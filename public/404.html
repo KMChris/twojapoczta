@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>404 · zwrot do nadawcy · TwojaPoczta</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="/assets/img/favicon.svg">
+  <link rel="stylesheet" href="/assets/css/fonts.css">
+  <link rel="stylesheet" href="/assets/css/tokens.css">
+  <link rel="stylesheet" href="/assets/css/auth.css">
+  <style>
+    .zwrot { text-align: center; max-width: 30rem; }
+    .zwrot-stempel {
+      display: inline-block;
+      padding: 0.5em 1.2em;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--polecony);
+      border: 2.5px solid var(--polecony);
+      border-radius: var(--r-s);
+      transform: rotate(-4deg);
+      opacity: 0.9;
+    }
+    .zwrot h1 {
+      margin-top: 1.5rem;
+      font-size: clamp(2.4rem, 8vw, 3.6rem);
+      font-weight: 830;
+      font-stretch: 116%;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+    .zwrot p { margin-top: 1rem; color: var(--atrament-2); }
+    .zwrot .btn { margin-top: 1.8rem; }
+  </style>
+</head>
+<body>
+
+<div class="pas-lotniczy" aria-hidden="true"></div>
+
+<header class="auth-naglowek">
+  <a class="logo" href="/">
+    <svg class="logo-znak" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.4"/>
+      <circle cx="16" cy="16" r="10" fill="none" stroke="currentColor" stroke-width="1"/>
+      <text x="16" y="20.5" text-anchor="middle" font-size="11.5" font-weight="800">TP</text>
+    </svg>
+    <span>TwojaPoczta</span>
+  </a>
+</header>
+
+<main class="auth-scena">
+  <div class="zwrot">
+    <span class="zwrot-stempel">Zwrot · 404</span>
+    <h1>Adresat nieznany.</h1>
+    <p>Ta strona nie istnieje albo zmieniła adres.
+       Przesyłka wraca do nadawcy, czyli do Ciebie.</p>
+    <a class="btn btn-atrament" href="/">Wróć na stronę główną</a>
+  </div>
+</main>
+
+<svg class="auth-znak-wodny" viewBox="0 0 200 200" aria-hidden="true">
+  <circle cx="100" cy="100" r="94" fill="none" stroke="currentColor" stroke-width="4"/>
+  <circle cx="100" cy="100" r="80" fill="none" stroke="currentColor" stroke-width="1.6"/>
+  <line x1="44" y1="88" x2="156" y2="88" stroke="currentColor" stroke-width="1.6"/>
+  <line x1="44" y1="114" x2="156" y2="114" stroke="currentColor" stroke-width="1.6"/>
+</svg>
+
+</body>
+</html>

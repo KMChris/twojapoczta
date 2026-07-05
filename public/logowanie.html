@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zaloguj się · TwojaPoczta</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="/assets/img/favicon.svg">
+  <link rel="stylesheet" href="/assets/css/fonts.css">
+  <link rel="stylesheet" href="/assets/css/tokens.css">
+  <link rel="stylesheet" href="/assets/css/auth.css">
+  <script src="/assets/js/auth.js" defer></script>
+</head>
+<body>
+
+<div class="pas-lotniczy" aria-hidden="true"></div>
+
+<header class="auth-naglowek">
+  <a class="logo" href="/">
+    <svg class="logo-znak" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.4"/>
+      <circle cx="16" cy="16" r="10" fill="none" stroke="currentColor" stroke-width="1"/>
+      <text x="16" y="20.5" text-anchor="middle" font-size="11.5" font-weight="800">TP</text>
+    </svg>
+    <span>TwojaPoczta</span>
+  </a>
+</header>
+
+<main class="auth-scena">
+  <form class="okienko" data-formularz="logowanie" novalidate>
+    <p class="eyebrow">Okienko nr 1 · logowanie</p>
+    <h1>Dobrze Cię znowu widzieć.</h1>
+
+    <p class="okienko-demo" data-demo-notka hidden>
+      Pola wypełniliśmy kontem demo. Wystarczy nacisnąć „Zaloguj się".
+    </p>
+
+    <div class="pole">
+      <label for="login">Adres</label>
+      <div class="pole-adres">
+        <input id="login" name="login" type="text" autocomplete="username"
+               autocapitalize="none" spellcheck="false" required>
+        <span aria-hidden="true">@twojapoczta.com</span>
+      </div>
+    </div>
+
+    <div class="pole">
+      <label for="haslo">Hasło</label>
+      <input id="haslo" name="haslo" type="password" autocomplete="current-password" required>
+    </div>
+
+    <p class="okienko-blad" data-blad role="alert" hidden></p>
+
+    <button class="btn btn-atrament btn-caly" type="submit" data-wyslij>Zaloguj się</button>
+
+    <p class="okienko-stopka">
+      Nie masz jeszcze adresu? <a href="/rejestracja">Załóż konto</a><br>
+      albo <a href="/logowanie?demo=1" data-demo-link>wypróbuj konto demo</a>.
+    </p>
+  </form>
+</main>
+
+<svg class="auth-znak-wodny" viewBox="0 0 200 200" aria-hidden="true">
+  <circle cx="100" cy="100" r="94" fill="none" stroke="currentColor" stroke-width="4"/>
+  <circle cx="100" cy="100" r="80" fill="none" stroke="currentColor" stroke-width="1.6"/>
+  <line x1="44" y1="88" x2="156" y2="88" stroke="currentColor" stroke-width="1.6"/>
+  <line x1="44" y1="114" x2="156" y2="114" stroke="currentColor" stroke-width="1.6"/>
+</svg>
+
+</body>
+</html>
