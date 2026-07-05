@@ -30,10 +30,10 @@ const PAGES = {
   '/rejestracja': 'rejestracja.html',
 };
 
+// Fonts never change; everything else revalidates (cheap 304s, no stale deploys).
 function cacheControl(filePath) {
   if (filePath.includes(`${path.sep}fonts${path.sep}`)) return 'public, max-age=31536000, immutable';
-  if (filePath.endsWith('.html')) return 'no-cache';
-  return 'public, max-age=3600';
+  return 'no-cache';
 }
 
 export function createStaticHandler(rootDir) {
@@ -63,6 +63,11 @@ export function createStaticHandler(rootDir) {
     const found = await resolveFile(filePath);
     if (!found) return notFound(res, root);
 
+    if (req.headers['if-modified-since'] === found.mtime) {
+      res.writeHead(304, { 'Cache-Control': cacheControl(found.path) });
+      res.end();
+      return;
+    }
     send(req, res, found, 200);
   };
 }
@@ -72,7 +77,7 @@ async function resolveFile(filePath) {
   for (const candidate of candidates) {
     try {
       const info = await stat(candidate);
-      if (info.isFile()) return { path: candidate, size: info.size };
+      if (info.isFile()) return { path: candidate, size: info.size, mtime: info.mtime.toUTCString() };
     } catch {
       // keep trying candidates
     }
@@ -93,6 +98,7 @@ function send(req, res, file, status) {
     'Content-Type': type,
     'Content-Length': file.size,
     'Cache-Control': cacheControl(file.path),
+    'Last-Modified': file.mtime,
   });
   if (req?.method === 'HEAD') {
     res.end();

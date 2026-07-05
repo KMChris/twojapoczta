@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TwojaPoczta · Twoja poczta. Twoje zasady.</title>
+  <meta name="description" content="Szybka, prywatna poczta e-mail na Twoim serwerze. Zero zależności, zero śledzenia, jeden proces Node. Twoja poczta. Twoje zasady.">
+  <meta property="og:title" content="TwojaPoczta · Twoja poczta. Twoje zasady.">
+  <meta property="og:description" content="Szybka, prywatna poczta e-mail na Twoim serwerze. Zero zależności, zero śledzenia.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://twojapoczta.com/">
+  <link rel="icon" type="image/svg+xml" href="/assets/img/favicon.svg">
+  <link rel="stylesheet" href="/assets/css/fonts.css">
+  <link rel="stylesheet" href="/assets/css/tokens.css">
+  <link rel="stylesheet" href="/assets/css/landing.css">
+  <script src="/assets/js/landing.js" defer></script>
+</head>
+<body>
+
+<a class="skip-link" href="#tresc">Przejdź do treści</a>
+
+<header class="nav">
+  <div class="container nav-wiersz">
+    <a class="logo" href="/" aria-label="TwojaPoczta, strona główna">
+      <svg class="logo-znak" viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.4"/>
+        <circle cx="16" cy="16" r="10" fill="none" stroke="currentColor" stroke-width="1"/>
+        <text x="16" y="20.5" text-anchor="middle" font-family="Archivo, sans-serif" font-size="11.5" font-weight="800">TP</text>
+      </svg>
+      <span>TwojaPoczta</span>
+    </a>
+    <button class="nav-burger" aria-expanded="false" aria-controls="nav-menu" aria-label="Menu">
+      <span></span><span></span>
+    </button>
+    <nav id="nav-menu" class="nav-menu" aria-label="Główna nawigacja">
+      <a href="#funkcje">Funkcje</a>
+      <a href="#prywatnosc">Prywatność</a>
+      <a href="#self-hosting">Własny serwer</a>
+      <a href="#faq">FAQ</a>
+      <div class="nav-akcje">
+        <a class="btn btn-cichy" href="/logowanie">Zaloguj się</a>
+        <a class="btn btn-atrament" href="/rejestracja">Załóż konto</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<main id="tresc">
+
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-naglowek">
+        <p class="eyebrow odsl">Poczta e-mail · na własnym serwerze · po polsku</p>
+        <h1 class="hero-tytul odsl">
+          <span>Twoja poczta.</span><br>
+          <span class="akcent">Twoje zasady.</span>
+        </h1>
+
+        <div class="datownik-scena" aria-hidden="true">
+          <svg class="datownik" viewBox="0 0 200 200">
+            <defs>
+              <path id="luk-gorny" d="M 27 100 A 73 73 0 0 1 173 100"/>
+              <path id="luk-dolny" d="M 33 100 A 67 67 0 0 0 167 100"/>
+              <filter id="tusz" x="-8%" y="-8%" width="116%" height="116%">
+                <feTurbulence type="fractalNoise" baseFrequency="0.05 0.07" numOctaves="2" seed="7" result="warp"/>
+                <feDisplacementMap in="SourceGraphic" in2="warp" scale="2.6" result="rough"/>
+                <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="2" seed="3" result="speck"/>
+                <feColorMatrix in="speck" type="matrix"
+                  values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.4 1.75" result="speckA"/>
+                <feComposite in="rough" in2="speckA" operator="in"/>
+              </filter>
+            </defs>
+            <g class="datownik-tusz" filter="url(#tusz)">
+              <circle cx="100" cy="100" r="94" fill="none" stroke="currentColor" stroke-width="4"/>
+              <circle cx="100" cy="100" r="80" fill="none" stroke="currentColor" stroke-width="1.6"/>
+              <text class="datownik-tekst">
+                <textPath href="#luk-gorny" startOffset="50%" text-anchor="middle">TWOJAPOCZTA.COM</textPath>
+              </text>
+              <text class="datownik-tekst">
+                <textPath href="#luk-dolny" startOffset="50%" text-anchor="middle">★ SORTOWNIA GŁÓWNA ★</textPath>
+              </text>
+              <line x1="44" y1="88" x2="156" y2="88" stroke="currentColor" stroke-width="1.6"/>
+              <line x1="44" y1="114" x2="156" y2="114" stroke="currentColor" stroke-width="1.6"/>
+              <text class="datownik-data" x="100" y="107" text-anchor="middle">06.07.2026</text>
+              <text class="datownik-czas" x="100" y="130" text-anchor="middle">NADANO · 24/7</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <p class="hero-lead odsl">
+        Szybka, prywatna skrzynka, która mieszka na Twoim serwerze.
+        Bez reklam, bez śledzenia, bez zaglądania Ci przez ramię.
+        Poczta jak list polecony, nie jak billboard.
+      </p>
+
+      <div class="hero-akcje odsl">
+        <a class="btn btn-polecony" href="/logowanie?demo=1">Wypróbuj demo</a>
+        <a class="btn btn-ramka" href="/rejestracja">Załóż konto</a>
+        <p class="hero-dostep">konto demo: <strong>demo</strong> · hasło: <strong>demo1234</strong></p>
+      </div>
+
+      <!-- Podgląd aplikacji -->
+      <div class="mock odsl" role="img" aria-label="Podgląd aplikacji TwojaPoczta: lista wiadomości i czytnik">
+        <div class="mock-pasek">
+          <span class="mock-kropka"></span><span class="mock-kropka"></span><span class="mock-kropka"></span>
+          <span class="mock-adres">poczta.twojadomena.pl</span>
+        </div>
+        <div class="mock-cialo">
+          <aside class="mock-boczny">
+            <span class="mock-napisz">+ Napisz</span>
+            <span class="mock-folder aktywny">Odebrane <em>2</em></span>
+            <span class="mock-folder">Z gwiazdką</span>
+            <span class="mock-folder">Wysłane</span>
+            <span class="mock-folder">Szkice <em>1</em></span>
+            <span class="mock-folder">Archiwum</span>
+            <span class="mock-folder">Kosz</span>
+          </aside>
+          <div class="mock-lista">
+            <div class="mock-wiersz nieprzeczytane">
+              <span class="mock-od">Zespół TwojaPoczta</span>
+              <span class="mock-temat">Witaj w TwojejPoczcie 👋</span>
+              <span class="mock-czas">09:41</span>
+            </div>
+            <div class="mock-wiersz nieprzeczytane">
+              <span class="mock-od">Michał Krajewski</span>
+              <span class="mock-temat">Plan na sobotę: rower?</span>
+              <span class="mock-czas">07:12</span>
+            </div>
+            <div class="mock-wiersz">
+              <span class="mock-od">Ania Nowakowska <svg class="mock-gwiazdka" viewBox="0 0 16 16"><path d="M8 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.2L8 11.5l-3.8 2 .7-4.2-3.1-3 4.3-.6z"/></svg></span>
+              <span class="mock-temat">Zdjęcia z Mazur ⛵</span>
+              <span class="mock-czas">wt</span>
+            </div>
+            <div class="mock-wiersz">
+              <span class="mock-od">Serwerownia.pl</span>
+              <span class="mock-temat">Faktura VAT 07/2026 za serwer VPS</span>
+              <span class="mock-czas">pt</span>
+            </div>
+            <div class="mock-wiersz">
+              <span class="mock-od">Zespół TwojaPoczta</span>
+              <span class="mock-temat">Pocztówka nr 12: co nowego w TwojejPoczcie</span>
+              <span class="mock-czas">czw</span>
+            </div>
+            <div class="mock-wiersz">
+              <span class="mock-od">Ania Nowakowska</span>
+              <span class="mock-temat">Re: Weekend w górach</span>
+              <span class="mock-czas">pn</span>
+            </div>
+            <div class="mock-wiersz">
+              <span class="mock-od">Rejestrator domen</span>
+              <span class="mock-temat">Potwierdzenie rejestracji domeny</span>
+              <span class="mock-czas">27.06</span>
+            </div>
+          </div>
+          <div class="mock-czytnik">
+            <span class="mock-chip">PRIORYTET</span>
+            <strong>Witaj w TwojejPoczcie 👋</strong>
+            <span class="mock-meta">Zespół TwojaPoczta · dziś, 09:41</span>
+            <p>Cześć! Twoja skrzynka właśnie ruszyła. Twój serwer, Twoje dane, Twoje zasady. Na dobry początek naciśnij <b>c</b> i napisz pierwszą wiadomość…</p>
+            <span class="mock-przycisk">Odpowiedz</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="pas-lotniczy" aria-hidden="true"></div>
+
+  <!-- ============ PASEK FAKTÓW ============ -->
+  <section class="fakty" aria-label="Najważniejsze liczby">
+    <div class="container fakty-siatka">
+      <div class="fakt odsl"><strong>0</strong><span>zależności npm</span></div>
+      <div class="fakt odsl"><strong>1</strong><span>proces Node</span></div>
+      <div class="fakt odsl"><strong>&lt;60 s</strong><span>od pobrania do skrzynki</span></div>
+      <div class="fakt odsl"><strong>100%</strong><span>danych u Ciebie</span></div>
+    </div>
+  </section>
+
+  <!-- ============ FUNKCJE ============ -->
+  <section class="funkcje" id="funkcje">
+    <div class="container">
+      <p class="eyebrow odsl">Co dostajesz w kopercie</p>
+      <h2 class="tytul-sekcji odsl">Wszystko, czego oczekujesz.<br>Nic, co Cię śledzi.</h2>
+
+      <div class="karty">
+        <article class="karta odsl">
+          <span class="naklejka naklejka-r"><b>R</b> polecony</span>
+          <h3>Bezpieczna jak list polecony</h3>
+          <p>Hasła haszowane scryptem, sesje tylko httpOnly, limit prób logowania.
+             Nikt nie podpisze się za Ciebie.</p>
+        </article>
+        <article class="karta odsl">
+          <span class="naklejka naklejka-p">Priorytet</span>
+          <h3>Szybka jak priorytet</h3>
+          <p>Zero frameworków po stronie przeglądarki. Cała aplikacja waży mniej
+             niż jedno zdjęcie z telefonu i otwiera się natychmiast.</p>
+        </article>
+        <article class="karta odsl">
+          <span class="naklejka">Skróty</span>
+          <h3>Klawiatura rządzi</h3>
+          <p><kbd>c</kbd> pisze, <kbd>/</kbd> szuka, <kbd>j</kbd> <kbd>k</kbd> przewijają,
+             <kbd>e</kbd> archiwizuje. Ręce nie schodzą z klawiatury.</p>
+        </article>
+        <article class="karta odsl">
+          <span class="naklejka">Paleta</span>
+          <h3>Jeden skrót do wszystkiego</h3>
+          <p><kbd>Ctrl</kbd>+<kbd>K</kbd> otwiera paletę poleceń: foldery, akcje,
+             ustawienia. Piszesz, czego chcesz. Reszta się znajduje.</p>
+        </article>
+        <article class="karta odsl">
+          <span class="naklejka">Szukaj</span>
+          <h3>Pełnotekstowe szukanie</h3>
+          <p>Po nadawcy, temacie i treści. Od ręki, na Twoim serwerze,
+             bez indeksowania w cudzej chmurze.</p>
+        </article>
+        <article class="karta odsl">
+          <span class="naklejka">Noc</span>
+          <h3>Nocna sortownia</h3>
+          <p>Ciemny motyw w granacie atramentu, nie w smolistej czerni.
+             Oczy podziękują przy nadrabianiu skrzynki o 23:40.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PRYWATNOŚĆ ============ -->
+  <section class="prywatnosc" id="prywatnosc">
+    <div class="perforacja" aria-hidden="true"></div>
+    <div class="container">
+      <p class="eyebrow odsl">Prywatność</p>
+      <h2 class="tytul-sekcji odsl">Tajemnica korespondencji<br>to Twoje prawo.</h2>
+      <p class="prywatnosc-lead odsl">
+        Art. 49 Konstytucji RP gwarantuje ochronę tajemnicy komunikowania się.
+        My traktujemy to dosłownie. W kodzie, nie w regulaminie.
+      </p>
+      <div class="prywatnosc-siatka">
+        <div class="prywatnosc-punkt odsl">
+          <h3>Nikt nie czyta</h3>
+          <p>Żadnego skanowania treści pod reklamy. Twoje listy czytają
+             wyłącznie ich adresaci.</p>
+        </div>
+        <div class="prywatnosc-punkt odsl">
+          <h3>Nic nie wycieka</h3>
+          <p>Zero zewnętrznych CDN-ów, czcionek z cudzych serwerów, pikseli
+             i analityki. Dane nie opuszczają Twojej maszyny.</p>
+        </div>
+        <div class="prywatnosc-punkt odsl">
+          <h3>Wszystko widzisz</h3>
+          <p>Otwarty kod, czytelne logi, jeden plik bazy danych.
+             Możesz sprawdzić każdą linijkę. Albo poprosić kogoś, kto sprawdzi za Ciebie.</p>
+        </div>
+      </div>
+    </div>
+    <div class="perforacja odwrocona" aria-hidden="true"></div>
+  </section>
+
+  <!-- ============ SELF-HOSTING ============ -->
+  <section class="hosting" id="self-hosting">
+    <div class="container hosting-siatka">
+      <div class="hosting-opis">
+        <p class="eyebrow odsl">Własny serwer</p>
+        <h2 class="tytul-sekcji odsl">Cały serwer pocztowy<br>w jednym procesie.</h2>
+        <p class="odsl">
+          Node 24 i nic więcej. Bez Dockera, bez bazy do postawienia,
+          bez <code>npm install</code>. Klonujesz repozytorium, uruchamiasz
+          jeden plik i masz pocztę.
+        </p>
+        <ul class="hosting-lista odsl">
+          <li>SQLite wbudowane w Node: cała skrzynka to jeden plik</li>
+          <li>Gotowe pod systemd i reverse proxy (Caddy, nginx)</li>
+          <li>Kopia zapasowa = skopiowanie jednego pliku</li>
+        </ul>
+      </div>
+      <div class="terminal odsl" aria-label="Instalacja w terminalu">
+        <div class="terminal-pasek">
+          <span></span><span></span><span></span>
+          <em>vps ~ twoja-poczta</em>
+        </div>
+        <pre class="terminal-tresc"><code><span class="t-prompt">$</span> git clone https://twojapoczta.com/kod.git
+<span class="t-prompt">$</span> cd kod
+<span class="t-prompt">$</span> node server/index.js
+
+  <span class="t-ok">📮 TwojaPoczta · http://127.0.0.1:3000</span>
+     Konto demo: demo@twojapoczta.com</code></pre>
+        <button class="terminal-kopiuj" type="button" data-kopiuj="node server/index.js">
+          Skopiuj polecenie
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 3 KROKI ============ -->
+  <section class="kroki">
+    <div class="container">
+      <p class="eyebrow odsl">Jak zacząć</p>
+      <h2 class="tytul-sekcji odsl">Trzy kroki do własnej poczty.</h2>
+      <ol class="kroki-lista">
+        <li class="krok odsl">
+          <span class="krok-nr">1</span>
+          <h3>Rozejrzyj się w demo</h3>
+          <p>Zaloguj się na konto <strong>demo</strong> i sprawdź, jak skrzynka
+             leży w dłoni. Bez rejestracji, bez zobowiązań.</p>
+          <a class="link-strzalka" href="/logowanie?demo=1">Otwórz demo</a>
+        </li>
+        <li class="krok odsl">
+          <span class="krok-nr">2</span>
+          <h3>Załóż konto</h3>
+          <p>Wybierz adres w domenie i odbierz list powitalny.
+             Zajmie Ci to mniej niż minutę.</p>
+          <a class="link-strzalka" href="/rejestracja">Wybierz adres</a>
+        </li>
+        <li class="krok odsl">
+          <span class="krok-nr">3</span>
+          <h3>Postaw u siebie</h3>
+          <p>Sklonuj kod na swój VPS, podepnij domenę i przenieś
+             korespondencję do siebie. Instrukcja jest w README.</p>
+          <a class="link-strzalka" href="#self-hosting">Zobacz instalację</a>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ============ FAQ ============ -->
+  <section class="faq" id="faq">
+    <div class="container faq-siatka">
+      <div>
+        <p class="eyebrow odsl">FAQ</p>
+        <h2 class="tytul-sekcji odsl">Pytania, które<br>i tak byś zadał.</h2>
+      </div>
+      <div class="faq-lista">
+        <details class="odsl">
+          <summary>Ile to kosztuje?</summary>
+          <p>Nic. Kod jest otwarty (MIT), płacisz tylko za swój serwer,
+             a skromny VPS za ~20 zł miesięcznie w zupełności wystarcza.</p>
+        </details>
+        <details class="odsl">
+          <summary>Czy odbiorę pocztę z Gmaila albo firmowej skrzynki?</summary>
+          <p>Ta wersja doręcza wiadomości między kontami w Twojej domenie,
+             idealna dla zespołu, rodziny albo społeczności. Bramka SMTP/IMAP
+             do świata zewnętrznego jest na mapie rozwoju.</p>
+        </details>
+        <details class="odsl">
+          <summary>Jakie są wymagania sprzętowe?</summary>
+          <p>Node 24 lub nowszy, 1 vCPU i 512 MB RAM. Naprawdę.
+             SQLite i serwer HTTP są wbudowane w Node, więc nie instalujesz nic poza nim.</p>
+        </details>
+        <details class="odsl">
+          <summary>Jak zrobić kopię zapasową?</summary>
+          <p>Konta, wiadomości i sesje siedzą w jednym pliku
+             <code>data/twojapoczta.db</code>. Kopiujesz plik, masz kopię.</p>
+        </details>
+        <details class="odsl">
+          <summary>Czy działa na telefonie?</summary>
+          <p>Tak. Interfejs jest responsywny od 375 px wzwyż, a skróty
+             klawiszowe grzecznie czekają, aż wrócisz do komputera.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CTA ============ -->
+  <section class="cta">
+    <div class="perforacja" aria-hidden="true"></div>
+    <div class="container cta-tresc">
+      <h2 class="odsl">Skrzynka gotowa<br>w 30 sekund.</h2>
+      <p class="odsl">Adres wygląda tak: <span class="cta-adres">ty@twojapoczta.com</span></p>
+      <div class="odsl">
+        <a class="btn btn-polecony btn-duzy" href="/rejestracja">Załóż konto</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="stopka">
+  <div class="container">
+    <div class="stopka-siatka">
+      <div class="stopka-marka">
+        <a class="logo" href="/">
+          <svg class="logo-znak" viewBox="0 0 32 32" aria-hidden="true">
+            <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.4"/>
+            <circle cx="16" cy="16" r="10" fill="none" stroke="currentColor" stroke-width="1"/>
+            <text x="16" y="20.5" text-anchor="middle" font-family="Archivo, sans-serif" font-size="11.5" font-weight="800" fill="currentColor" stroke="none">TP</text>
+          </svg>
+          <span>TwojaPoczta</span>
+        </a>
+        <p>Poczta, która należy do Ciebie.<br>Twój serwer. Twoje dane. Twoje zasady.</p>
+      </div>
+      <nav class="stopka-kolumna" aria-label="Produkt">
+        <h4>Produkt</h4>
+        <a href="#funkcje">Funkcje</a>
+        <a href="/logowanie?demo=1">Demo</a>
+        <a href="/rejestracja">Załóż konto</a>
+      </nav>
+      <nav class="stopka-kolumna" aria-label="Projekt">
+        <h4>Projekt</h4>
+        <a href="#self-hosting">Własny serwer</a>
+        <a href="#prywatnosc">Prywatność</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <div class="stopka-kolumna">
+        <h4>Kontakt</h4>
+        <a href="/logowanie">zespol@twojapoczta.com</a>
+        <p class="stopka-notka">Napisz do nas. Najlepiej z własnej<br>skrzynki, rzecz jasna.</p>
+      </div>
+    </div>
+    <div class="stopka-dol">
+      <span>© 2026 TwojaPoczta · kod na licencji MIT</span>
+      <span class="stopka-nr">NR PRZESYŁKI <b data-nr-przesylki>TP-00000000</b> · NADANO W POLSCE</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
