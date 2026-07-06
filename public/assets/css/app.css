@@ -1,0 +1,1281 @@
+/* TwojaPoczta · aplikacja webmail. Trzy panele, kompozycja, paleta, modale. */
+
+body.app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.ikona-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--r-m);
+  color: var(--stempel);
+  cursor: pointer;
+  transition: background var(--przejscie), color var(--przejscie);
+}
+
+.ikona-btn:hover {
+  background: var(--papier-2);
+  color: var(--atrament);
+}
+
+.ikona-btn svg {
+  width: 19px;
+  height: 19px;
+}
+
+/* --- Górny pasek ---------------------------------------------------------- */
+
+.pasek {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0 1rem;
+  min-height: 58px;
+  background: var(--papier);
+  border-bottom: 1px solid var(--linia);
+}
+
+.pasek-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 750;
+  font-size: 1.05rem;
+  text-decoration: none;
+}
+
+.logo-znak {
+  width: 28px;
+  height: 28px;
+  color: var(--polecony);
+}
+
+.logo-znak text {
+  fill: currentColor;
+  font-family: var(--sans);
+}
+
+.szukaj {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 540px;
+  margin-inline: auto;
+}
+
+.szukaj > svg {
+  position: absolute;
+  left: 0.9rem;
+  width: 17px;
+  height: 17px;
+  color: var(--stempel);
+  pointer-events: none;
+}
+
+.szukaj input {
+  width: 100%;
+  padding: 0.6em 2.6em 0.6em 2.6em;
+  font: inherit;
+  font-size: 0.92rem;
+  color: var(--atrament);
+  background: var(--papier-2);
+  border: 1.5px solid transparent;
+  border-radius: 99px;
+  transition: border-color var(--przejscie), background var(--przejscie);
+}
+
+.szukaj input:focus {
+  outline: none;
+  background: var(--papier);
+  border-color: var(--priorytet);
+}
+
+.szukaj input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.szukaj-wyczysc {
+  position: absolute;
+  right: 0.4rem;
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: var(--stempel);
+  cursor: pointer;
+}
+
+.szukaj-wyczysc svg {
+  width: 15px;
+  height: 15px;
+}
+
+.szukaj-wyczysc:hover {
+  background: var(--papier-3);
+  color: var(--atrament);
+}
+
+.pasek-akcje {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pasek-akcje kbd {
+  font-size: 0.72rem;
+}
+
+.awatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--priorytet);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform var(--przejscie), box-shadow var(--przejscie);
+}
+
+.awatar:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--cien-1);
+}
+
+/* --- Układ ------------------------------------------------------------------ */
+
+.uklad {
+  display: grid;
+  grid-template-columns: 228px minmax(320px, 400px) 1fr;
+  flex: 1;
+  min-height: 0;
+}
+
+/* --- Panel boczny -------------------------------------------------------------- */
+
+.boczny {
+  display: flex;
+  flex-direction: column;
+  padding: 0.9rem 0.7rem;
+  border-right: 1px solid var(--linia);
+  overflow-y: auto;
+}
+
+.btn-napisz {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+  padding: 0.72em 1em;
+  font-weight: 660;
+  font-size: 0.95rem;
+  color: #fff;
+  background: var(--polecony);
+  border: none;
+  border-radius: var(--r-m);
+  cursor: pointer;
+  transition: background var(--przejscie), transform var(--przejscie), box-shadow var(--przejscie);
+}
+
+.btn-napisz:hover {
+  background: var(--polecony-ciemny);
+  transform: translateY(-1px);
+  box-shadow: var(--cien-1);
+}
+
+.btn-napisz svg {
+  width: 16px;
+  height: 16px;
+}
+
+.btn-napisz kbd {
+  margin-left: auto;
+  color: rgb(255 255 255 / 0.85);
+  background: rgb(255 255 255 / 0.14);
+  border-color: rgb(255 255 255 / 0.25);
+}
+
+.foldery {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.folder {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.52em 0.75em;
+  font: inherit;
+  font-size: 0.92rem;
+  color: var(--atrament-2);
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: var(--r-m);
+  cursor: pointer;
+  transition: background var(--przejscie), color var(--przejscie);
+}
+
+.folder:hover {
+  background: var(--papier-2);
+  color: var(--atrament);
+}
+
+.folder.aktywny {
+  background: var(--koperta-tlo);
+  color: var(--atrament);
+  font-weight: 660;
+}
+
+.folder svg {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  color: var(--stempel);
+}
+
+.folder.aktywny svg {
+  color: var(--polecony);
+}
+
+.folder em {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 600;
+  color: var(--polecony);
+}
+
+.boczny-stopka {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: auto;
+  padding-top: 1.2rem;
+}
+
+.boczny-adres {
+  margin-bottom: 0.4rem;
+  padding-inline: 0.75em;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--stempel);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boczny-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4em 0.75em;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--stempel);
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: var(--r-s);
+  cursor: pointer;
+}
+
+.boczny-link:hover {
+  background: var(--papier-2);
+  color: var(--atrament);
+}
+
+/* --- Lista wiadomości ------------------------------------------------------------ */
+
+.lista {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--linia);
+}
+
+.lista-naglowek {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem 0.55rem;
+}
+
+.lista-naglowek h1 {
+  font-size: 0.95rem;
+  font-weight: 780;
+  font-stretch: 112%;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.lista-przewijanie {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.wiadomosc {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  gap: 0.15rem 0.7rem;
+  width: 100%;
+  padding: 0.7rem 1rem;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--linia);
+  cursor: pointer;
+  transition: background var(--przejscie);
+}
+
+.wiadomosc:hover {
+  background: var(--papier-2);
+}
+
+.wiadomosc.wybrana {
+  background: var(--koperta-tlo);
+  box-shadow: inset 3px 0 0 var(--polecony);
+}
+
+.aw {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fff;
+  border-radius: 50%;
+  align-self: center;
+}
+
+.w-gora {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.w-od {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 560;
+  color: var(--atrament-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.w-czas {
+  grid-column: 3;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--stempel);
+  white-space: nowrap;
+}
+
+.w-dol {
+  grid-column: 2 / 4;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  font-size: 0.85rem;
+  color: var(--stempel);
+}
+
+.w-temat {
+  color: var(--atrament-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+}
+
+.w-snippet {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wiadomosc.nieprzeczytana .w-od,
+.wiadomosc.nieprzeczytana .w-temat {
+  color: var(--atrament);
+  font-weight: 700;
+}
+
+.wiadomosc.nieprzeczytana::before {
+  content: '';
+  position: absolute;
+  left: 0.35rem;
+  top: 50%;
+  translate: 0 -50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--polecony);
+}
+
+.w-chip {
+  padding: 0.1em 0.5em;
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: #fff;
+  background: var(--priorytet);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.w-gwiazdka {
+  display: inline-flex;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--linia-2);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--przejscie), color var(--przejscie);
+}
+
+.wiadomosc:hover .w-gwiazdka,
+.wiadomosc.wybrana .w-gwiazdka,
+.w-gwiazdka.aktywna,
+.w-gwiazdka:focus-visible {
+  opacity: 1;
+}
+
+.w-gwiazdka svg {
+  width: 15px;
+  height: 15px;
+}
+
+.w-gwiazdka.aktywna {
+  color: #d9a514;
+}
+
+.w-gwiazdka.aktywna svg path {
+  fill: currentColor;
+}
+
+.w-gwiazdka:hover {
+  color: #d9a514;
+}
+
+.lista-pusta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 4rem 1.5rem;
+  text-align: center;
+  color: var(--stempel);
+  font-size: 0.92rem;
+}
+
+.lista-pusta svg {
+  width: 90px;
+  color: var(--linia-2);
+}
+
+/* --- Czytnik ---------------------------------------------------------------------- */
+
+.czytnik {
+  position: relative;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--papier);
+}
+
+.czytnik-puste {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.4rem;
+  height: 100%;
+  color: var(--stempel);
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+
+.puste-znaczek {
+  width: 130px;
+  color: var(--linia-2);
+}
+
+.czytnik-tresc {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 1.6rem clamp(1.25rem, 3vw, 2.4rem) 4rem;
+}
+
+.cz-powrot {
+  display: none;
+  margin-bottom: 0.75rem;
+}
+
+.cz-naglowek {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.cz-temat {
+  flex: 1;
+  font-size: 1.45rem;
+  font-weight: 760;
+  font-stretch: 108%;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.cz-chip {
+  padding: 0.25em 0.7em;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: #fff;
+  background: var(--priorytet);
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: 0.4rem;
+}
+
+.cz-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 1.2rem;
+  padding-bottom: 1.2rem;
+  border-bottom: 1px solid var(--linia);
+}
+
+.cz-meta .aw {
+  grid-row: auto;
+  width: 40px;
+  height: 40px;
+  font-size: 0.85rem;
+}
+
+.cz-kto {
+  flex: 1;
+  min-width: 0;
+}
+
+.cz-od {
+  font-weight: 680;
+  font-size: 0.95rem;
+}
+
+.cz-od small {
+  margin-left: 0.4rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--stempel);
+}
+
+.cz-do {
+  margin-top: 0.15rem;
+  font-size: 0.8rem;
+  color: var(--stempel);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cz-data {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--stempel);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cz-akcje {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 1rem;
+}
+
+.cz-przycisk {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.5em 1em;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 620;
+  color: var(--atrament);
+  background: none;
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-m);
+  cursor: pointer;
+  transition: border-color var(--przejscie), background var(--przejscie);
+}
+
+.cz-przycisk:hover {
+  border-color: var(--atrament);
+}
+
+.cz-przycisk svg {
+  width: 15px;
+  height: 15px;
+}
+
+.cz-przycisk.glowny {
+  color: #fff;
+  background: var(--atrament);
+  border-color: var(--atrament);
+}
+
+[data-theme='dark'] .cz-przycisk.glowny {
+  color: var(--papier);
+}
+
+.cz-przycisk.glowny:hover {
+  opacity: 0.88;
+}
+
+.cz-akcje .ikona-btn.aktywna {
+  color: #d9a514;
+}
+
+.cz-akcje .ikona-btn.aktywna svg path {
+  fill: currentColor;
+}
+
+.cz-body {
+  margin-top: 1.6rem;
+  font-size: 0.98rem;
+  line-height: 1.75;
+  color: var(--atrament);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.cz-body a {
+  color: var(--priorytet);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* --- Kompozycja ---------------------------------------------------------------------- */
+
+.kompozycja {
+  position: fixed;
+  right: 24px;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: min(540px, calc(100vw - 48px));
+  max-height: min(640px, 82dvh);
+  background: var(--papier);
+  border: 1px solid var(--linia-2);
+  border-bottom: none;
+  border-radius: var(--r-l) var(--r-l) 0 0;
+  box-shadow: var(--cien-3);
+  overflow: hidden;
+  animation: kompozycja-wjazd 0.28s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+@keyframes kompozycja-wjazd {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+}
+
+.kompozycja-pasek {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.6rem 0.55rem 1.1rem;
+  color: var(--papier);
+  background: var(--atrament);
+  font-size: 0.9rem;
+  font-weight: 640;
+}
+
+.kompozycja-pasek .ikona-btn {
+  color: color-mix(in srgb, var(--papier) 75%, transparent);
+}
+
+.kompozycja-pasek .ikona-btn:hover {
+  color: var(--papier);
+  background: rgb(255 255 255 / 0.12);
+}
+
+.kompozycja-formularz {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.kompozycja-pole {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.35rem 1.1rem;
+  border-bottom: 1px solid var(--linia);
+}
+
+.kompozycja-pole span {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--stempel);
+  width: 46px;
+  flex-shrink: 0;
+}
+
+.kompozycja-pole input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45em 0;
+  font: inherit;
+  font-size: 0.92rem;
+  color: var(--atrament);
+  background: none;
+  border: none;
+  outline: none;
+}
+
+.kompozycja-formularz textarea {
+  flex: 1;
+  min-height: 220px;
+  padding: 0.9rem 1.1rem;
+  font: inherit;
+  font-size: 0.94rem;
+  line-height: 1.65;
+  color: var(--atrament);
+  background: none;
+  border: none;
+  outline: none;
+  resize: none;
+}
+
+.kompozycja-stopka {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.7rem 1.1rem;
+  border-top: 1px solid var(--linia);
+}
+
+.btn-wyslij {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55em;
+  padding: 0.62em 1.4em;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 660;
+  color: #fff;
+  background: var(--polecony);
+  border: none;
+  border-radius: var(--r-m);
+  cursor: pointer;
+  transition: background var(--przejscie), transform var(--przejscie);
+}
+
+.btn-wyslij:hover {
+  background: var(--polecony-ciemny);
+  transform: translateY(-1px);
+}
+
+.btn-wyslij svg {
+  width: 15px;
+  height: 15px;
+}
+
+.btn-wyslij[disabled] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.kompozycja-status {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--stempel);
+}
+
+.kompozycja-stempel {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  width: 180px;
+  margin: -90px 0 0 -90px;
+  color: var(--polecony);
+  opacity: 0;
+  transform: rotate(-10deg);
+  pointer-events: none;
+}
+
+.stempel-napis {
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 4px;
+  fill: currentColor;
+}
+
+.stempel-data {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  fill: currentColor;
+}
+
+@keyframes przybicie-stempla {
+  0% {
+    transform: scale(1.8) rotate(-2deg);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(0.94) rotate(-11deg);
+    opacity: 0.95;
+  }
+  75% {
+    transform: scale(1.04) rotate(-9.5deg);
+  }
+  100% {
+    transform: scale(1) rotate(-10deg);
+    opacity: 0.95;
+  }
+}
+
+.kompozycja-stempel.przybity {
+  animation: przybicie-stempla 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+
+/* --- Paleta poleceń ---------------------------------------------------------------------- */
+
+.paleta,
+.modal {
+  width: min(560px, 92vw);
+  padding: 0;
+  color: var(--atrament);
+  background: var(--papier);
+  border: 1px solid var(--linia-2);
+  border-radius: var(--r-l);
+  box-shadow: var(--cien-3);
+}
+
+.paleta {
+  margin: 12vh auto auto;
+}
+
+.modal {
+  margin: auto;
+}
+
+.paleta::backdrop,
+.modal::backdrop {
+  background: rgb(15 17 23 / 0.4);
+  backdrop-filter: blur(2px);
+}
+
+.paleta-szukaj {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--linia);
+}
+
+.paleta-szukaj svg {
+  width: 17px;
+  height: 17px;
+  color: var(--stempel);
+  flex-shrink: 0;
+}
+
+.paleta-szukaj input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.98rem;
+  color: var(--atrament);
+  background: none;
+  border: none;
+  outline: none;
+}
+
+.paleta-lista {
+  max-height: 330px;
+  margin: 0;
+  padding: 0.4rem;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.paleta-pozycja {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--r-m);
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.paleta-pozycja svg {
+  width: 17px;
+  height: 17px;
+  color: var(--stempel);
+  flex-shrink: 0;
+}
+
+.paleta-pozycja kbd {
+  margin-left: auto;
+}
+
+.paleta-pozycja.zaznaczona {
+  background: var(--koperta-tlo);
+}
+
+.paleta-pozycja.zaznaczona svg {
+  color: var(--polecony);
+}
+
+.paleta-pusta {
+  padding: 1.2rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--stempel);
+}
+
+/* --- Modale ---------------------------------------------------------------------------------- */
+
+.modal-naglowek {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1rem 1rem 1.4rem;
+  border-bottom: 1px solid var(--linia);
+}
+
+.modal-naglowek h2 {
+  font-size: 1.05rem;
+  font-weight: 760;
+  font-stretch: 110%;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.pomoc-siatka {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.6rem;
+  padding: 1.4rem;
+}
+
+.pomoc-siatka dl {
+  margin: 0;
+}
+
+.pomoc-siatka dt {
+  margin-bottom: 0.7rem;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--stempel);
+}
+
+.pomoc-siatka dd {
+  margin: 0 0 0.5rem;
+  font-size: 0.88rem;
+  color: var(--atrament-2);
+}
+
+.ustawienia-formularz {
+  padding: 1.4rem;
+}
+
+.ustawienia-formularz .pole {
+  display: block;
+  margin-bottom: 1.1rem;
+}
+
+.ustawienia-formularz .pole > span,
+.ustawienia-formularz legend {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--stempel);
+}
+
+.ustawienia-formularz input[type='text'],
+.ustawienia-formularz textarea {
+  width: 100%;
+  padding: 0.65em 0.85em;
+  font: inherit;
+  font-size: 0.92rem;
+  color: var(--atrament);
+  background: var(--papier-2);
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-m);
+  resize: vertical;
+}
+
+.ustawienia-formularz input:focus,
+.ustawienia-formularz textarea:focus {
+  outline: none;
+  border-color: var(--priorytet);
+}
+
+.ustawienia-formularz fieldset {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.motywy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.1rem;
+}
+
+.motywy label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.motywy input {
+  accent-color: var(--polecony);
+}
+
+.modal-stopka {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.4rem;
+}
+
+.btn-zapisz {
+  padding: 0.62em 1.5em;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 660;
+  color: #fff;
+  background: var(--polecony);
+  border: none;
+  border-radius: var(--r-m);
+  cursor: pointer;
+  transition: background var(--przejscie);
+}
+
+.btn-zapisz:hover {
+  background: var(--polecony-ciemny);
+}
+
+/* --- Toasty ------------------------------------------------------------------------------------ */
+
+.toast-strefa {
+  position: fixed;
+  bottom: 1.4rem;
+  left: 50%;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  translate: -50% 0;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1.15rem;
+  font-size: 0.9rem;
+  font-weight: 560;
+  color: var(--papier);
+  background: var(--atrament);
+  border-radius: var(--r-m);
+  box-shadow: var(--cien-3);
+  animation: toast-wjazd 0.25s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.toast svg {
+  width: 16px;
+  height: 16px;
+  color: var(--koperta);
+}
+
+.toast.blad {
+  background: var(--polecony-ciemny);
+  color: #fff;
+}
+
+.toast.blad svg {
+  color: #fff;
+}
+
+@keyframes toast-wjazd {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+}
+
+.toast.znika {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+/* --- Zasłona i responsywność --------------------------------------------------------------------- */
+
+.zaslona {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  background: rgb(15 17 23 / 0.4);
+}
+
+.tylko-mobile {
+  display: none !important;
+}
+
+@media (max-width: 1080px) {
+  .uklad {
+    grid-template-columns: 210px 1fr;
+  }
+
+  .czytnik {
+    position: fixed;
+    top: 58px;
+    right: 0;
+    bottom: 0;
+    left: 210px;
+    z-index: 20;
+    background: var(--papier);
+    transform: translateX(102%);
+    transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.3, 1);
+    box-shadow: var(--cien-3);
+  }
+
+  .czytnik.otwarty {
+    transform: none;
+  }
+
+  .czytnik-puste {
+    display: none;
+  }
+
+  .cz-powrot {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 800px) {
+  .tylko-mobile {
+    display: inline-flex !important;
+  }
+
+  .pasek {
+    gap: 0.5rem;
+  }
+
+  .pasek-logo span {
+    display: none;
+  }
+
+  .uklad {
+    grid-template-columns: 1fr;
+  }
+
+  .boczny {
+    position: fixed;
+    top: 58px;
+    bottom: 0;
+    left: 0;
+    z-index: 30;
+    width: min(280px, 80vw);
+    background: var(--papier);
+    transform: translateX(-102%);
+    transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.3, 1);
+    box-shadow: var(--cien-3);
+  }
+
+  .boczny.otwarty {
+    transform: none;
+  }
+
+  .czytnik {
+    left: 0;
+  }
+
+  .kompozycja {
+    right: 0;
+    width: 100vw;
+    max-height: 88dvh;
+    border-radius: var(--r-l) var(--r-l) 0 0;
+  }
+
+  .pomoc-siatka {
+    grid-template-columns: 1fr;
+  }
+
+  .cz-meta {
+    flex-wrap: wrap;
+    row-gap: 0.35rem;
+  }
+
+  .cz-data {
+    flex-basis: 100%;
+    padding-left: calc(40px + 0.8rem);
+    text-align: left;
+  }
+}

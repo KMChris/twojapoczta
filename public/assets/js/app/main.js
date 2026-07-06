@@ -1,0 +1,603 @@
+// TwojaPoczta · rdzeń aplikacji: stan, foldery, lista, czytnik, ustawienia.
+
+import { api } from './api.js';
+import { el, ikona, krotkiCzas, pelnaData, inicjaly, kolorAwatara, wstawTrescZLinkami, toast } from './ui.js';
+import { initKompozycja, zbudujOdpowiedz, zbudujPrzekazanie } from './kompozycja.js';
+import { initSkroty } from './skroty.js';
+
+const NAZWY = {
+  inbox: 'Odebrane', starred: 'Z gwiazdką', sent: 'Wysłane', drafts: 'Szkice',
+  archive: 'Archiwum', spam: 'Spam', trash: 'Kosz',
+};
+const SLUGI = {
+  odebrane: 'inbox', gwiazdka: 'starred', wyslane: 'sent', szkice: 'drafts',
+  archiwum: 'archive', spam: 'spam', kosz: 'trash',
+};
+const SLUG_FOLDERU = Object.fromEntries(Object.entries(SLUGI).map(([s, f]) => [f, s]));
+
+const PUSTE_TEKSTY = {
+  inbox: 'Pusta skrzynka. Cisza jak w niedzielę na poczcie.',
+  starred: 'Nic tu jeszcze nie błyszczy.\nOtwórz wiadomość i naciśnij „s”.',
+  sent: 'Jeszcze nic stąd nie wysłano.\nNaciśnij „c” i nadaj pierwszy list.',
+  drafts: 'Brak szkiców. Wszystko, co zaczniesz pisać,\nzapisze się tu samo.',
+  archive: 'Archiwum świeci pustkami.',
+  spam: 'Zero spamu. Tak trzymać.',
+  trash: 'Kosz jest pusty.',
+};
+
+const stan = {
+  user: null,
+  folder: 'inbox',
+  q: '',
+  wiadomosci: [],
+  liczniki: {},
+  wybranaId: null,
+  otwarta: null,
+};
+
+// --- Referencje DOM ----------------------------------------------------------
+
+const listaEl = document.querySelector('[data-lista]');
+const tytulFolderu = document.querySelector('[data-tytul-folderu]');
+const czytnikEl = document.querySelector('[data-czytnik]');
+const czytnikPanel = document.querySelector('[data-panel-czytnik]');
+const czytnikPuste = document.querySelector('[data-czytnik-puste]');
+const szukajInput = document.querySelector('[data-szukaj]');
+const szukajWyczysc = document.querySelector('[data-akcja="wyczysc-szukanie"]');
+const boczny = document.querySelector('[data-boczny]');
+const zaslona = document.querySelector('[data-zaslona]');
+const ustawieniaDialog = document.querySelector('[data-ustawienia]');
+const pomocDialog = document.querySelector('[data-pomoc]');
+const formularzUstawien = document.querySelector('[data-formularz-ustawien]');
+
+// --- Motyw ---------------------------------------------------------------------
+
+const systemowyCiemny = matchMedia('(prefers-color-scheme: dark)');
+
+function zastosujMotyw() {
+  const motyw = stan.user?.theme ?? 'system';
+  const ciemny = motyw === 'dark' || (motyw === 'system' && systemowyCiemny.matches);
+  if (ciemny) document.documentElement.dataset.theme = 'dark';
+  else delete document.documentElement.dataset.theme;
+}
+
+systemowyCiemny.addEventListener('change', zastosujMotyw);
+
+async function ustawMotyw(motyw, { zapisz = false } = {}) {
+  stan.user.theme = motyw;
+  zastosujMotyw();
+  if (zapisz) {
+    try {
+      await api.zapiszProfil({ theme: motyw });
+    } catch {
+      /* motyw i tak działa lokalnie */
+    }
+  }
+}
+
+// --- Foldery i lista --------------------------------------------------------------
+
+function przejdzDoFolderu(folder, { zHash = false } = {}) {
+  stan.folder = folder;
+  stan.q = '';
+  szukajInput.value = '';
+  szukajWyczysc.hidden = true;
+  stan.wybranaId = null;
+  stan.otwarta = null;
+  if (!zHash) history.replaceState(null, '', `#${SLUG_FOLDERU[folder]}`);
+  document.querySelectorAll('.folder').forEach((f) => {
+    f.classList.toggle('aktywny', f.dataset.folder === folder);
+  });
+  tytulFolderu.textContent = NAZWY[folder];
+  pokazPustyCzytnik();
+  zamknijBoczny();
+  odswiezListe();
+}
+
+async function odswiezListe({ cicho = false } = {}) {
+  try {
+    const { messages, counts } = await api.lista(stan.folder, stan.q);
+    stan.wiadomosci = messages;
+    stan.liczniki = counts;
+    renderujListe();
+    renderujLiczniki();
+  } catch (blad) {
+    if (!cicho) toast(blad.message, { blad: true });
+  }
+}
+
+async function odswiezLiczniki() {
+  try {
+    const { counts } = await api.liczniki();
+    stan.liczniki = counts;
+    renderujLiczniki();
+  } catch {
+    /* cisza, to tylko liczniki */
+  }
+}
+
+function renderujLiczniki() {
+  for (const [klucz, wartosc] of [
+    ['inbox', stan.liczniki.inbox],
+    ['drafts', stan.liczniki.drafts],
+    ['spam', stan.liczniki.spam],
+  ]) {
+    const znacznik = document.querySelector(`[data-licznik="${klucz}"]`);
+    if (!znacznik) continue;
+    znacznik.hidden = !wartosc;
+    znacznik.textContent = wartosc || '';
+  }
+  const nieprzeczytane = stan.liczniki.inbox;
+  document.title = `${NAZWY[stan.folder]}${nieprzeczytane ? ` (${nieprzeczytane})` : ''} · TwojaPoczta`;
+}
+
+function renderujListe() {
+  listaEl.replaceChildren();
+
+  if (!stan.wiadomosci.length) {
+    const tekst = stan.q
+      ? `Brak wyników dla „${stan.q}”.`
+      : PUSTE_TEKSTY[stan.folder] ?? 'Pusto.';
+    const pusta = el('div', { class: 'lista-pusta' }, ikona('mail'));
+    for (const linia of tekst.split('\n')) pusta.append(el('p', {}, linia));
+    listaEl.append(pusta);
+    return;
+  }
+
+  for (const w of stan.wiadomosci) listaEl.append(zbudujWiersz(w));
+}
+
+function zbudujWiersz(w) {
+  const wysylkowy = stan.folder === 'sent' || stan.folder === 'drafts';
+  const kto = wysylkowy ? `Do: ${w.to_addr || '(bez adresata)'}` : w.from_name || w.from_addr;
+  const kolorAdres = wysylkowy ? w.to_addr : w.from_addr;
+
+  const gwiazdka = el(
+    'span',
+    {
+      class: `w-gwiazdka${w.is_starred ? ' aktywna' : ''}`,
+      role: 'button',
+      tabindex: '0',
+      'aria-label': w.is_starred ? 'Zdejmij gwiazdkę' : 'Oznacz gwiazdką',
+      onclick: (e) => {
+        e.stopPropagation();
+        przelaczGwiazdke(w.id);
+      },
+    },
+    ikona('star')
+  );
+
+  const wiersz = el(
+    'button',
+    {
+      class:
+        'wiadomosc' +
+        (!w.is_read && !wysylkowy ? ' nieprzeczytana' : '') +
+        (w.id === stan.wybranaId ? ' wybrana' : ''),
+      dataset: { id: w.id },
+      onclick: () => otworzWiadomosc(w.id),
+    },
+    el('span', { class: 'aw', style: `background:${kolorAwatara(kolorAdres)}` }, inicjaly(kto.replace(/^Do: /, ''), kolorAdres)),
+    el(
+      'span',
+      { class: 'w-gora' },
+      el('span', { class: 'w-od' }, kto),
+      w.is_priority ? el('span', { class: 'w-chip' }, 'PRIORYTET') : null
+    ),
+    el('span', { class: 'w-czas' }, krotkiCzas(w.sent_at)),
+    el(
+      'span',
+      { class: 'w-dol' },
+      el('span', { class: 'w-temat' }, w.subject || '(bez tematu)'),
+      el('span', { class: 'w-snippet' }, w.snippet ? `· ${w.snippet}` : ''),
+      gwiazdka
+    )
+  );
+  return wiersz;
+}
+
+// --- Czytnik ----------------------------------------------------------------------
+
+function pokazPustyCzytnik() {
+  stan.otwarta = null;
+  czytnikEl.hidden = true;
+  czytnikPuste.hidden = false;
+  czytnikPanel.classList.remove('otwarty');
+  odswiezZaznaczenieListy();
+}
+
+function zamknijCzytnik() {
+  pokazPustyCzytnik();
+  stan.wybranaId = null;
+  odswiezZaznaczenieListy();
+}
+
+function odswiezZaznaczenieListy() {
+  listaEl.querySelectorAll('.wiadomosc').forEach((wiersz) => {
+    wiersz.classList.toggle('wybrana', Number(wiersz.dataset.id) === stan.wybranaId);
+  });
+}
+
+async function otworzWiadomosc(id) {
+  const skrot = stan.wiadomosci.find((w) => w.id === id);
+  stan.wybranaId = id;
+  odswiezZaznaczenieListy();
+
+  try {
+    const { message } = await api.wiadomosc(id);
+    // W międzyczasie wybrano coś innego albo zmieniono folder, więc nie renderuj starej odpowiedzi.
+    if (stan.wybranaId !== id) return;
+
+    if (message.folder === 'drafts') {
+      kompozycja.otworz({ draft: message });
+      return;
+    }
+
+    stan.otwarta = message;
+    if (skrot && !skrot.is_read) {
+      skrot.is_read = 1;
+      listaEl.querySelector(`[data-id="${id}"]`)?.classList.remove('nieprzeczytana');
+      odswiezLiczniki();
+    }
+    renderujCzytnik();
+  } catch (blad) {
+    toast(blad.message, { blad: true });
+  }
+}
+
+function przyciskAkcji(tekst, nazwaIkony, klik, { glowny = false } = {}) {
+  return el(
+    'button',
+    { class: `cz-przycisk${glowny ? ' glowny' : ''}`, onclick: klik },
+    ikona(nazwaIkony),
+    tekst
+  );
+}
+
+function ikonaAkcji(tytul, nazwaIkony, klik, { aktywna = false } = {}) {
+  return el(
+    'button',
+    { class: `ikona-btn${aktywna ? ' aktywna' : ''}`, title: tytul, 'aria-label': tytul, onclick: klik },
+    ikona(nazwaIkony)
+  );
+}
+
+function renderujCzytnik() {
+  const w = stan.otwarta;
+  czytnikEl.replaceChildren();
+  czytnikPuste.hidden = true;
+  czytnikEl.hidden = false;
+  czytnikPanel.classList.add('otwarty');
+
+  const powrot = el(
+    'button',
+    { class: 'ikona-btn cz-powrot', 'aria-label': 'Wróć do listy', onclick: () => zamknijCzytnik() },
+    ikona('back')
+  );
+
+  const naglowek = el(
+    'div',
+    { class: 'cz-naglowek' },
+    el('h2', { class: 'cz-temat' }, w.subject || '(bez tematu)'),
+    w.is_priority ? el('span', { class: 'cz-chip' }, 'PRIORYTET') : null
+  );
+
+  const meta = el(
+    'div',
+    { class: 'cz-meta' },
+    el('span', { class: 'aw', style: `background:${kolorAwatara(w.from_addr)}` }, inicjaly(w.from_name, w.from_addr)),
+    el(
+      'div',
+      { class: 'cz-kto' },
+      el('div', { class: 'cz-od' }, w.from_name || w.from_addr, el('small', {}, `<${w.from_addr}>`)),
+      el('div', { class: 'cz-do' }, `Do: ${w.to_addr || stan.user.address}`)
+    ),
+    el('div', { class: 'cz-data' }, pelnaData(w.sent_at))
+  );
+
+  const akcje = el('div', { class: 'cz-akcje' });
+  akcje.append(
+    przyciskAkcji('Odpowiedz', 'reply', () => odpowiedz(), { glowny: true }),
+    przyciskAkcji('Przekaż', 'forward', () => przekaz())
+  );
+  if (w.folder === 'trash') {
+    akcje.append(
+      przyciskAkcji('Przywróć', 'inbox', () => przeniesOtwarta('inbox', 'Przywrócono do Odebranych')),
+      przyciskAkcji('Usuń trwale', 'trash', () => doKoszaOtwarta())
+    );
+  } else {
+    if (w.folder === 'spam') {
+      akcje.append(przyciskAkcji('To nie spam', 'inbox', () => przeniesOtwarta('inbox', 'Przeniesiono do Odebranych')));
+    }
+    akcje.append(
+      ikonaAkcji('Archiwizuj (e)', 'archive', () => archiwizujOtwarta()),
+      ikonaAkcji(w.is_starred ? 'Zdejmij gwiazdkę (s)' : 'Gwiazdka (s)', 'star', () => gwiazdkaOtwarta(), {
+        aktywna: !!w.is_starred,
+      }),
+      ikonaAkcji('Oznacz jako nieprzeczytane (u)', 'unread', () => nieprzeczytanaOtwarta()),
+      ikonaAkcji('Do kosza (#)', 'trash', () => doKoszaOtwarta())
+    );
+    if (w.folder !== 'spam' && w.folder !== 'sent') {
+      akcje.append(ikonaAkcji('Zgłoś spam', 'spam', () => przeniesOtwarta('spam', 'Oznaczono jako spam')));
+    }
+  }
+
+  const body = el('div', { class: 'cz-body' });
+  wstawTrescZLinkami(body, w.body);
+
+  czytnikEl.append(powrot, naglowek, meta, akcje, body);
+  czytnikPanel.scrollTop = 0;
+}
+
+// --- Akcje na wiadomościach ------------------------------------------------------
+
+function usunZListy(id, { zaznaczNastepna = true } = {}) {
+  const indeks = stan.wiadomosci.findIndex((w) => w.id === id);
+  if (indeks === -1) return;
+  stan.wiadomosci.splice(indeks, 1);
+  renderujListe();
+  if (stan.wybranaId !== id) return;
+  const nastepnaW = stan.wiadomosci[Math.min(indeks, stan.wiadomosci.length - 1)];
+  if (zaznaczNastepna && nastepnaW) otworzWiadomosc(nastepnaW.id);
+  else zamknijCzytnik();
+}
+
+async function przelaczGwiazdke(id) {
+  const w = stan.wiadomosci.find((x) => x.id === id) ?? stan.otwarta;
+  if (!w) return;
+  const nowa = !w.is_starred;
+  try {
+    await api.zmien(id, { is_starred: nowa });
+  } catch (blad) {
+    return toast(blad.message, { blad: true });
+  }
+  w.is_starred = nowa ? 1 : 0;
+  if (stan.otwarta?.id === id) stan.otwarta.is_starred = w.is_starred;
+  if (stan.folder === 'starred' && !nowa) {
+    usunZListy(id);
+  } else {
+    renderujListe();
+    if (stan.otwarta?.id === id) renderujCzytnik();
+  }
+}
+
+async function przeniesOtwarta(folder, komunikat) {
+  const w = stan.otwarta;
+  if (!w) return;
+  try {
+    await api.zmien(w.id, { folder });
+    toast(komunikat, { ikonaNazwa: 'archive' });
+    usunZListy(w.id);
+    odswiezLiczniki();
+  } catch (blad) {
+    toast(blad.message, { blad: true });
+  }
+}
+
+function archiwizujOtwarta() {
+  if (!stan.otwarta || stan.otwarta.folder === 'archive') return;
+  przeniesOtwarta('archive', 'Zarchiwizowano');
+}
+
+function gwiazdkaOtwarta() {
+  if (stan.otwarta) przelaczGwiazdke(stan.otwarta.id);
+}
+
+async function doKoszaOtwarta() {
+  const w = stan.otwarta;
+  if (!w) return;
+  try {
+    const wynik = await api.usun(w.id);
+    toast(wynik.purged ? 'Usunięto trwale' : 'Przeniesiono do kosza', { ikonaNazwa: 'trash' });
+    usunZListy(w.id);
+    odswiezLiczniki();
+  } catch (blad) {
+    toast(blad.message, { blad: true });
+  }
+}
+
+async function nieprzeczytanaOtwarta() {
+  const w = stan.otwarta;
+  if (!w) return;
+  try {
+    await api.zmien(w.id, { is_read: false });
+    const skrot = stan.wiadomosci.find((x) => x.id === w.id);
+    if (skrot) skrot.is_read = 0;
+    zamknijCzytnik();
+    renderujListe();
+    odswiezLiczniki();
+  } catch (blad) {
+    toast(blad.message, { blad: true });
+  }
+}
+
+// --- Nawigacja po liście -------------------------------------------------------------
+
+function otworzWzgledna(krok) {
+  if (!stan.wiadomosci.length) return;
+  const indeks = stan.wiadomosci.findIndex((w) => w.id === stan.wybranaId);
+  const nowy = indeks === -1 ? 0 : Math.min(Math.max(indeks + krok, 0), stan.wiadomosci.length - 1);
+  if (stan.wiadomosci[nowy].id !== stan.wybranaId) {
+    otworzWiadomosc(stan.wiadomosci[nowy].id);
+    listaEl.querySelector(`[data-id="${stan.wiadomosci[nowy].id}"]`)?.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+// --- Kompozycja: wejścia -------------------------------------------------------------
+
+function napisz() {
+  kompozycja.otworz({ tresc: stan.user.signature ? `\n\n${stan.user.signature}` : '' });
+}
+
+function odpowiedz() {
+  if (!stan.otwarta) return;
+  kompozycja.otworz(zbudujOdpowiedz(stan.otwarta, stan.user));
+}
+
+function przekaz() {
+  if (!stan.otwarta) return;
+  kompozycja.otworz(zbudujPrzekazanie(stan.otwarta));
+}
+
+// --- Szukanie ----------------------------------------------------------------------
+
+let zegarSzukania = null;
+
+szukajInput.addEventListener('input', () => {
+  szukajWyczysc.hidden = !szukajInput.value;
+  clearTimeout(zegarSzukania);
+  zegarSzukania = setTimeout(() => {
+    stan.q = szukajInput.value.trim();
+    odswiezListe();
+  }, 300);
+});
+
+szukajInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    clearTimeout(zegarSzukania);
+    stan.q = szukajInput.value.trim();
+    odswiezListe();
+  }
+});
+
+szukajWyczysc.addEventListener('click', () => {
+  szukajInput.value = '';
+  szukajWyczysc.hidden = true;
+  stan.q = '';
+  odswiezListe();
+  szukajInput.focus();
+});
+
+function fokusSzukaj() {
+  szukajInput.focus();
+  szukajInput.select();
+}
+
+// --- Ustawienia i pomoc ---------------------------------------------------------------
+
+function otworzUstawienia() {
+  formularzUstawien.imie.value = stan.user.name;
+  formularzUstawien.podpis.value = stan.user.signature;
+  formularzUstawien.motyw.value = stan.user.theme;
+  ustawieniaDialog.showModal();
+}
+
+formularzUstawien.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    const { user } = await api.zapiszProfil({
+      name: formularzUstawien.imie.value.trim(),
+      signature: formularzUstawien.podpis.value,
+      theme: formularzUstawien.motyw.value,
+    });
+    stan.user = user;
+    zastosujMotyw();
+    odswiezAwatar();
+    ustawieniaDialog.close();
+    toast('Zapisano ustawienia', { ikonaNazwa: 'ustawienia' });
+  } catch (blad) {
+    toast(blad.message, { blad: true });
+  }
+});
+
+function otworzPomoc() {
+  pomocDialog.showModal();
+}
+
+async function wyloguj() {
+  try {
+    await api.wyloguj();
+  } finally {
+    location.href = '/logowanie';
+  }
+}
+
+// --- Panel boczny (mobile) --------------------------------------------------------------
+
+function zamknijBoczny() {
+  boczny.classList.remove('otwarty');
+  zaslona.hidden = true;
+}
+
+document.querySelector('[data-akcja="menu"]').addEventListener('click', () => {
+  const otwarty = boczny.classList.toggle('otwarty');
+  zaslona.hidden = !otwarty;
+});
+
+zaslona.addEventListener('click', zamknijBoczny);
+
+// --- Spinanie całości ----------------------------------------------------------------------
+
+function odswiezAwatar() {
+  const znak = document.querySelector('[data-awatar]');
+  znak.textContent = inicjaly(stan.user.name, stan.user.address);
+  znak.parentElement.style.background = kolorAwatara(stan.user.address);
+  document.querySelector('[data-adres]').textContent = stan.user.address;
+}
+
+const app = {
+  stan,
+  przejdzDoFolderu,
+  odswiezListe,
+  odswiezLiczniki,
+  zamknijCzytnik,
+  napisz,
+  fokusSzukaj,
+  ustawMotyw,
+  otworzUstawienia,
+  otworzPomoc,
+  wyloguj,
+  nastepna: () => otworzWzgledna(1),
+  poprzednia: () => otworzWzgledna(-1),
+  otworzZaznaczona: () => stan.wybranaId && otworzWiadomosc(stan.wybranaId),
+  archiwizujOtwarta,
+  gwiazdkaOtwarta,
+  doKoszaOtwarta,
+  nieprzeczytanaOtwarta,
+};
+
+const kompozycja = initKompozycja(app);
+initSkroty(app, kompozycja);
+
+for (const przycisk of document.querySelectorAll('.folder')) {
+  przycisk.addEventListener('click', () => przejdzDoFolderu(przycisk.dataset.folder));
+}
+
+document.querySelector('[data-akcja="napisz"]').addEventListener('click', napisz);
+document.querySelector('[data-akcja="odswiez"]').addEventListener('click', () => odswiezListe());
+document.querySelector('[data-akcja="ustawienia"]').addEventListener('click', otworzUstawienia);
+document.querySelector('[data-akcja="pomoc"]').addEventListener('click', otworzPomoc);
+document.querySelector('[data-akcja="wyloguj"]').addEventListener('click', wyloguj);
+
+for (const przycisk of document.querySelectorAll('[data-akcja="zamknij-modal"]')) {
+  przycisk.addEventListener('click', () => przycisk.closest('dialog').close());
+}
+
+window.addEventListener('hashchange', () => {
+  const folder = SLUGI[location.hash.slice(1)];
+  if (folder && folder !== stan.folder) przejdzDoFolderu(folder, { zHash: true });
+});
+
+async function start() {
+  try {
+    const { user } = await api.ja();
+    stan.user = user;
+  } catch {
+    return; // api.js przekierowało do logowania
+  }
+  zastosujMotyw();
+  odswiezAwatar();
+  const zHasha = SLUGI[location.hash.slice(1)];
+  przejdzDoFolderu(zHasha ?? 'inbox');
+
+  // Cichy puls: świeże liczniki, a w Odebranych także lista.
+  setInterval(() => {
+    if (document.hidden) return;
+    odswiezLiczniki();
+    if (stan.folder === 'inbox' && !stan.q && !kompozycja.otwarte() && listaEl.scrollTop === 0) {
+      odswiezListe({ cicho: true });
+    }
+  }, 30_000);
+}
+
+start();

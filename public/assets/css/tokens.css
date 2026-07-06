@@ -110,6 +110,11 @@ img, svg {
   border-radius: 2px;
 }
 
+/* Atrybut hidden wygrywa z każdym display z klas. */
+[hidden] {
+  display: none !important;
+}
+
 ::selection {
   background: var(--koperta);
   color: #191c24;
