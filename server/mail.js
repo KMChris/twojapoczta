@@ -10,6 +10,20 @@ export function addressOf(login) {
   return `${login}@${DOMAIN}`;
 }
 
+// A local part resolves to a mailbox directly or through an alias.
+export function findMailbox(db, localPart) {
+  const user = db.prepare('SELECT id, login, name FROM users WHERE login = ?').get(localPart);
+  if (user) return user;
+  return (
+    db
+      .prepare(
+        `SELECT u.id, u.login, u.name FROM aliases a
+         JOIN users u ON u.id = a.user_id WHERE a.alias = ?`
+      )
+      .get(localPart) ?? null
+  );
+}
+
 export function makeSnippet(body) {
   return body.replace(/\s+/g, ' ').trim().slice(0, 140);
 }
@@ -167,9 +181,9 @@ export function sendMessage(db, user, { to, subject, body, draftId, priority }) 
     if (match[2] !== DOMAIN) {
       return { error: `Ta instalacja doręcza pocztę tylko w domenie @${DOMAIN}. Adres „${addr}" jest poza nią.` };
     }
-    const recipient = db.prepare('SELECT id, login, name FROM users WHERE login = ?').get(match[1]);
+    const recipient = findMailbox(db, match[1]);
     if (!recipient) return { error: `Nie znaleziono skrzynki „${addr}".` };
-    resolved.push(recipient);
+    if (!resolved.some((r) => r.id === recipient.id)) resolved.push(recipient);
   }
 
   const sentAt = now();

@@ -479,7 +479,69 @@ function otworzUstawienia() {
   formularzUstawien.imie.value = stan.user.name;
   formularzUstawien.podpis.value = stan.user.signature;
   formularzUstawien.motyw.value = stan.user.theme;
+  odswiezAliasy();
   ustawieniaDialog.showModal();
+}
+
+// --- Aliasy ---------------------------------------------------------------------
+
+async function odswiezAliasy() {
+  try {
+    const { aliases } = await api.aliasy();
+    renderujAliasy(aliases);
+  } catch {
+    /* sekcja zostaje pusta */
+  }
+}
+
+function renderujAliasy(aliasy) {
+  const lista = document.querySelector('[data-aliasy]');
+  lista.replaceChildren();
+  if (!aliasy.length) {
+    lista.append(el('li', { class: 'aliasy-brak' }, 'Nie masz jeszcze żadnego aliasu.'));
+    return;
+  }
+  for (const wpis of aliasy) {
+    lista.append(
+      el(
+        'li',
+        { class: 'alias' },
+        el('span', {}, wpis.address),
+        el(
+          'button',
+          {
+            type: 'button',
+            class: 'alias-usun',
+            'aria-label': `Usuń alias ${wpis.address}`,
+            onclick: async () => {
+              try {
+                const { aliases } = await api.usunAlias(wpis.id);
+                renderujAliasy(aliases);
+                toast('Usunięto alias', { ikonaNazwa: 'trash' });
+              } catch (blad) {
+                toast(blad.message, { blad: true });
+              }
+            },
+          },
+          ikona('close')
+        )
+      )
+    );
+  }
+}
+
+async function dodajAlias() {
+  const input = document.querySelector('[data-alias-input]');
+  const alias = input.value.trim().toLowerCase();
+  if (!alias) return input.focus();
+  try {
+    const { aliases } = await api.dodajAlias(alias);
+    input.value = '';
+    renderujAliasy(aliases);
+    toast('Dodano alias', { ikonaNazwa: 'mail' });
+  } catch (blad) {
+    toast(blad.message, { blad: true });
+  }
 }
 
 formularzUstawien.addEventListener('submit', async (e) => {
@@ -572,6 +634,14 @@ document.querySelector('[data-akcja="wyloguj"]').addEventListener('click', wylog
 for (const przycisk of document.querySelectorAll('[data-akcja="zamknij-modal"]')) {
   przycisk.addEventListener('click', () => przycisk.closest('dialog').close());
 }
+
+document.querySelector('[data-akcja="dodaj-alias"]').addEventListener('click', dodajAlias);
+document.querySelector('[data-alias-input]').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    dodajAlias();
+  }
+});
 
 window.addEventListener('hashchange', () => {
   const folder = SLUGI[location.hash.slice(1)];

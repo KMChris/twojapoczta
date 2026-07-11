@@ -1096,6 +1096,108 @@ body.app {
   accent-color: var(--polecony);
 }
 
+.aliasy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 0.7rem;
+  padding: 0;
+  list-style: none;
+}
+
+.alias {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.4em 0.45em 0.4em 0.85em;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  background: var(--papier-2);
+  border: 1px solid var(--linia);
+  border-radius: var(--r-m);
+}
+
+.alias-usun {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--r-s);
+  color: var(--stempel);
+  cursor: pointer;
+}
+
+.alias-usun:hover {
+  background: var(--polecony-tlo);
+  color: var(--polecony);
+}
+
+.alias-usun svg {
+  width: 14px;
+  height: 14px;
+}
+
+.aliasy-brak {
+  font-size: 0.85rem;
+  color: var(--stempel);
+}
+
+.alias-dodawanie {
+  display: flex;
+  align-items: stretch;
+}
+
+.alias-dodawanie input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55em 0.85em;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--atrament);
+  background: var(--papier-2);
+  border: 1.5px solid var(--linia-2);
+  border-right: 0;
+  border-radius: var(--r-m) 0 0 var(--r-m);
+}
+
+.alias-dodawanie input:focus {
+  outline: none;
+  border-color: var(--priorytet);
+}
+
+.alias-dodawanie span {
+  display: flex;
+  align-items: center;
+  padding-inline: 0.7em;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--atrament-2);
+  background: var(--koperta-tlo);
+  border: 1.5px solid var(--linia-2);
+}
+
+.alias-dodawanie .alias-dodaj {
+  padding: 0.55em 1.1em;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 640;
+  color: var(--atrament);
+  background: none;
+  border: 1.5px solid var(--linia-2);
+  border-left: 0;
+  border-radius: 0 var(--r-m) var(--r-m) 0;
+  cursor: pointer;
+}
+
+.alias-dodawanie .alias-dodaj:hover {
+  background: var(--papier-2);
+}
+
 .modal-stopka {
   display: flex;
   justify-content: flex-end;

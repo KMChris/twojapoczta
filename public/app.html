@@ -210,6 +210,17 @@
         <label><input type="radio" name="motyw" value="system"> Jak system</label>
       </div>
     </fieldset>
+    <fieldset class="pole">
+      <legend>Aliasy adresu</legend>
+      <ul class="aliasy" data-aliasy></ul>
+      <div class="alias-dodawanie">
+        <input type="text" data-alias-input placeholder="np. biuro" autocomplete="off"
+               autocapitalize="none" spellcheck="false" maxlength="30" aria-label="Nowy alias">
+        <span aria-hidden="true">@twojapoczta.com</span>
+        <button type="button" class="alias-dodaj" data-akcja="dodaj-alias">Dodaj</button>
+      </div>
+      <p class="pole-opis">Wiadomości wysłane na alias trafią do Twojej skrzynki. Najwyżej 5.</p>
+    </fieldset>
     <footer class="modal-stopka">
       <button type="submit" class="btn-zapisz">Zapisz zmiany</button>
     </footer>

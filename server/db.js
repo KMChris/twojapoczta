@@ -41,6 +41,13 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_messages_owner_folder
   ON messages(owner_id, folder, sent_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+
+CREATE TABLE IF NOT EXISTS aliases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  alias TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL
+);
 `;
 
 export function openDb(dataDir) {

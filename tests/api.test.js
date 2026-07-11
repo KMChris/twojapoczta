@@ -169,6 +169,38 @@ test('search finds messages by subject and sender', async () => {
   assert.equal(nothing.data.messages.length, 0);
 });
 
+test('aliases: add, deliver through alias, dedupe, remove', async () => {
+  const ania = client();
+  await ania('POST', '/api/login', { login: 'ania', password: 'demo1234' });
+
+  const added = await ania('POST', '/api/aliases', { alias: 'ksiegowa' });
+  assert.equal(added.status, 201);
+  assert.equal(added.data.aliases[0].address, 'ksiegowa@twojapoczta.com');
+
+  const taken = await ania('POST', '/api/aliases', { alias: 'demo' });
+  assert.equal(taken.status, 409);
+  const invalid = await ania('POST', '/api/aliases', { alias: 'Źle!' });
+  assert.equal(invalid.status, 400);
+
+  const demo = client();
+  await demo('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const sent = await demo('POST', '/api/messages', {
+    to: 'ksiegowa@twojapoczta.com, ania@twojapoczta.com',
+    subject: 'Test aliasu',
+    body: 'Przez alias i wprost, powinna dojść jedna kopia.',
+  });
+  assert.equal(sent.status, 201);
+
+  const inbox = await ania('GET', '/api/messages?folder=inbox');
+  const kopie = inbox.data.messages.filter((m) => m.subject === 'Test aliasu');
+  assert.equal(kopie.length, 1);
+
+  const removed = await ania('DELETE', `/api/aliases/${added.data.aliases[0].id}`);
+  assert.equal(removed.status, 200);
+  const gone = await demo('POST', '/api/messages', { to: 'ksiegowa@twojapoczta.com', subject: 'x', body: 'x' });
+  assert.equal(gone.status, 400);
+});
+
 test('profile can be updated', async () => {
   const api = client();
   await api('POST', '/api/login', { login: 'kasia', password: 'sekretne123' });

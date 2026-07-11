@@ -6,7 +6,7 @@ import {
   SESSION_COOKIE,
 } from './auth.js';
 import {
-  DOMAIN, addressOf, listMessages, getMessage, updateMessage, deleteMessage,
+  DOMAIN, addressOf, findMailbox, listMessages, getMessage, updateMessage, deleteMessage,
   unreadCounts, sendMessage, saveDraft, deliverSystemMessage,
 } from './mail.js';
 import { WELCOME_SUBJECT, WELCOME_BODY } from './seed.js';
@@ -212,6 +212,43 @@ export function registerApiRoutes(router, db) {
 
   route('GET', '/api/counts', async (req, res, { user }) => {
     json(res, 200, { counts: unreadCounts(db, user.id) });
+  });
+
+  // --- Aliasy ------------------------------------------------------------------
+
+  const listAliases = (userId) =>
+    db
+      .prepare('SELECT id, alias FROM aliases WHERE user_id = ? ORDER BY id')
+      .all(userId)
+      .map((a) => ({ ...a, address: addressOf(a.alias) }));
+
+  route('GET', '/api/aliases', async (req, res, { user }) => {
+    json(res, 200, { aliases: listAliases(user.id) });
+  });
+
+  route('POST', '/api/aliases', async (req, res, { user }) => {
+    const body = await readBody(req);
+    const alias = String(body.alias ?? '').trim().toLowerCase();
+    if (!LOGIN_RE.test(alias)) {
+      return json(res, 400, {
+        error: 'Alias może mieć 3–30 znaków: małe litery, cyfry, kropki i myślniki.',
+      });
+    }
+    const count = db.prepare('SELECT COUNT(*) AS n FROM aliases WHERE user_id = ?').get(user.id);
+    if (count.n >= 5) return json(res, 400, { error: 'Możesz mieć najwyżej 5 aliasów.' });
+    if (findMailbox(db, alias)) {
+      return json(res, 409, { error: `Adres ${addressOf(alias)} jest już zajęty.` });
+    }
+    db.prepare('INSERT INTO aliases (user_id, alias, created_at) VALUES (?, ?, ?)').run(user.id, alias, now());
+    json(res, 201, { aliases: listAliases(user.id) });
+  });
+
+  route('DELETE', '/api/aliases/:id', async (req, res, { user, params }) => {
+    const result = db
+      .prepare('DELETE FROM aliases WHERE id = ? AND user_id = ?')
+      .run(Number(params.id), user.id);
+    if (!result.changes) return json(res, 404, { error: 'Nie znaleziono aliasu.' });
+    json(res, 200, { aliases: listAliases(user.id) });
   });
 
   return {

@@ -30,4 +30,7 @@ export const api = {
   zmien: (id, dane) => zadanie('PATCH', `/api/messages/${id}`, dane),
   usun: (id) => zadanie('DELETE', `/api/messages/${id}`),
   liczniki: () => zadanie('GET', '/api/counts'),
+  aliasy: () => zadanie('GET', '/api/aliases'),
+  dodajAlias: (alias) => zadanie('POST', '/api/aliases', { alias }),
+  usunAlias: (id) => zadanie('DELETE', `/api/aliases/${id}`),
 };
