@@ -269,6 +269,7 @@
         </p>
         <ul class="hosting-lista odsl">
           <li>SQLite wbudowane w Node: cała skrzynka to jeden plik</li>
+          <li>Bramka SMTP w zestawie: poczta ze świata bez dodatkowych programów</li>
           <li>Gotowe pod systemd i reverse proxy (Caddy, nginx)</li>
           <li>Kopia zapasowa = skopiowanie jednego pliku</li>
         </ul>
@@ -337,9 +338,10 @@
         </details>
         <details class="odsl">
           <summary>Czy odbiorę pocztę z Gmaila albo firmowej skrzynki?</summary>
-          <p>Ta wersja doręcza wiadomości między kontami w Twojej domenie,
-             idealna dla zespołu, rodziny albo społeczności. Bramka SMTP/IMAP
-             do świata zewnętrznego jest na mapie rozwoju.</p>
+          <p>Tak. Wbudowana bramka SMTP przyjmuje pocztę ze świata. Wystarczy
+             wskazać Twój serwer w rekordzie MX domeny i otworzyć port 25.
+             Wysyłanie na zewnątrz włączysz jedną zmienną środowiskową.
+             Szczegóły znajdziesz w README.</p>
         </details>
         <details class="odsl">
           <summary>Jakie są wymagania sprzętowe?</summary>

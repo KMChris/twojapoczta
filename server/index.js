@@ -8,6 +8,7 @@ import { createRouter } from './router.js';
 import { createStaticHandler } from './static.js';
 import { registerApiRoutes, requireUser, json } from './api.js';
 import { seedIfEmpty } from './seed.js';
+import { startSmtpServer } from './smtp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -75,10 +76,23 @@ if (isMain) {
     console.log('');
     console.log(`  \u{1F4EE} TwojaPoczta · http://${HOST}:${PORT}`);
     console.log(`     Konto demo: demo@twojapoczta.com · hasło: demo1234`);
+    if (process.env.TP_EXTERNAL === '1') {
+      console.log('     Poczta wychodząca na zewnątrz: włączona (TP_EXTERNAL=1)');
+    }
     console.log('');
   });
 
+  let smtp = null;
+  if (process.env.TP_SMTP_PORT) {
+    smtp = startSmtpServer(db, {
+      port: Number(process.env.TP_SMTP_PORT),
+      host: process.env.TP_SMTP_HOST ?? '0.0.0.0',
+      hostname: process.env.TP_SMTP_HOSTNAME,
+    });
+  }
+
   const shutdown = () => {
+    smtp?.close();
     server.close(() => {
       db.close();
       process.exit(0);

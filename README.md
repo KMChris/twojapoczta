@@ -21,6 +21,11 @@ To wszystko. Bez `npm install`, bez Dockera, bez zewnętrznej bazy danych.
   Archiwum, Spam, Kosz (dwustopniowe usuwanie).
 - **Doręczanie wewnętrzne**: wiadomości między kontami w Twojej domenie
   trafiają do adresatów natychmiast.
+- **Bramka SMTP**: odbiór poczty ze świata (rekord MX + port 25) z pełnym
+  parserem MIME; wysyłka na zewnątrz opcjonalnie (`TP_EXTERNAL=1`),
+  nieudane doręczenia wracają jako „Zwrot do nadawcy".
+- **Załączniki**: do 10 plików po 5 MB, przechowywane z deduplikacją treści.
+- **Aliasy adresów**: do 5 dodatkowych adresów wpadających do Twojej skrzynki.
 - **Skróty klawiszowe**: `c` pisze, `/` szuka, `j`/`k` przewijają, `e` archiwizuje,
   `s` gwiazdka, `#` kosz, `u` nieprzeczytane, `g i`/`g s` foldery, `?` ściąga.
 - **Paleta poleceń** `Ctrl+K`: foldery, akcje i ustawienia w jednym miejscu.
@@ -53,13 +58,19 @@ data/            # tworzony przy starcie; cała poczta w jednym pliku
 
 Zmiennymi środowiskowymi:
 
-| Zmienna       | Domyślnie          | Opis                                        |
-| ------------- | ------------------ | ------------------------------------------- |
-| `PORT`        | `3000`             | port HTTP                                   |
-| `HOST`        | `127.0.0.1`        | adres nasłuchu (za proxy zostaw domyślny)   |
-| `TP_DATA_DIR` | `./data`           | katalog na bazę SQLite                      |
-| `TP_DOMAIN`   | `twojapoczta.com`  | domena adresów e-mail                       |
-| `TP_SECURE`   | brak               | `1` wymusza cookie `Secure` (albo nagłówek `x-forwarded-proto: https` z proxy) |
+| Zmienna            | Domyślnie          | Opis                                        |
+| ------------------ | ------------------ | ------------------------------------------- |
+| `PORT`             | `3000`             | port HTTP                                   |
+| `HOST`             | `127.0.0.1`        | adres nasłuchu (za proxy zostaw domyślny)   |
+| `TP_DATA_DIR`      | `./data`           | katalog na bazę SQLite                      |
+| `TP_DOMAIN`        | `twojapoczta.com`  | domena adresów e-mail                       |
+| `TP_SECURE`        | brak               | `1` wymusza cookie `Secure` (albo nagłówek `x-forwarded-proto: https` z proxy) |
+| `TP_SMTP_PORT`     | brak (wyłączone)   | port przychodzącego SMTP (produkcyjnie `25`) |
+| `TP_SMTP_HOST`     | `0.0.0.0`          | adres nasłuchu SMTP                         |
+| `TP_SMTP_HOSTNAME` | `mx.{TP_DOMAIN}`   | nazwa serwera w powitaniu SMTP i EHLO       |
+| `TP_EXTERNAL`      | brak (wyłączone)   | `1` włącza wysyłkę poza własną domenę       |
+| `TP_SMTP_ROUTE`    | brak               | smarthost `host[:port]`: cała poczta wychodząca przez przekaźnik |
+| `TP_TLS_VERIFY`    | brak (oportunistycznie) | `1` wymusza walidację certyfikatu serwera odbiorcy (fail-closed) |
 
 ## Wdrożenie na VPS
 
@@ -78,6 +89,11 @@ WorkingDirectory=/opt/twoja-poczta
 ExecStart=/usr/bin/node server/index.js
 Environment=PORT=3000
 Environment=TP_DATA_DIR=/var/lib/twojapoczta
+# Poczta ze świata (odkomentuj, gdy MX wskazuje na ten serwer):
+# Environment=TP_SMTP_PORT=25
+# Environment=TP_EXTERNAL=1
+# Port 25 bez roota wymaga tej zdolności:
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 Restart=on-failure
 
 [Install]
@@ -111,7 +127,37 @@ server {
 }
 ```
 
-### 3. Kopia zapasowa
+### 3. Poczta ze świata (bramka SMTP)
+
+**Odbiór.** Ustaw `TP_SMTP_PORT=25`, otwórz port 25 w zaporze i dodaj rekordy DNS:
+
+```
+twojapoczta.com.      MX 10  mx.twojapoczta.com.
+mx.twojapoczta.com.   A      <IP Twojego VPS>
+twojapoczta.com.      TXT    "v=spf1 a mx -all"
+```
+
+Bramka przyjmuje pocztę wyłącznie dla skrzynek i aliasów w Twojej domenie
+(relay jest odrzucany), parsuje MIME (w tym załączniki, kodowania
+`quoted-printable`/`base64` i polskie strony kodowe) i doręcza do Odebranych.
+
+**Wysyłka na zewnątrz.** Włącz `TP_EXTERNAL=1`. Wiadomości do obcych domen
+idą bezpośrednio do serwera MX odbiorcy (STARTTLS, gdy dostępny); porażka
+wraca do Twoich Odebranych jako „Zwrot do nadawcy".
+
+Szczera uwaga o dostarczalności: wielcy operatorzy oczekują poprawnego
+rekordu PTR (reverse DNS), a często i podpisów DKIM, których ta wersja
+jeszcze nie składa. Jeśli Twoje listy lądują w spamie, najprościej wysyłać
+przez przekaźnik (np. usługę SMTP Twojego hostingu):
+
+```
+TP_SMTP_ROUTE=smtp.twoj-hosting.pl:25
+```
+
+Wiele sieci domowych i część VPS-ów blokuje wychodzący port 25; wtedy
+smarthost to jedyna droga.
+
+### 4. Kopia zapasowa
 
 Cała poczta to jeden plik:
 
@@ -130,10 +176,9 @@ npm test       # smoke testy API (node:test, baza in-memory)
 
 ## Mapa rozwoju
 
-- Bramka SMTP/IMAP do poczty ze świata zewnętrznego
-- Załączniki
-- Aliasy adresów i katalogi własne
-- Filtry / reguły
+- Podpisy DKIM dla poczty wychodzącej
+- Dostęp IMAP dla zewnętrznych klientów pocztowych
+- Katalogi własne i filtry / reguły
 
 ## Licencja
 

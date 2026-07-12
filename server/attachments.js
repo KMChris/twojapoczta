@@ -106,6 +106,18 @@ function pruneUploads(db) {
   if (wynik.changes) gcBlobs(db);
 }
 
+// Zapis załącznika prosto z parsera (poczta przychodząca), bez tokenów uploadu.
+export function storeAttachment(db, messageId, { filename, mime, data }) {
+  const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  if (!buffer.length || buffer.length > MAX_FILE_BYTES) return false;
+  const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+  db.prepare('INSERT OR IGNORE INTO blobs (hash, data, size) VALUES (?, ?, ?)').run(hash, buffer, buffer.length);
+  db.prepare(
+    'INSERT INTO attachments (message_id, filename, mime, size, blob_hash) VALUES (?, ?, ?, ?, ?)'
+  ).run(messageId, sanitizeFilename(filename), sanitizeMime(mime), buffer.length, hash);
+  return true;
+}
+
 // Usuwa treści, do których nic już nie prowadzi.
 export function gcBlobs(db) {
   db.exec(

@@ -1,7 +1,8 @@
 // Mail domain logic: folders, internal delivery, search, message lifecycle.
 
 import { now } from './db.js';
-import { claimUploads, bindUploads, gcBlobs } from './attachments.js';
+import { claimUploads, bindUploads, gcBlobs, storeAttachment } from './attachments.js';
+import { buildRawMessage, deliverExternal } from './smtp-out.js';
 
 export const DOMAIN = process.env.TP_DOMAIN || 'twojapoczta.com';
 export const REAL_FOLDERS = ['inbox', 'sent', 'drafts', 'archive', 'spam', 'trash'];
@@ -177,15 +178,28 @@ export function sendMessage(db, user, { to, subject, body, draftId, priority, up
   if (!recipients.length) return { error: 'Podaj co najmniej jednego adresata.' };
 
   const resolved = [];
+  const zewnetrzni = [];
   for (const addr of recipients) {
-    const match = addr.match(/^([a-z0-9][a-z0-9.-]{0,63})@(.+)$/);
-    if (!match) return { error: `Adres „${addr}" wygląda na niepoprawny.` };
-    if (match[2] !== DOMAIN) {
+    const at = addr.lastIndexOf('@');
+    const local = addr.slice(0, at);
+    const domena = addr.slice(at + 1);
+    if (at < 1 || !domena) return { error: `Adres „${addr}" wygląda na niepoprawny.` };
+
+    if (domena === DOMAIN) {
+      const recipient = findMailbox(db, local);
+      if (!recipient) return { error: `Nie znaleziono skrzynki „${addr}".` };
+      if (!resolved.some((r) => r.id === recipient.id)) resolved.push(recipient);
+      continue;
+    }
+
+    // Poza naszą domenę tylko z włączoną bramką wychodzącą.
+    if (process.env.TP_EXTERNAL !== '1') {
       return { error: `Ta instalacja doręcza pocztę tylko w domenie @${DOMAIN}. Adres „${addr}" jest poza nią.` };
     }
-    const recipient = findMailbox(db, match[1]);
-    if (!recipient) return { error: `Nie znaleziono skrzynki „${addr}".` };
-    if (!resolved.some((r) => r.id === recipient.id)) resolved.push(recipient);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) {
+      return { error: `Adres „${addr}" wygląda na niepoprawny.` };
+    }
+    if (!zewnetrzni.includes(addr)) zewnetrzni.push(addr);
   }
 
   const claimed = claimUploads(db, user.id, uploads);
@@ -217,7 +231,87 @@ export function sendMessage(db, user, { to, subject, body, draftId, priority, up
       db.prepare("DELETE FROM messages WHERE owner_id = ? AND id = ? AND folder = 'drafts'").run(user.id, draftId);
     }
     db.exec('COMMIT');
+
+    if (zewnetrzni.length) {
+      const zalaczniki = claimed.uploads
+        .map((u) => ({
+          filename: u.filename,
+          mime: u.mime,
+          data: db.prepare('SELECT data FROM blobs WHERE hash = ?').get(u.blob_hash)?.data,
+        }))
+        .filter((z) => z.data);
+      dispatchExternal(db, user, { recipients: zewnetrzni, subject: base.subject, body: base.body, zalaczniki });
+    }
+
     return { message: getMessage(db, user.id, copyIds[0]) };
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+// Wysyłka na zewnątrz dzieje się po odpowiedzi HTTP; porażka wraca jako „Zwrot do nadawcy".
+function dispatchExternal(db, user, { recipients, subject, body, zalaczniki }) {
+  const raw = buildRawMessage({
+    domain: DOMAIN,
+    from: { name: user.name, addr: addressOf(user.login) },
+    to: recipients,
+    subject,
+    body,
+    attachments: zalaczniki,
+  });
+  setImmediate(async () => {
+    try {
+      const { porazki } = await deliverExternal({
+        domain: DOMAIN,
+        ehloName: process.env.TP_SMTP_HOSTNAME ?? `mx.${DOMAIN}`,
+        mailFrom: addressOf(user.login),
+        recipients,
+        raw,
+      });
+      if (porazki.length) deliverBounce(db, user.id, subject, porazki);
+    } catch (err) {
+      deliverBounce(db, user.id, subject, recipients.map((adres) => ({ adres, powod: err.message })));
+    }
+  });
+}
+
+function deliverBounce(db, userId, subject, porazki) {
+  const lista = porazki.map((p) => `• ${p.adres}: ${p.powod}`).join('\n');
+  try {
+    deliverSystemMessage(db, userId, {
+      subject: `Zwrot do nadawcy: ${subject}`,
+      body: `Nie udało się doręczyć wiadomości „${subject}" do:\n\n${lista}\n\nKopia została w folderze Wysłane. Sprawdź adres albo spróbuj ponownie później.\n\nZespół TwojaPoczta`,
+      priority: true,
+    });
+  } catch (err) {
+    console.error('[smtp-out] bounce', err);
+  }
+}
+
+// Delivery of a parsed external message (SMTP gateway) into a local inbox.
+export function deliverInbound(db, mailboxUserId, parsed, { toAddr }) {
+  db.exec('BEGIN');
+  try {
+    const id = insertMessage(db, mailboxUserId, {
+      folder: 'inbox',
+      from_name: parsed.from.name ?? '',
+      from_addr: parsed.from.addr,
+      to_addr: toAddr ?? '',
+      subject: parsed.subject || '(bez tematu)',
+      body: parsed.body ?? '',
+      is_read: 0,
+      sent_at: now(),
+    });
+    let zapisane = 0;
+    for (const zalacznik of parsed.attachments ?? []) {
+      if (storeAttachment(db, id, zalacznik)) zapisane += 1;
+    }
+    if (zapisane) {
+      db.prepare('UPDATE messages SET attachments_count = ? WHERE id = ?').run(zapisane, id);
+    }
+    db.exec('COMMIT');
+    return id;
   } catch (err) {
     db.exec('ROLLBACK');
     throw err;
