@@ -1,6 +1,7 @@
 // Mail domain logic: folders, internal delivery, search, message lifecycle.
 
 import { now } from './db.js';
+import { claimUploads, bindUploads, gcBlobs } from './attachments.js';
 
 export const DOMAIN = process.env.TP_DOMAIN || 'twojapoczta.com';
 export const REAL_FOLDERS = ['inbox', 'sent', 'drafts', 'archive', 'spam', 'trash'];
@@ -59,7 +60,7 @@ export function listMessages(db, userId, { folder = 'inbox', q = '', limit = 100
   return db
     .prepare(
       `SELECT id, folder, from_name, from_addr, to_addr, subject, snippet,
-              is_read, is_starred, is_priority, sent_at
+              is_read, is_starred, is_priority, attachments_count, sent_at
        FROM messages WHERE ${where.join(' AND ')}
        ORDER BY sent_at DESC, id DESC LIMIT ?`
     )
@@ -98,6 +99,7 @@ export function deleteMessage(db, userId, id) {
   if (!msg) return { deleted: false };
   if (msg.folder === 'trash') {
     db.prepare('DELETE FROM messages WHERE owner_id = ? AND id = ?').run(userId, id);
+    if (msg.attachments_count) gcBlobs(db);
     return { deleted: true, purged: true };
   }
   db.prepare("UPDATE messages SET folder = 'trash' WHERE owner_id = ? AND id = ?").run(userId, id);
@@ -170,7 +172,7 @@ export function saveDraft(db, user, { id, to, subject, body }) {
 }
 
 // Internal delivery: a copy lands in the sender's "sent" and each recipient's "inbox".
-export function sendMessage(db, user, { to, subject, body, draftId, priority }) {
+export function sendMessage(db, user, { to, subject, body, draftId, priority, uploads }) {
   const recipients = parseRecipients(to);
   if (!recipients.length) return { error: 'Podaj co najmniej jednego adresata.' };
 
@@ -186,6 +188,9 @@ export function sendMessage(db, user, { to, subject, body, draftId, priority }) 
     if (!resolved.some((r) => r.id === recipient.id)) resolved.push(recipient);
   }
 
+  const claimed = claimUploads(db, user.id, uploads);
+  if (claimed.error) return { error: claimed.error };
+
   const sentAt = now();
   const base = {
     from_name: user.name,
@@ -197,18 +202,26 @@ export function sendMessage(db, user, { to, subject, body, draftId, priority }) 
     sent_at: sentAt,
   };
 
-  const sentId = insertMessage(db, user.id, { ...base, folder: 'sent', is_read: 1 });
-  for (const recipient of resolved) {
-    if (recipient.id === user.id) continue; // sent-to-self: inbox copy below
-    insertMessage(db, recipient.id, { ...base, folder: 'inbox', is_read: 0 });
+  db.exec('BEGIN');
+  try {
+    const copyIds = [insertMessage(db, user.id, { ...base, folder: 'sent', is_read: 1 })];
+    for (const recipient of resolved) {
+      if (recipient.id === user.id) continue; // sent-to-self: inbox copy below
+      copyIds.push(insertMessage(db, recipient.id, { ...base, folder: 'inbox', is_read: 0 }));
+    }
+    if (resolved.some((r) => r.id === user.id)) {
+      copyIds.push(insertMessage(db, user.id, { ...base, folder: 'inbox', is_read: 0 }));
+    }
+    bindUploads(db, claimed.uploads, copyIds);
+    if (draftId) {
+      db.prepare("DELETE FROM messages WHERE owner_id = ? AND id = ? AND folder = 'drafts'").run(user.id, draftId);
+    }
+    db.exec('COMMIT');
+    return { message: getMessage(db, user.id, copyIds[0]) };
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
   }
-  if (resolved.some((r) => r.id === user.id)) {
-    insertMessage(db, user.id, { ...base, folder: 'inbox', is_read: 0 });
-  }
-  if (draftId) {
-    db.prepare("DELETE FROM messages WHERE owner_id = ? AND id = ? AND folder = 'drafts'").run(user.id, draftId);
-  }
-  return { message: getMessage(db, user.id, sentId) };
 }
 
 // Messages from the product itself (welcome mail, notifications).

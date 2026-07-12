@@ -1,7 +1,9 @@
 // TwojaPoczta · rdzeń aplikacji: stan, foldery, lista, czytnik, ustawienia.
 
 import { api } from './api.js';
-import { el, ikona, krotkiCzas, pelnaData, inicjaly, kolorAwatara, wstawTrescZLinkami, toast } from './ui.js';
+import {
+  el, ikona, krotkiCzas, pelnaData, inicjaly, kolorAwatara, wstawTrescZLinkami, toast, formatujRozmiar,
+} from './ui.js';
 import { initKompozycja, zbudujOdpowiedz, zbudujPrzekazanie } from './kompozycja.js';
 import { initSkroty } from './skroty.js';
 
@@ -33,6 +35,7 @@ const stan = {
   liczniki: {},
   wybranaId: null,
   otwarta: null,
+  zalacznikiOtwartej: [],
 };
 
 // --- Referencje DOM ----------------------------------------------------------
@@ -190,6 +193,7 @@ function zbudujWiersz(w) {
       { class: 'w-dol' },
       el('span', { class: 'w-temat' }, w.subject || '(bez tematu)'),
       el('span', { class: 'w-snippet' }, w.snippet ? `· ${w.snippet}` : ''),
+      w.attachments_count ? el('span', { class: 'w-spinacz', title: 'Z załącznikiem' }, ikona('attach')) : null,
       gwiazdka
     )
   );
@@ -224,7 +228,7 @@ async function otworzWiadomosc(id) {
   odswiezZaznaczenieListy();
 
   try {
-    const { message } = await api.wiadomosc(id);
+    const { message, attachments } = await api.wiadomosc(id);
     // W międzyczasie wybrano coś innego albo zmieniono folder, więc nie renderuj starej odpowiedzi.
     if (stan.wybranaId !== id) return;
 
@@ -234,6 +238,7 @@ async function otworzWiadomosc(id) {
     }
 
     stan.otwarta = message;
+    stan.zalacznikiOtwartej = attachments ?? [];
     if (skrot && !skrot.is_read) {
       skrot.is_read = 1;
       listaEl.querySelector(`[data-id="${id}"]`)?.classList.remove('nieprzeczytana');
@@ -326,6 +331,34 @@ function renderujCzytnik() {
   wstawTrescZLinkami(body, w.body);
 
   czytnikEl.append(powrot, naglowek, meta, akcje, body);
+
+  if (stan.zalacznikiOtwartej.length) {
+    const lista = el('div', { class: 'cz-zalaczniki-lista' });
+    for (const z of stan.zalacznikiOtwartej) {
+      lista.append(
+        el(
+          'a',
+          {
+            class: 'zalacznik',
+            href: `/api/messages/${w.id}/attachments/${z.id}`,
+            download: z.filename,
+          },
+          ikona('attach'),
+          el('span', { class: 'zalacznik-nazwa' }, z.filename),
+          el('small', {}, formatujRozmiar(z.size))
+        )
+      );
+    }
+    czytnikEl.append(
+      el(
+        'section',
+        { class: 'cz-zalaczniki' },
+        el('p', { class: 'eyebrow' }, `Załączniki (${stan.zalacznikiOtwartej.length})`),
+        lista
+      )
+    );
+  }
+
   czytnikPanel.scrollTop = 0;
 }
 

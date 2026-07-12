@@ -32,6 +32,7 @@
     <symbol id="i-mail" viewBox="0 0 24 24"><path d="M3 6h18v12H3zM3 7l9 6 9-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-unread" viewBox="0 0 24 24"><path d="M3 8h12M3 12h12M3 16h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="19" cy="14" r="3.2" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-attach" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 1 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-ustawienia" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
   </defs>
 </svg>
@@ -133,11 +134,16 @@
       <input name="temat" type="text" autocomplete="off" placeholder="O czym piszesz?">
     </label>
     <textarea name="tresc" placeholder="Napisz wiadomość…"></textarea>
+    <ul class="kompozycja-zalaczniki" data-zalaczniki hidden></ul>
     <footer class="kompozycja-stopka">
       <button type="submit" class="btn-wyslij">
         Wyślij
         <svg aria-hidden="true"><use href="#i-send"/></svg>
       </button>
+      <button type="button" class="ikona-btn" data-akcja="dodaj-zalacznik" title="Dodaj załącznik" aria-label="Dodaj załącznik">
+        <svg><use href="#i-attach"/></svg>
+      </button>
+      <input type="file" data-plik-input multiple hidden>
       <span class="kompozycja-status" data-status-szkicu></span>
     </footer>
   </form>

@@ -10,6 +10,9 @@ import {
   unreadCounts, sendMessage, saveDraft, deliverSystemMessage,
 } from './mail.js';
 import { WELCOME_SUBJECT, WELCOME_BODY } from './seed.js';
+import {
+  saveUpload, listAttachments, getAttachment, MAX_FILE_BYTES,
+} from './attachments.js';
 import { now } from './db.js';
 
 const LOGIN_RE = /^[a-z0-9][a-z0-9.-]{2,29}$/;
@@ -24,29 +27,44 @@ export function json(res, status, data) {
   res.end(payload);
 }
 
-function readBody(req) {
+function readRaw(req, limit, limitMessage) {
   return new Promise((resolve, reject) => {
     let size = 0;
-    const chunks = [];
+    let przekroczono = false;
+    let chunks = [];
     req.on('data', (chunk) => {
       size += chunk.length;
-      if (size > BODY_LIMIT) {
-        reject(Object.assign(new Error('Wiadomość jest zbyt duża (limit 512 KB).'), { status: 413 }));
-        req.destroy();
+      if (przekroczono) {
+        // Dojadamy resztę, żeby klient dostał czyste 413, ale bez przesady.
+        if (size > limit + 32 * 1024 * 1024) req.destroy();
+        return;
+      }
+      if (size > limit) {
+        przekroczono = true;
+        chunks = [];
         return;
       }
       chunks.push(chunk);
     });
     req.on('end', () => {
-      if (!chunks.length) return resolve({});
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
-      } catch {
-        reject(Object.assign(new Error('Nieprawidłowy format danych.'), { status: 400 }));
+      if (przekroczono) {
+        reject(Object.assign(new Error(limitMessage), { status: 413 }));
+      } else {
+        resolve(Buffer.concat(chunks));
       }
     });
     req.on('error', reject);
   });
+}
+
+async function readBody(req) {
+  const raw = await readRaw(req, BODY_LIMIT, 'Wiadomość jest zbyt duża (limit 512 KB).');
+  if (!raw.length) return {};
+  try {
+    return JSON.parse(raw.toString('utf8'));
+  } catch {
+    throw Object.assign(new Error('Nieprawidłowy format danych.'), { status: 400 });
+  }
 }
 
 function publicUser(user) {
@@ -179,7 +197,41 @@ export function registerApiRoutes(router, db) {
       updateMessage(db, user.id, msg.id, { is_read: true });
       msg.is_read = 1;
     }
-    json(res, 200, { message: msg });
+    const attachments = msg.attachments_count ? listAttachments(db, user.id, msg.id) : [];
+    json(res, 200, { message: msg, attachments });
+  });
+
+  // --- Załączniki -------------------------------------------------------------
+
+  route('POST', '/api/uploads', async (req, res, { user }) => {
+    const buffer = await readRaw(req, MAX_FILE_BYTES, 'Załącznik może mieć najwyżej 5 MB.');
+    let filename = 'plik';
+    try {
+      filename = decodeURIComponent(req.headers['x-filename'] ?? 'plik');
+    } catch {
+      /* zostaje domyślna nazwa */
+    }
+    const wynik = saveUpload(db, user.id, {
+      filename,
+      mime: req.headers['content-type'],
+      buffer,
+    });
+    if (wynik.error) return json(res, 400, { error: wynik.error });
+    json(res, 201, wynik);
+  });
+
+  route('GET', '/api/messages/:id/attachments/:aid', async (req, res, { user, params }) => {
+    const zalacznik = getAttachment(db, user.id, Number(params.id), Number(params.aid));
+    if (!zalacznik) return json(res, 404, { error: 'Nie znaleziono załącznika.' });
+    // Fallback w cudzysłowie musi być ASCII; pełna nazwa (z ogonkami) idzie w filename*.
+    const bezpiecznaNazwa = zalacznik.filename.replace(/["\\]/g, '_').replace(/[^\x20-\x7e]/g, '_');
+    res.writeHead(200, {
+      'Content-Type': zalacznik.mime,
+      'Content-Length': zalacznik.size,
+      'Content-Disposition': `attachment; filename="${bezpiecznaNazwa}"; filename*=UTF-8''${encodeURIComponent(zalacznik.filename)}`,
+      'Cache-Control': 'private, max-age=3600',
+    });
+    res.end(zalacznik.data);
   });
 
   route('POST', '/api/messages', async (req, res, { user }) => {

@@ -91,6 +91,12 @@ export function toast(tekst, { blad = false, ikonaNazwa = 'mail' } = {}) {
   }, 3400);
 }
 
+export function formatujRozmiar(bajty) {
+  if (bajty < 1024) return `${bajty} B`;
+  if (bajty < 1024 * 1024) return `${Math.round(bajty / 1024)} KB`;
+  return `${(bajty / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+}
+
 export function bezOgonkow(tekst) {
   return tekst
     .toLowerCase()

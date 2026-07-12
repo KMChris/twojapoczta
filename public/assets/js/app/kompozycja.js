@@ -1,7 +1,7 @@
 // Okno pisania wiadomości: szkice z autozapisem i stempel „WYSŁANO" przy wysyłce.
 
 import { api } from './api.js';
-import { toast } from './ui.js';
+import { el, ikona, toast, formatujRozmiar } from './ui.js';
 
 export function initKompozycja(app) {
   const panel = document.querySelector('[data-kompozycja]');
@@ -11,14 +11,20 @@ export function initKompozycja(app) {
   const stempel = document.querySelector('[data-stempel-wyslano]');
   const stempelData = document.querySelector('[data-stempel-data]');
   const przyciskWyslij = formularz.querySelector('.btn-wyslij');
+  const listaZalacznikow = document.querySelector('[data-zalaczniki]');
+  const plikInput = document.querySelector('[data-plik-input]');
 
   let draftId = null;
   let zapisNaHoryzoncie = null;
   let zmienione = false;
+  let zalaczniki = [];
+  let uploadyWToku = 0;
 
   function otworz({ do: doKogo = '', temat = '', tresc = '', draft = null } = {}) {
     draftId = draft?.id ?? null;
     zmienione = false;
+    zalaczniki = [];
+    renderujZalaczniki();
     formularz.do.value = draft?.to_addr ?? doKogo;
     formularz.temat.value = draft?.subject ?? temat;
     formularz.tresc.value = draft?.body ?? tresc;
@@ -30,6 +36,75 @@ export function initKompozycja(app) {
     cel.focus();
     if (cel === formularz.tresc) cel.setSelectionRange(0, 0);
   }
+
+  // --- Załączniki -----------------------------------------------------------
+
+  function renderujZalaczniki() {
+    listaZalacznikow.hidden = !zalaczniki.length;
+    listaZalacznikow.replaceChildren();
+    for (const [indeks, plik] of zalaczniki.entries()) {
+      listaZalacznikow.append(
+        el(
+          'li',
+          { class: 'zalacznik-chip' },
+          ikona('attach'),
+          el('span', { class: 'zalacznik-nazwa' }, plik.filename),
+          el('small', {}, formatujRozmiar(plik.size)),
+          el(
+            'button',
+            {
+              type: 'button',
+              class: 'zalacznik-usun',
+              'aria-label': `Usuń załącznik ${plik.filename}`,
+              onclick: () => {
+                zalaczniki.splice(indeks, 1);
+                renderujZalaczniki();
+              },
+            },
+            ikona('close')
+          )
+        )
+      );
+    }
+  }
+
+  function ustawBlokadeWysylki() {
+    przyciskWyslij.disabled = uploadyWToku > 0;
+  }
+
+  async function dodajPliki(pliki) {
+    for (const plik of pliki) {
+      if (zalaczniki.length + uploadyWToku >= 10) {
+        toast('Najwyżej 10 załączników w jednej wiadomości.', { blad: true });
+        break;
+      }
+      if (plik.size > 5 * 1024 * 1024) {
+        toast(`„${plik.name}” przekracza 5 MB.`, { blad: true });
+        continue;
+      }
+      uploadyWToku += 1;
+      ustawBlokadeWysylki();
+      status.textContent = `Wysyłanie: ${plik.name}…`;
+      try {
+        const upload = await api.uploadPlik(plik);
+        zalaczniki.push(upload);
+        renderujZalaczniki();
+        status.textContent = '';
+      } catch (blad) {
+        toast(blad.message, { blad: true });
+        status.textContent = '';
+      } finally {
+        uploadyWToku -= 1;
+        ustawBlokadeWysylki();
+      }
+    }
+    plikInput.value = '';
+  }
+
+  document
+    .querySelector('[data-akcja="dodaj-zalacznik"]')
+    .addEventListener('click', () => plikInput.click());
+  plikInput.addEventListener('change', () => dodajPliki([...plikInput.files]));
 
   function otwarte() {
     return !panel.hidden;
@@ -91,7 +166,7 @@ export function initKompozycja(app) {
     clearTimeout(zapisNaHoryzoncie);
     przyciskWyslij.disabled = true;
     try {
-      await api.wyslij({ to, subject, body, draftId });
+      await api.wyslij({ to, subject, body, draftId, uploads: zalaczniki.map((z) => z.token) });
       const dzis = new Date();
       stempelData.textContent = dzis.toLocaleDateString('pl-PL');
       stempel.classList.add('przybity');
@@ -101,6 +176,8 @@ export function initKompozycja(app) {
         toast('Wysłano ✓', { ikonaNazwa: 'send' });
         draftId = null;
         zmienione = false;
+        zalaczniki = [];
+        renderujZalaczniki();
         if (app.stan.folder === 'sent' || app.stan.folder === 'drafts') {
           app.odswiezListe({ cicho: true });
         }

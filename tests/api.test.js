@@ -10,7 +10,7 @@ let base;
 
 function client() {
   let cookie = '';
-  return async function call(method, path, body) {
+  async function call(method, path, body) {
     const res = await fetch(base + path, {
       method,
       headers: {
@@ -23,7 +23,15 @@ function client() {
     if (setCookie) cookie = setCookie.split(';')[0];
     const data = res.headers.get('content-type')?.includes('json') ? await res.json() : null;
     return { status: res.status, data };
-  };
+  }
+  // Surowe żądanie (upload/pobranie załącznika) na tej samej sesji.
+  call.raw = (method, path, body, headers = {}) =>
+    fetch(base + path, {
+      method,
+      headers: { ...(cookie ? { Cookie: cookie } : {}), ...headers },
+      body,
+    });
+  return call;
 }
 
 before(async () => {
@@ -199,6 +207,76 @@ test('aliases: add, deliver through alias, dedupe, remove', async () => {
   assert.equal(removed.status, 200);
   const gone = await demo('POST', '/api/messages', { to: 'ksiegowa@twojapoczta.com', subject: 'x', body: 'x' });
   assert.equal(gone.status, 400);
+});
+
+test('attachments: upload, send, download, single-use tokens', async () => {
+  const demo = client();
+  await demo('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+
+  const tresc = Buffer.from('%PDF-1.4 testowa zawartość raportu, żółć');
+  const upload = await demo.raw('POST', '/api/uploads', tresc, {
+    'Content-Type': 'application/pdf',
+    'X-Filename': encodeURIComponent('raport żniwny.pdf'),
+  });
+  assert.equal(upload.status, 201);
+  const { upload: meta } = await upload.json();
+  assert.equal(meta.filename, 'raport żniwny.pdf');
+  assert.equal(meta.mime, 'application/pdf');
+
+  const sent = await demo('POST', '/api/messages', {
+    to: 'ania@twojapoczta.com',
+    subject: 'Raport w załączniku',
+    body: 'W załączeniu raport.',
+    uploads: [meta.token],
+  });
+  assert.equal(sent.status, 201);
+  assert.equal(sent.data.message.attachments_count, 1);
+
+  const ania = client();
+  await ania('POST', '/api/login', { login: 'ania', password: 'demo1234' });
+  const inbox = await ania('GET', '/api/messages?folder=inbox');
+  const wiersz = inbox.data.messages.find((m) => m.subject === 'Raport w załączniku');
+  assert.equal(wiersz.attachments_count, 1);
+
+  const otwarta = await ania('GET', `/api/messages/${wiersz.id}`);
+  assert.equal(otwarta.data.attachments.length, 1);
+  const zalacznik = otwarta.data.attachments[0];
+  assert.equal(zalacznik.filename, 'raport żniwny.pdf');
+
+  const pobranie = await ania.raw('GET', `/api/messages/${wiersz.id}/attachments/${zalacznik.id}`);
+  assert.equal(pobranie.status, 200);
+  assert.ok(pobranie.headers.get('content-disposition').includes('attachment'));
+  const bajty = Buffer.from(await pobranie.arrayBuffer());
+  assert.ok(bajty.equals(tresc));
+
+  // Token jest jednorazowy.
+  const ponownie = await demo('POST', '/api/messages', {
+    to: 'ania@twojapoczta.com', subject: 'x', body: 'x', uploads: [meta.token],
+  });
+  assert.equal(ponownie.status, 400);
+});
+
+test('attachments: size limit and foreign tokens rejected', async () => {
+  const demo = client();
+  await demo('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const zaDuzy = await demo.raw('POST', '/api/uploads', Buffer.alloc(5 * 1024 * 1024 + 1), {
+    'Content-Type': 'application/octet-stream',
+    'X-Filename': 'ogromny.bin',
+  });
+  assert.equal(zaDuzy.status, 413);
+
+  const upload = await demo.raw('POST', '/api/uploads', Buffer.from('sekret'), {
+    'Content-Type': 'text/plain',
+    'X-Filename': 'notatka.txt',
+  });
+  const { upload: meta } = await upload.json();
+
+  const michal = client();
+  await michal('POST', '/api/login', { login: 'michal', password: 'demo1234' });
+  const kradziez = await michal('POST', '/api/messages', {
+    to: 'demo@twojapoczta.com', subject: 'x', body: 'x', uploads: [meta.token],
+  });
+  assert.equal(kradziez.status, 400);
 });
 
 test('profile can be updated', async () => {

@@ -48,7 +48,41 @@ CREATE TABLE IF NOT EXISTS aliases (
   alias TEXT NOT NULL UNIQUE,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS blobs (
+  hash TEXT PRIMARY KEY,
+  data BLOB NOT NULL,
+  size INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS attachments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  filename TEXT NOT NULL,
+  mime TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  blob_hash TEXT NOT NULL REFERENCES blobs(hash)
+);
+CREATE INDEX IF NOT EXISTS idx_attachments_message ON attachments(message_id);
+
+CREATE TABLE IF NOT EXISTS uploads (
+  token TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  filename TEXT NOT NULL,
+  mime TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  blob_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 `;
+
+// Dostawia kolumnę do istniejącej bazy (migracja bez narzędzi zewnętrznych).
+function ensureColumn(db, table, column, ddl) {
+  const kolumny = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!kolumny.some((k) => k.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
+}
 
 export function openDb(dataDir) {
   mkdirSync(dataDir, { recursive: true });
@@ -56,6 +90,7 @@ export function openDb(dataDir) {
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
+  migrate(db);
   return db;
 }
 
@@ -63,7 +98,12 @@ export function openMemoryDb() {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+function migrate(db) {
+  ensureColumn(db, 'messages', 'attachments_count', 'attachments_count INTEGER NOT NULL DEFAULT 0');
 }
 
 export function now() {

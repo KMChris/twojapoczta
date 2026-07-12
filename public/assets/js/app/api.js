@@ -33,4 +33,21 @@ export const api = {
   aliasy: () => zadanie('GET', '/api/aliases'),
   dodajAlias: (alias) => zadanie('POST', '/api/aliases', { alias }),
   usunAlias: (id) => zadanie('DELETE', `/api/aliases/${id}`),
+  uploadPlik: async (plik) => {
+    const odpowiedz = await fetch('/api/uploads', {
+      method: 'POST',
+      headers: {
+        'Content-Type': plik.type || 'application/octet-stream',
+        'X-Filename': encodeURIComponent(plik.name),
+      },
+      body: plik,
+    });
+    if (odpowiedz.status === 401) {
+      location.replace('/logowanie');
+      throw new Error('Sesja wygasła.');
+    }
+    const dane = await odpowiedz.json().catch(() => ({}));
+    if (!odpowiedz.ok) throw new Error(dane.error ?? 'Nie udało się wysłać załącznika.');
+    return dane.upload;
+  },
 };
