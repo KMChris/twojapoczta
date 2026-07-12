@@ -4,6 +4,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../server/index.js';
 import { openMemoryDb } from '../server/db.js';
+import { seedIfEmpty } from '../server/seed.js';
 
 let server;
 let base;
@@ -277,6 +278,42 @@ test('attachments: size limit and foreign tokens rejected', async () => {
     to: 'demo@twojapoczta.com', subject: 'x', body: 'x', uploads: [meta.token],
   });
   assert.equal(kradziez.status, 400);
+});
+
+test('config endpoint exposes domain and registration flag', async () => {
+  const res = await fetch(`${base}/api/config`);
+  assert.equal(res.status, 200);
+  const dane = await res.json();
+  assert.equal(dane.domain, 'twojapoczta.com');
+  assert.equal(dane.registration, true);
+});
+
+test('TP_REGISTER=0 blocks new registrations', async () => {
+  process.env.TP_REGISTER = '0';
+  try {
+    const api = client();
+    const reg = await api('POST', '/api/register', {
+      login: 'zablokowany', name: 'X', password: '12345678',
+    });
+    assert.equal(reg.status, 403);
+    const konfiguracja = await (await fetch(`${base}/api/config`)).json();
+    assert.equal(konfiguracja.registration, false);
+  } finally {
+    delete process.env.TP_REGISTER;
+  }
+});
+
+test('TP_SEED=0 leaves a fresh database empty', async () => {
+  process.env.TP_SEED = '0';
+  try {
+    const czysta = openMemoryDb();
+    const zaseedowano = await seedIfEmpty(czysta);
+    assert.equal(zaseedowano, false);
+    assert.equal(czysta.prepare('SELECT COUNT(*) AS n FROM users').get().n, 0);
+    czysta.close();
+  } finally {
+    delete process.env.TP_SEED;
+  }
 });
 
 test('profile can be updated', async () => {

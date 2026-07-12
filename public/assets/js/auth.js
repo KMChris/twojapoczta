@@ -10,6 +10,19 @@ fetch('/api/me').then((r) => {
   if (r.ok) location.replace('/app');
 });
 
+// Sufiks domeny bierzemy z serwera: instalacja może działać pod własną domeną.
+let domena = 'twojapoczta.com';
+fetch('/api/config')
+  .then((r) => r.json())
+  .then((konfiguracja) => {
+    if (!konfiguracja.domain) return;
+    domena = konfiguracja.domain;
+    for (const wezel of document.querySelectorAll('[data-domena]')) {
+      wezel.textContent = `@${domena}`;
+    }
+  })
+  .catch(() => {});
+
 // Tryb demo: wypełnij pola i pokaż notkę.
 const parametry = new URLSearchParams(location.search);
 if (tryb === 'logowanie' && parametry.get('demo') === '1') {
@@ -31,7 +44,7 @@ if (podglad) {
     }
     podglad.append('Twój adres: ');
     const b = document.createElement('b');
-    b.textContent = `${login}@twojapoczta.com`;
+    b.textContent = `${login}@${domena}`;
     podglad.append(b);
   });
 }

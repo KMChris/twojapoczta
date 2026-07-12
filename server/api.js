@@ -91,7 +91,14 @@ export function registerApiRoutes(router, db) {
 
   // --- Auth ----------------------------------------------------------------
 
+  route('GET', '/api/config', async (req, res) => {
+    json(res, 200, { domain: DOMAIN, registration: process.env.TP_REGISTER !== '0' });
+  }, { auth: false });
+
   route('POST', '/api/register', async (req, res) => {
+    if (process.env.TP_REGISTER === '0') {
+      return json(res, 403, { error: 'Rejestracja nowych kont jest wyłączona na tym serwerze.' });
+    }
     const body = await readBody(req);
     const login = String(body.login ?? '').trim().toLowerCase();
     const name = String(body.name ?? '').trim();

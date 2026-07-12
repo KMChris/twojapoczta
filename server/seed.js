@@ -36,6 +36,8 @@ function at(msAgo) {
 }
 
 export async function seedIfEmpty(db) {
+  // Na produkcji (TP_SEED=0) nie tworzymy kont demo o publicznie znanym haśle.
+  if (process.env.TP_SEED === '0') return false;
   const existing = db.prepare('SELECT COUNT(*) AS n FROM users').get();
   if (existing.n > 0) return false;
 

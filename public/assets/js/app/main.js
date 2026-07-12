@@ -628,6 +628,12 @@ function odswiezAwatar() {
   znak.textContent = inicjaly(stan.user.name, stan.user.address);
   znak.parentElement.style.background = kolorAwatara(stan.user.address);
   document.querySelector('[data-adres]').textContent = stan.user.address;
+
+  const domena = stan.user.address.split('@')[1];
+  for (const wezel of document.querySelectorAll('[data-domena]')) {
+    wezel.textContent = `@${domena}`;
+  }
+  document.querySelector('[data-formularz-kompozycji]').do.placeholder = `adres@${domena}`;
 }
 
 const app = {
