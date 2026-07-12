@@ -22,8 +22,8 @@ To wszystko. Bez `npm install`, bez Dockera, bez zewnętrznej bazy danych.
 - **Doręczanie wewnętrzne**: wiadomości między kontami w Twojej domenie
   trafiają do adresatów natychmiast.
 - **Bramka SMTP**: odbiór poczty ze świata (rekord MX + port 25) z pełnym
-  parserem MIME; wysyłka na zewnątrz opcjonalnie (`TP_EXTERNAL=1`),
-  nieudane doręczenia wracają jako „Zwrot do nadawcy".
+  parserem MIME; wysyłka na zewnątrz opcjonalnie (`TP_EXTERNAL=1`)
+  z podpisami **DKIM**, nieudane doręczenia wracają jako „Zwrot do nadawcy".
 - **Załączniki**: do 10 plików po 5 MB, przechowywane z deduplikacją treści.
 - **Aliasy adresów**: do 5 dodatkowych adresów wpadających do Twojej skrzynki.
 - **Skróty klawiszowe**: `c` pisze, `/` szuka, `j`/`k` przewijają, `e` archiwizuje,
@@ -71,6 +71,7 @@ Zmiennymi środowiskowymi:
 | `TP_EXTERNAL`      | brak (wyłączone)   | `1` włącza wysyłkę poza własną domenę       |
 | `TP_SMTP_ROUTE`    | brak               | smarthost `host[:port]`: cała poczta wychodząca przez przekaźnik |
 | `TP_TLS_VERIFY`    | brak (oportunistycznie) | `1` wymusza walidację certyfikatu serwera odbiorcy (fail-closed) |
+| `TP_DKIM_SELECTOR` | `tp1`              | selektor podpisów DKIM (nazwa rekordu TXT)  |
 
 ## Wdrożenie na VPS
 
@@ -145,10 +146,17 @@ Bramka przyjmuje pocztę wyłącznie dla skrzynek i aliasów w Twojej domenie
 idą bezpośrednio do serwera MX odbiorcy (STARTTLS, gdy dostępny); porażka
 wraca do Twoich Odebranych jako „Zwrot do nadawcy".
 
-Szczera uwaga o dostarczalności: wielcy operatorzy oczekują poprawnego
-rekordu PTR (reverse DNS), a często i podpisów DKIM, których ta wersja
-jeszcze nie składa. Jeśli Twoje listy lądują w spamie, najprościej wysyłać
-przez przekaźnik (np. usługę SMTP Twojego hostingu):
+**Podpisy DKIM.** Przy pierwszym starcie z `TP_EXTERNAL=1` serwer generuje
+klucz RSA-2048 i podpisuje każdą wychodzącą wiadomość
+(`rsa-sha256`, `relaxed/relaxed`). Wydrukuj rekord do wklejenia w DNS:
+
+```sh
+npm run dkim
+```
+
+Do kompletu dostarczalności zadbaj jeszcze o rekord PTR (reverse DNS);
+ustawia się go w panelu dostawcy VPS. Jeśli mimo wszystko listy lądują
+w spamie (albo Twój VPS blokuje port 25), wysyłaj przez przekaźnik:
 
 ```
 TP_SMTP_ROUTE=smtp.twoj-hosting.pl:25
@@ -176,7 +184,6 @@ npm test       # smoke testy API (node:test, baza in-memory)
 
 ## Mapa rozwoju
 
-- Podpisy DKIM dla poczty wychodzącej
 - Dostęp IMAP dla zewnętrznych klientów pocztowych
 - Katalogi własne i filtry / reguły
 

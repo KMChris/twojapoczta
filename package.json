@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "node --test tests/api.test.js tests/smtp.test.js"
+    "dkim": "node server/index.js --dkim",
+    "test": "node --test tests/api.test.js tests/smtp.test.js tests/dkim.test.js"
   },
   "license": "MIT"
 }

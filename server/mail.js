@@ -3,6 +3,7 @@
 import { now } from './db.js';
 import { claimUploads, bindUploads, gcBlobs, storeAttachment } from './attachments.js';
 import { buildRawMessage, deliverExternal } from './smtp-out.js';
+import { signMessage } from './dkim.js';
 
 export const DOMAIN = process.env.TP_DOMAIN || 'twojapoczta.com';
 export const REAL_FOLDERS = ['inbox', 'sent', 'drafts', 'archive', 'spam', 'trash'];
@@ -252,14 +253,16 @@ export function sendMessage(db, user, { to, subject, body, draftId, priority, up
 
 // Wysyłka na zewnątrz dzieje się po odpowiedzi HTTP; porażka wraca jako „Zwrot do nadawcy".
 function dispatchExternal(db, user, { recipients, subject, body, zalaczniki }) {
-  const raw = buildRawMessage({
-    domain: DOMAIN,
-    from: { name: user.name, addr: addressOf(user.login) },
-    to: recipients,
-    subject,
-    body,
-    attachments: zalaczniki,
-  });
+  const raw = signMessage(
+    buildRawMessage({
+      domain: DOMAIN,
+      from: { name: user.name, addr: addressOf(user.login) },
+      to: recipients,
+      subject,
+      body,
+      attachments: zalaczniki,
+    })
+  );
   setImmediate(async () => {
     try {
       const { porazki } = await deliverExternal({

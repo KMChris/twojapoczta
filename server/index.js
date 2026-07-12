@@ -9,6 +9,8 @@ import { createStaticHandler } from './static.js';
 import { registerApiRoutes, requireUser, json } from './api.js';
 import { seedIfEmpty } from './seed.js';
 import { startSmtpServer } from './smtp.js';
+import { initDkim, dnsRecord, dkimConfigured } from './dkim.js';
+import { DOMAIN } from './mail.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -26,8 +28,18 @@ function setSecurityHeaders(res) {
 }
 
 export async function createApp({ dataDir, db } = {}) {
-  const database = db ?? openDb(dataDir ?? path.join(ROOT, 'data'));
+  const resolvedDataDir = dataDir ?? path.join(ROOT, 'data');
+  const database = db ?? openDb(resolvedDataDir);
   await seedIfEmpty(database);
+
+  // Podpisy DKIM tylko przy realnym wdrożeniu (dysk + włączona wysyłka na zewnątrz).
+  if (!db && process.env.TP_EXTERNAL === '1') {
+    try {
+      initDkim(resolvedDataDir, { domain: DOMAIN });
+    } catch (err) {
+      console.error('[dkim] nie udało się przygotować klucza:', err.message);
+    }
+  }
 
   const router = createRouter();
   const api = registerApiRoutes(router, database);
@@ -67,6 +79,21 @@ export async function createApp({ dataDir, db } = {}) {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
+// `npm run dkim`: przygotuj klucz i wydrukuj rekord TXT do DNS.
+if (isMain && process.argv.includes('--dkim')) {
+  const { wygenerowano, plik } = initDkim(process.env.TP_DATA_DIR ?? path.join(ROOT, 'data'), { domain: DOMAIN });
+  const rekord = dnsRecord();
+  console.log('');
+  console.log(wygenerowano ? '  Wygenerowano nowy klucz DKIM:' : '  Klucz DKIM już istnieje:');
+  console.log(`  ${plik}`);
+  console.log('');
+  console.log('  Dodaj w DNS rekord TXT:');
+  console.log(`  ${rekord.nazwa}`);
+  console.log(`  "${rekord.wartosc}"`);
+  console.log('');
+  process.exit(0);
+}
+
 if (isMain) {
   const PORT = Number(process.env.PORT ?? 3000);
   const HOST = process.env.HOST ?? '127.0.0.1';
@@ -78,6 +105,11 @@ if (isMain) {
     console.log(`     Konto demo: demo@twojapoczta.com · hasło: demo1234`);
     if (process.env.TP_EXTERNAL === '1') {
       console.log('     Poczta wychodząca na zewnątrz: włączona (TP_EXTERNAL=1)');
+      console.log(
+        dkimConfigured()
+          ? '     DKIM: podpisujemy wychodzące · rekord DNS: npm run dkim'
+          : '     DKIM: wyłączone (brak klucza)'
+      );
     }
     console.log('');
   });
