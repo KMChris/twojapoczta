@@ -11,19 +11,23 @@ const MAX_DEPTH = 5;
 export function parseHeaders(text) {
   const headers = {};
   const lines = text.split(/\r?\n/);
-  let current = null;
+  let activeKey = null;
   for (const line of lines) {
-    if (/^[ \t]/.test(line) && current) {
-      current.value += ' ' + line.trim();
+    if (/^[ \t]/.test(line) && activeKey) {
+      headers[activeKey] += ' ' + line.trim(); // dociągnij złamaną kontynuację
       continue;
     }
     const sep = line.indexOf(':');
     if (sep === -1) continue;
-    current = { name: line.slice(0, sep).trim().toLowerCase(), value: line.slice(sep + 1).trim() };
-    if (!(current.name in headers)) headers[current.name] = current.value;
-    else current = { name: current.name, value: headers[current.name] }; // pierwszy wygrywa
+    const name = line.slice(0, sep).trim().toLowerCase();
+    if (name in headers) {
+      activeKey = null; // pierwszy wygrywa, kolejne wystąpienie i jego kontynuacje pomijamy
+      continue;
+    }
+    headers[name] = line.slice(sep + 1).trim();
+    activeKey = name;
   }
-  // dociągnij sklejone kontynuacje
+  // znormalizuj białe znaki w sklejonych wartościach
   for (const key of Object.keys(headers)) {
     headers[key] = headers[key].replace(/\s+/g, ' ').trim();
   }
