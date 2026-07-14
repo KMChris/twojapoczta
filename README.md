@@ -13,7 +13,16 @@ To wszystko. Bez `npm install`, bez Dockera, bez zewnętrznej bazy danych.
 
 - **Strona główna:** `http://localhost:3000/`
 - **Aplikacja:** `http://localhost:3000/app`
-- **Konto demo:** `demo` / `demo1234`
+- **Konto demo:** `demo` / `demo1234` (tylko lokalnie; na produkcji ustaw `TP_SEED=0`)
+
+## Dokumentacja
+
+| Dokument | O czym |
+| -------- | ------ |
+| [Wdrożenie krok po kroku](docs/wdrozenie.md) | Od świeżego VPS-a do publicznej poczty z HTTPS i DKIM. |
+| [Konfiguracja](docs/konfiguracja.md) | Wszystkie zmienne środowiskowe, rekordy DNS, limity. |
+| [Przewodnik użytkownika](docs/przewodnik.md) | Skróty, paleta poleceń, aliasy, ustawienia. |
+| [Architektura](docs/architektura.md) | Budowa kodu, model danych, API. Dla współtwórców. |
 
 ## Co potrafi
 
@@ -48,11 +57,14 @@ wbudowane w Node 24:
 | Fonty      | własne woff2 (Archivo, IBM Plex Mono; licencja SIL OFL) |
 
 ```
-server/          # backend: index, router, static, db, auth, mail, api, seed
+server/          # backend: http, router, static, db, auth, mail, api, seed,
+                 #          attachments, mime, smtp (in), smtp-out, dkim
 public/          # strona główna, logowanie/rejestracja, aplikacja /app
-tests/           # smoke testy node:test (in-memory SQLite)
+tests/           # testy node:test (in-memory SQLite): api, smtp, dkim
 data/            # tworzony przy starcie; cała poczta w jednym pliku
 ```
+
+Szczegółowy opis modułów i modelu danych: [docs/architektura.md](docs/architektura.md).
 
 ## Konfiguracja
 
@@ -64,6 +76,8 @@ Zmiennymi środowiskowymi:
 | `HOST`             | `127.0.0.1`        | adres nasłuchu (za proxy zostaw domyślny)   |
 | `TP_DATA_DIR`      | `./data`           | katalog na bazę SQLite                      |
 | `TP_DOMAIN`        | `twojapoczta.com`  | domena adresów e-mail                       |
+| `TP_SEED`          | brak (włączone)    | `0` wyłącza konta demo (ustaw na produkcji) |
+| `TP_REGISTER`      | brak (otwarta)     | `0` zamyka rejestrację nowych kont          |
 | `TP_SECURE`        | brak               | `1` wymusza cookie `Secure` (albo nagłówek `x-forwarded-proto: https` z proxy) |
 | `TP_SMTP_PORT`     | brak (wyłączone)   | port przychodzącego SMTP (produkcyjnie `25`) |
 | `TP_SMTP_HOST`     | `0.0.0.0`          | adres nasłuchu SMTP                         |
@@ -75,115 +89,53 @@ Zmiennymi środowiskowymi:
 
 ## Wdrożenie na VPS
 
-### 1. Usługa systemd
+Pełne wdrożenie, od świeżego serwera po publiczną pocztę z HTTPS, odbiorem
+ze świata, DKIM i kopiami zapasowymi, opisuje krok po kroku
+[**docs/wdrozenie.md**](docs/wdrozenie.md). Poniżej skrót.
 
-`/etc/systemd/system/twojapoczta.service`:
+Aplikacja słucha tylko na `127.0.0.1`; do świata wystawia ją reverse proxy
+z TLS (Caddy albo nginx, konfiguracja obu w samouczku). Uruchamiasz ją jako
+usługę systemd:
 
 ```ini
-[Unit]
-Description=TwojaPoczta
-After=network.target
-
+# /etc/systemd/system/twojapoczta.service
 [Service]
 User=poczta
 WorkingDirectory=/opt/twoja-poczta
 ExecStart=/usr/bin/node server/index.js
 Environment=PORT=3000
+Environment=TP_DOMAIN=twojadomena.pl
 Environment=TP_DATA_DIR=/var/lib/twojapoczta
-# Poczta ze świata (odkomentuj, gdy MX wskazuje na ten serwer):
+Environment=TP_SEED=0          # produkcja: bez konta demo
+# Poczta ze świata (gdy MX wskazuje na ten serwer):
 # Environment=TP_SMTP_PORT=25
-# Environment=TP_EXTERNAL=1
-# Port 25 bez roota wymaga tej zdolności:
+# Environment=TP_EXTERNAL=1     # + podpisy DKIM (npm run dkim wypisze rekord DNS)
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
 ```
 
-```sh
-sudo systemctl enable --now twojapoczta
-```
+Bramka SMTP przyjmuje pocztę tylko dla skrzynek i aliasów w Twojej domenie
+(relay odrzucany), a wysyłka na zewnątrz podpisuje wiadomości DKIM i zwraca
+nieudane doręczenia jako „Zwrot do nadawcy". Rekordy DNS (MX, SPF, DKIM),
+rekord PTR, zaporę i wariant ze smarthostem opisuje samouczek.
 
-### 2. Reverse proxy z TLS
-
-Caddy (najprościej, automatyczny certyfikat):
-
-```
-twojapoczta.com {
-    reverse_proxy 127.0.0.1:3000
-}
-```
-
-albo nginx + certbot:
-
-```nginx
-server {
-    server_name twojapoczta.com;
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-For $remote_addr;
-    }
-}
-```
-
-### 3. Poczta ze świata (bramka SMTP)
-
-**Odbiór.** Ustaw `TP_SMTP_PORT=25`, otwórz port 25 w zaporze i dodaj rekordy DNS:
-
-```
-twojapoczta.com.      MX 10  mx.twojapoczta.com.
-mx.twojapoczta.com.   A      <IP Twojego VPS>
-twojapoczta.com.      TXT    "v=spf1 a mx -all"
-```
-
-Bramka przyjmuje pocztę wyłącznie dla skrzynek i aliasów w Twojej domenie
-(relay jest odrzucany), parsuje MIME (w tym załączniki, kodowania
-`quoted-printable`/`base64` i polskie strony kodowe) i doręcza do Odebranych.
-
-**Wysyłka na zewnątrz.** Włącz `TP_EXTERNAL=1`. Wiadomości do obcych domen
-idą bezpośrednio do serwera MX odbiorcy (STARTTLS, gdy dostępny); porażka
-wraca do Twoich Odebranych jako „Zwrot do nadawcy".
-
-**Podpisy DKIM.** Przy pierwszym starcie z `TP_EXTERNAL=1` serwer generuje
-klucz RSA-2048 i podpisuje każdą wychodzącą wiadomość
-(`rsa-sha256`, `relaxed/relaxed`). Wydrukuj rekord do wklejenia w DNS:
-
-```sh
-npm run dkim
-```
-
-Do kompletu dostarczalności zadbaj jeszcze o rekord PTR (reverse DNS);
-ustawia się go w panelu dostawcy VPS. Jeśli mimo wszystko listy lądują
-w spamie (albo Twój VPS blokuje port 25), wysyłaj przez przekaźnik:
-
-```
-TP_SMTP_ROUTE=smtp.twoj-hosting.pl:25
-```
-
-Wiele sieci domowych i część VPS-ów blokuje wychodzący port 25; wtedy
-smarthost to jedyna droga.
-
-### 4. Kopia zapasowa
-
-Cała poczta to jeden plik:
+**Kopia zapasowa.** Cała poczta to jeden plik SQLite:
 
 ```sh
 sqlite3 /var/lib/twojapoczta/twojapoczta.db ".backup kopia-$(date +%F).db"
 ```
 
-(albo zwykłe `cp`, gdy usługa jest zatrzymana).
-
 ## Rozwój i testy
 
 ```sh
-npm run dev    # restart przy zmianach (node --watch)
-npm test       # smoke testy API (node:test, baza in-memory)
+npm run dev             # restart przy zmianach (node --watch)
+npm test                # 212 testów (node:test, baza w pamięci, zero instalacji)
+npm run test:coverage   # to samo + raport pokrycia linii i gałęzi
 ```
 
 ## Mapa rozwoju
 
+- STARTTLS dla przychodzącego SMTP (szyfrowany transport od obcych serwerów)
 - Dostęp IMAP dla zewnętrznych klientów pocztowych
 - Katalogi własne i filtry / reguły
 
