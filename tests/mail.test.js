@@ -721,6 +721,33 @@ test('przesyłanie dalej: zniknięta skrzynka celu nie wywraca doręczenia', () 
   db.close();
 });
 
+test('przesyłanie dalej: na zewnątrz idzie bramką, a porażka wraca zwrotem do właściciela', async () => {
+  process.env.TP_EXTERNAL = '1';
+  process.env.TP_SMTP_ROUTE = '127.0.0.1:1'; // martwy port, doręczenie musi się nie udać
+  try {
+    const { db, user, users } = fresh();
+    setForwarding(db, user('ania'), { to: 'ania-prywatnie@gdzieindziej.example' });
+    sendMessage(db, user('demo'), { to: addressOf('ania'), subject: 'Dalej w świat', body: 'x' });
+
+    let odbicie = null;
+    for (let i = 0; i < 80 && !odbicie; i++) {
+      await new Promise((res) => setTimeout(res, 25));
+      odbicie = listMessages(db, users.ania, { folder: 'inbox' }).find((m) => m.subject.startsWith('Zwrot do nadawcy'));
+    }
+    assert.ok(odbicie, 'nieudane przesłanie wraca zwrotem do właściciela skrzynki');
+    assert.match(getMessage(db, users.ania, odbicie.id).body, /gdzieindziej\.example/);
+    // zwrot jest wiadomością systemową, więc sam nie poleciał dalej i nie zapętlił bramki
+    assert.equal(
+      listMessages(db, users.ania, { folder: 'inbox' }).filter((m) => m.subject.startsWith('Zwrot do nadawcy')).length,
+      1
+    );
+    db.close();
+  } finally {
+    delete process.env.TP_EXTERNAL;
+    delete process.env.TP_SMTP_ROUTE;
+  }
+});
+
 test('przesyłanie dalej: kopia w Wysłanych nadawcy nie jest przekazywana', () => {
   const { db, user, users } = fresh();
   // nadawca ma przekierowanie, ale nie może ono dotyczyć jego własnych kopii w Wysłanych

@@ -140,6 +140,28 @@ test('buildRawMessage: HTML + załącznik → mixed z alternative w środku', ()
   assert.match(m.body, /tekst/);
 });
 
+test('buildRawMessage: Reply-To trafia do nagłówków (przesyłanie dalej)', () => {
+  const raw = buildRawMessage({
+    domain: 'twojapoczta.com',
+    from: { name: 'Ania Nowakowska', addr: 'demo@twojapoczta.com' },
+    replyTo: 'ania@obca.pl',
+    to: ['ja-prywatnie@gdzieindziej.pl'],
+    subject: 'Przesłane',
+    body: 'tresc',
+  });
+  assert.match(raw, /^Reply-To: <ania@obca\.pl>$/m);
+  assert.match(raw, /^From: .* <demo@twojapoczta\.com>$/m);
+  // bez replyTo nagłówek nie ma prawa się pojawić
+  const bez = buildRawMessage({
+    domain: 'twojapoczta.com',
+    from: { name: 'Jan', addr: 'jan@twojapoczta.com' },
+    to: ['a@b.pl'],
+    subject: 'Zwykła',
+    body: 'x',
+  });
+  assert.ok(!/Reply-To:/.test(bez));
+});
+
 test('buildRawMessage: pusta nazwa nadawcy i pusty temat', () => {
   const raw = buildRawMessage({ domain: 'd.pl', from: { name: '', addr: 'x@y.pl' }, to: ['z@w.pl'], subject: '', body: '' });
   assert.match(raw, /^From: <x@y\.pl>$/m);
