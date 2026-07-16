@@ -4,8 +4,8 @@
 VPS. Zero zależności npm, wystarczy Node 24.
 
 ```sh
-git clone <adres-repozytorium> twoja-poczta
-cd twoja-poczta
+git clone git@github.com:KMChris/twojapoczta.git
+cd twojapoczta
 node server/index.js
 ```
 
@@ -114,7 +114,7 @@ usługę systemd:
 # /etc/systemd/system/twojapoczta.service
 [Service]
 User=poczta
-WorkingDirectory=/opt/twoja-poczta
+WorkingDirectory=/opt/twojapoczta
 ExecStart=/usr/bin/node server/index.js
 Environment=PORT=3000
 Environment=TP_DOMAIN=twojadomena.pl

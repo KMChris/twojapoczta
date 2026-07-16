@@ -56,17 +56,17 @@ Aplikacja będzie działać jako osobny użytkownik systemowy, bez powłoki:
 
 ```sh
 sudo adduser --system --group --home /var/lib/twojapoczta poczta
-sudo git clone https://twojapoczta.com/kod.git /opt/twoja-poczta
-sudo chown -R poczta:poczta /opt/twoja-poczta /var/lib/twojapoczta
+sudo git clone https://twojapoczta.com/kod.git /opt/twojapoczta
+sudo chown -R poczta:poczta /opt/twojapoczta /var/lib/twojapoczta
 ```
 
-Kod trafia do `/opt/twoja-poczta`, dane (baza SQLite, klucz DKIM) do
+Kod trafia do `/opt/twojapoczta`, dane (baza SQLite, klucz DKIM) do
 `/var/lib/twojapoczta`. Rozdzielenie ułatwia aktualizacje i kopie zapasowe.
 
 ## Krok 4: pierwszy start na próbę
 
 ```sh
-cd /opt/twoja-poczta
+cd /opt/twojapoczta
 sudo -u poczta env TP_SEED=0 TP_DOMAIN=twojadomena.pl \
   TP_DATA_DIR=/var/lib/twojapoczta node server/index.js
 ```
@@ -96,7 +96,7 @@ After=network.target
 [Service]
 User=poczta
 Group=poczta
-WorkingDirectory=/opt/twoja-poczta
+WorkingDirectory=/opt/twojapoczta
 ExecStart=/usr/bin/node server/index.js
 Restart=on-failure
 
@@ -216,7 +216,7 @@ działać z kłódką.
    z `TP_EXTERNAL=1`; to polecenie tylko go wydrukuje):
 
    ```sh
-   cd /opt/twoja-poczta
+   cd /opt/twojapoczta
    sudo -u poczta env TP_DOMAIN=twojadomena.pl \
      TP_DATA_DIR=/var/lib/twojapoczta node server/index.js --dkim
    ```
@@ -289,7 +289,7 @@ sudo systemctl start twojapoczta
 ## Krok 11: aktualizacje
 
 ```sh
-cd /opt/twoja-poczta
+cd /opt/twojapoczta
 sudo -u poczta git pull
 sudo -u poczta npm test        # 212 testów, zero zależności do instalowania
 sudo systemctl restart twojapoczta
