@@ -9,7 +9,7 @@ import {
   DOMAIN, addressOf, findMailbox, makeSnippet, parseRecipients,
   listMessages, getMessage, updateMessage, deleteMessage, unreadCounts,
   saveDraft, sendMessage, deliverInbound, deliverSystemMessage, REAL_FOLDERS,
-  fireScheduled, resolveSenderAddress,
+  fireScheduled, resolveSenderAddress, setForwarding, getForwarding,
 } from '../server/mail.js';
 
 function fresh() {
@@ -560,6 +560,176 @@ test('fireScheduled: znikła skrzynka adresata → zwrot do nadawcy, reszta dor�
   assert.equal(listMessages(db, users.ania, { folder: 'inbox' }).length, 1);
   const zwrot = listMessages(db, users.demo, { folder: 'inbox' }).find((m) => m.subject.startsWith('Zwrot do nadawcy'));
   assert.ok(zwrot, 'nadawca dostaje zwrot o nieistniejącej skrzynce');
+  db.close();
+});
+
+// --- Przesyłanie dalej ----------------------------------------------------------
+
+test('setForwarding: ustawia, czyta i kasuje przekierowanie', () => {
+  const { db, user, users } = fresh();
+  const demo = user('demo');
+  assert.deepEqual(getForwarding(db, users.demo), { to: '', keepCopy: true });
+
+  const ok = setForwarding(db, demo, { to: addressOf('ania'), keepCopy: false });
+  assert.deepEqual(ok.forwarding, { to: addressOf('ania'), keepCopy: false });
+  assert.deepEqual(getForwarding(db, users.demo), { to: addressOf('ania'), keepCopy: false });
+
+  setForwarding(db, demo, { to: '' });
+  assert.deepEqual(getForwarding(db, users.demo), { to: '', keepCopy: true });
+  db.close();
+});
+
+test('setForwarding: własny adres, własny alias i nieznana skrzynka → błąd', () => {
+  const { db, user, users } = fresh();
+  const demo = user('demo');
+  db.prepare('INSERT INTO aliases (user_id, alias, created_at) VALUES (?, ?, ?)').run(users.demo, 'ja-inaczej', now());
+
+  assert.match(setForwarding(db, demo, { to: addressOf('demo') }).error, /na własny adres/);
+  assert.match(setForwarding(db, demo, { to: addressOf('ja-inaczej') }).error, /na własny adres/);
+  assert.match(setForwarding(db, demo, { to: addressOf('nieznany') }).error, /Nie znaleziono skrzynki/);
+  assert.match(setForwarding(db, demo, { to: 'bezmalpy' }).error, /niepoprawny/);
+  // nic z tego nie zostało zapisane
+  assert.equal(getForwarding(db, users.demo).to, '');
+  db.close();
+});
+
+test('setForwarding: adres z obcej domeny wymaga włączonej bramki', () => {
+  const { db, user, users } = fresh();
+  const demo = user('demo');
+  assert.match(setForwarding(db, demo, { to: 'ja@gdzieindziej.pl' }).error, /tylko w domenie/);
+
+  process.env.TP_EXTERNAL = '1';
+  try {
+    assert.equal(setForwarding(db, demo, { to: 'ja@gdzieindziej.pl' }).forwarding.to, 'ja@gdzieindziej.pl');
+    assert.equal(getForwarding(db, users.demo).to, 'ja@gdzieindziej.pl');
+  } finally {
+    delete process.env.TP_EXTERNAL;
+  }
+  db.close();
+});
+
+test('przesyłanie dalej: poczta przychodząca trafia do celu, kopia zostaje', () => {
+  const { db, user, users } = fresh();
+  setForwarding(db, user('ania'), { to: addressOf('michal') });
+
+  sendMessage(db, user('demo'), { to: addressOf('ania'), subject: 'Dla Ani', body: 'tresc', bodyHtml: '<p>tresc</p>' });
+
+  const [uAni] = listMessages(db, users.ania, { folder: 'inbox' });
+  assert.ok(uAni, 'oryginał zostaje w skrzynce Ani');
+  const [uMichala] = listMessages(db, users.michal, { folder: 'inbox' });
+  assert.equal(uMichala.subject, 'Dla Ani');
+  // przesłana kopia zachowuje oryginalnego nadawcę i trafia jako nieprzeczytana
+  assert.equal(uMichala.from_addr, addressOf('demo'));
+  assert.equal(uMichala.to_addr, addressOf('michal'));
+  assert.equal(uMichala.is_read, 0);
+  assert.equal(getMessage(db, users.michal, uMichala.id).body_html, '<p>tresc</p>');
+  db.close();
+});
+
+test('przesyłanie dalej: bez „zostaw kopię" oryginał ląduje w Archiwum', () => {
+  const { db, user, users } = fresh();
+  setForwarding(db, user('ania'), { to: addressOf('michal'), keepCopy: false });
+
+  sendMessage(db, user('demo'), { to: addressOf('ania'), subject: 'Przelotem', body: 'x' });
+
+  assert.equal(listMessages(db, users.ania, { folder: 'inbox' }).length, 0);
+  const [zarchiwizowana] = listMessages(db, users.ania, { folder: 'archive' });
+  assert.equal(zarchiwizowana.subject, 'Przelotem', 'poczta nie ginie, tylko schodzi z Odebranych');
+  assert.equal(listMessages(db, users.michal, { folder: 'inbox' }).length, 1);
+  db.close();
+});
+
+test('przesyłanie dalej: załączniki idą z listem, bloby zostają wspólne', () => {
+  const { db, user, users } = fresh();
+  setForwarding(db, user('ania'), { to: addressOf('michal') });
+  const { upload } = saveUpload(db, users.demo, { filename: 'umowa.txt', mime: 'text/plain', buffer: Buffer.from('tresc') });
+
+  sendMessage(db, user('demo'), { to: addressOf('ania'), subject: 'Z plikiem', body: 'x', uploads: [upload.token] });
+
+  const [uMichala] = listMessages(db, users.michal, { folder: 'inbox' });
+  assert.equal(uMichala.attachments_count, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM blobs').get().n, 1);
+  db.close();
+});
+
+test('przesyłanie dalej: łańcuch A→B→C dochodzi do końca', () => {
+  const { db, user, users } = fresh();
+  const biuroId = Number(
+    db.prepare('INSERT INTO users (login, name, password_hash, created_at) VALUES (?, ?, ?, ?)')
+      .run('biuro', 'Biuro', 'x', now()).lastInsertRowid
+  );
+  setForwarding(db, user('ania'), { to: addressOf('michal') });
+  setForwarding(db, user('michal'), { to: addressOf('biuro') });
+
+  sendMessage(db, user('demo'), { to: addressOf('ania'), subject: 'Sztafeta', body: 'x' });
+
+  assert.equal(listMessages(db, users.ania, { folder: 'inbox' }).length, 1);
+  assert.equal(listMessages(db, users.michal, { folder: 'inbox' }).length, 1);
+  assert.equal(listMessages(db, biuroId, { folder: 'inbox' }).length, 1, 'list dochodzi na koniec łańcucha');
+  db.close();
+});
+
+test('przesyłanie dalej: pętla A→B→A zatrzymuje się i nie zalewa skrzynek', () => {
+  const { db, user, users } = fresh();
+  setForwarding(db, user('ania'), { to: addressOf('michal') });
+  setForwarding(db, user('michal'), { to: addressOf('ania') });
+
+  sendMessage(db, user('demo'), { to: addressOf('ania'), subject: 'W kółko', body: 'x' });
+
+  // Ania: oryginał + jeden nawrót od Michała. Michał: jedna kopia. I koniec.
+  assert.equal(listMessages(db, users.ania, { folder: 'inbox' }).length, 2);
+  assert.equal(listMessages(db, users.michal, { folder: 'inbox' }).length, 1);
+  db.close();
+});
+
+test('przesyłanie dalej: wiadomości systemowe nie idą dalej', () => {
+  const { db, user, users } = fresh();
+  setForwarding(db, user('ania'), { to: addressOf('michal') });
+
+  deliverSystemMessage(db, users.ania, { subject: 'Witaj', body: 'x' });
+
+  assert.equal(listMessages(db, users.ania, { folder: 'inbox' }).length, 1);
+  assert.equal(listMessages(db, users.michal, { folder: 'inbox' }).length, 0, 'zwroty i powitania zostają na miejscu');
+  db.close();
+});
+
+test('przesyłanie dalej: poczta z bramki SMTP też jest przekazywana', () => {
+  const { db, user, users } = fresh();
+  setForwarding(db, user('ania'), { to: addressOf('michal') });
+
+  deliverInbound(
+    db,
+    users.ania,
+    { from: { name: 'Ktoś', addr: 'ktos@obca.pl' }, subject: 'Z zewnątrz', body: 'halo', attachments: [] },
+    { toAddr: addressOf('ania') }
+  );
+
+  const [uMichala] = listMessages(db, users.michal, { folder: 'inbox' });
+  assert.equal(uMichala.subject, 'Z zewnątrz');
+  assert.equal(uMichala.from_addr, 'ktos@obca.pl');
+  db.close();
+});
+
+test('przesyłanie dalej: zniknięta skrzynka celu nie wywraca doręczenia', () => {
+  const { db, user, users } = fresh();
+  setForwarding(db, user('ania'), { to: addressOf('michal') });
+  db.prepare('DELETE FROM users WHERE id = ?').run(users.michal);
+
+  const wynik = sendMessage(db, user('demo'), { to: addressOf('ania'), subject: 'Mimo wszystko', body: 'x' });
+  assert.ok(!wynik.error);
+  assert.equal(listMessages(db, users.ania, { folder: 'inbox' }).length, 1, 'list dociera, przekierowanie milczy');
+  db.close();
+});
+
+test('przesyłanie dalej: kopia w Wysłanych nadawcy nie jest przekazywana', () => {
+  const { db, user, users } = fresh();
+  // nadawca ma przekierowanie, ale nie może ono dotyczyć jego własnych kopii w Wysłanych
+  setForwarding(db, user('demo'), { to: addressOf('michal') });
+
+  sendMessage(db, user('demo'), { to: addressOf('ania'), subject: 'Ode mnie', body: 'x' });
+
+  assert.equal(listMessages(db, users.michal, { folder: 'inbox' }).length, 0);
+  assert.equal(listMessages(db, users.demo, { folder: 'sent' }).length, 1);
   db.close();
 });
 

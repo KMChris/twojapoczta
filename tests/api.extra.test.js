@@ -157,6 +157,39 @@ test('GET /api/counts zwraca liczniki', async () => {
   assert.ok('inbox' in res.data.counts);
 });
 
+// --- Przesyłanie dalej --------------------------------------------------------
+
+test('/api/forwarding: ustawienie, odczyt, walidacja i wyłączenie', async () => {
+  const api = client();
+  await api('POST', '/api/register', { login: 'przekierowany', name: 'Prze Kierowany', password: 'haslo12345' });
+
+  assert.deepEqual((await api('GET', '/api/forwarding')).data.forwarding, { to: '', keepCopy: true });
+
+  // własny adres → 400 i nic się nie zapisuje
+  const naSiebie = await api('PUT', '/api/forwarding', { to: 'przekierowany@twojapoczta.com' });
+  assert.equal(naSiebie.status, 400);
+  assert.match(naSiebie.data.error, /na własny adres/);
+  assert.equal((await api('GET', '/api/forwarding')).data.forwarding.to, '');
+
+  // poprawny cel
+  const ok = await api('PUT', '/api/forwarding', { to: 'demo@twojapoczta.com', keepCopy: false });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(ok.data.forwarding, { to: 'demo@twojapoczta.com', keepCopy: false });
+  assert.deepEqual((await api('GET', '/api/forwarding')).data.forwarding, { to: 'demo@twojapoczta.com', keepCopy: false });
+
+  // wyłączenie wraca do stanu domyślnego
+  assert.deepEqual((await api('PUT', '/api/forwarding', { to: '' })).data.forwarding, { to: '', keepCopy: true });
+
+  // typ inny niż tekst → 400
+  assert.equal((await api('PUT', '/api/forwarding', { to: { zly: 'typ' } })).status, 400);
+});
+
+test('/api/forwarding: bez sesji → 401', async () => {
+  const api = client();
+  assert.equal((await api('GET', '/api/forwarding')).status, 401);
+  assert.equal((await api('PUT', '/api/forwarding', { to: 'demo@twojapoczta.com' })).status, 401);
+});
+
 // --- Aliasy ------------------------------------------------------------------
 
 test('aliasy: lista, walidacja, zajęty, limit 5, usunięcie nieistniejącego', async () => {

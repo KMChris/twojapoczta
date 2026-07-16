@@ -296,6 +296,22 @@
       </div>
       <p class="pole-opis">Wiadomości wysłane na alias trafią do Twojej skrzynki. Najwyżej 5.</p>
     </fieldset>
+    <fieldset class="pole">
+      <legend>Przesyłanie dalej</legend>
+      <div class="przekierowanie">
+        <input type="text" name="przekierowanie" data-przekierowanie placeholder="adres@twojapoczta.com"
+               autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Adres przesyłania dalej">
+        <button type="button" class="przekierowanie-wylacz" data-akcja="wylacz-przekierowanie" hidden>Wyłącz</button>
+      </div>
+      <label class="przekierowanie-kopia">
+        <input type="checkbox" name="przekierowanie_kopia" data-przekierowanie-kopia checked>
+        Zostaw kopię w Odebranych
+      </label>
+      <p class="pole-opis" data-przekierowanie-opis>
+        Każda nowa wiadomość poleci automatycznie pod wskazany adres.
+        Bez zostawiania kopii oryginał schodzi do Archiwum, więc nic nie ginie.
+      </p>
+    </fieldset>
     <footer class="modal-stopka">
       <button type="submit" class="btn-zapisz">Zapisz zmiany</button>
     </footer>

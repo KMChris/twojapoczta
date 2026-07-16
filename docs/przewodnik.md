@@ -26,6 +26,7 @@ widok, a foldery chowają się pod ikoną menu.
 | Odebrane       | Poczta przychodząca. Licznik pokazuje nieprzeczytane. |
 | Z gwiazdką     | Wiadomości oznaczone gwiazdką (z dowolnego folderu poza Koszem i Spamem). |
 | Wysłane        | Kopie tego, co wysłałeś. |
+| Zaplanowane    | Listy czekające na swoją godzinę. Licznik pokazuje, ile ich jest. |
 | Wersje robocze | Zaczęte, jeszcze niewysłane wiadomości; zapisują się same. |
 | Archiwum       | Uprzątnięte z Odebranych, ale nieusunięte. |
 | Spam           | Zgłoszone albo złapane jako niechciane. |
@@ -37,7 +38,16 @@ Kliknij **Napisz** (albo naciśnij `c`). Okno kompozycji pojawia się w prawym
 dolnym rogu. Wpisz adresata, temat i treść. Możesz podać kilku adresatów
 po przecinku.
 
+- **Formatowanie**: pasek nad treścią daje pogrubienie, kursywę, podkreślenie,
+  przekreślenie, krój pisma, kolor, wyrównanie, listy, cytat, odnośniki
+  i obrazki w treści. Ostatnia ikona czyści formatowanie zaznaczenia.
+- **Kilku adresatów**: rozdziel adresy przecinkiem. Przyciski `DW` i `UDW`
+  obok pola „Do" dokładają kopię i kopię ukrytą. Adresaci z UDW nie widzą
+  siebie nawzajem ani nie pojawiają się w kopiach u pozostałych.
+- **Nadawca**: mając aliasy, wybierzesz w polu „Od", spod którego adresu
+  wychodzi list.
 - **Załączniki**: ikona spinacza dodaje pliki (do 10 sztuk po 5 MB).
+  Obrazek wklejony w treść może mieć 1,5 MB; większe dodaj jako załącznik.
 - **Wersja robocza zapisuje się sama** kilka sekund po tym, jak przestaniesz
   pisać. Zamknięcie okna z niepustą treścią też odkłada wiadomość do Wersji
   roboczych.
@@ -45,6 +55,10 @@ po przecinku.
   a zapisaną wersję roboczą przenosi do Kosza.
 - **Wysyłka**: przycisk „Wyślij" albo `Ctrl+Enter`. Na wysłaną wiadomość
   przybija się pieczęć „WYSŁANO" z dzisiejszą datą.
+- **Wysyłka o wybranej porze**: zegar obok „Wyślij" otwiera okienko z gotowymi
+  terminami (dziś wieczorem, jutro rano, w poniedziałek) albo własną datą
+  i godziną. List czeka w Zaplanowanych; „Anuluj wysyłkę" cofa go do wersji
+  roboczych i od razu otwiera do poprawek.
 
 Doręczanie w obrębie Twojej domeny jest natychmiastowe. Jeśli serwer ma
 włączoną bramkę wychodzącą, możesz pisać też na zewnętrzne adresy.
@@ -54,8 +68,11 @@ Nieudane doręczenie wróci jako „Zwrot do nadawcy".
 
 Kliknij wiadomość, żeby ją otworzyć. Nad treścią masz przyciski:
 **Odpowiedz** (cytuje oryginał), **Przekaż**, archiwizuj, gwiazdka,
-oznacz jako nieprzeczytane, do kosza, zgłoś spam. Załączniki pobierasz
+oznacz jako nieprzeczytane, do kosza, zgłoś spam, drukuj. Załączniki pobierasz
 klikając ich kafelki pod treścią.
+
+**Drukowanie** (ikona drukarki albo `Ctrl+P`) kładzie na papier samą otwartą
+wiadomość: temat, nadawcę, datę i treść. Bez folderów, listy i przycisków.
 
 ## Skróty klawiszowe
 
@@ -107,7 +124,18 @@ Kliknij swój awatar w prawym górnym rogu:
   jak system.
 - **Aliasy**: do 5 dodatkowych adresów (np. `biuro@…`, `sklep@…`), które
   wpadają do tej samej skrzynki. Wygodne do rozdzielania korespondencji
-  bez zakładania kolejnych kont.
+  bez zakładania kolejnych kont. Spod aliasu możesz też nadawać: wybierz go
+  w polu „Od" w oknie pisania.
+- **Przesyłanie dalej**: podaj adres, a każda nowa wiadomość poleci tam
+  automatycznie. Domyślnie kopia zostaje w Odebranych; po odznaczeniu
+  „Zostaw kopię w Odebranych" oryginał schodzi do Archiwum, więc nic nie ginie.
+  Nie da się przesyłać na własny adres ani na swój alias, a poza domenę tylko
+  przy włączonej bramce wychodzącej. Przycisk „Wyłącz" kasuje przekierowanie.
+
+  Zwroty i wiadomości od Zespołu nie są przesyłane dalej, a łańcuch
+  przekierowań (gdy adresat też przesyła gdzie indziej) urywa się po trzech
+  krokach. Dzięki temu dwie skrzynki ustawione na siebie nawzajem
+  nie zapętlą się.
 
 ## Prywatność
 

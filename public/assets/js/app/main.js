@@ -41,6 +41,7 @@ const stan = {
   wybranaId: null,
   otwarta: null,
   zalacznikiOtwartej: [],
+  przekierowanie: null,
 };
 
 // --- Referencje DOM ----------------------------------------------------------
@@ -560,8 +561,53 @@ function otworzUstawienia() {
   formularzUstawien.podpis.value = stan.user.signature;
   formularzUstawien.motyw.value = stan.user.theme;
   odswiezAliasy();
+  odswiezPrzekierowanie();
   ustawieniaDialog.showModal();
 }
+
+// --- Przesyłanie dalej ------------------------------------------------------------
+
+const przekierowanieInput = document.querySelector('[data-przekierowanie]');
+const przekierowanieKopia = document.querySelector('[data-przekierowanie-kopia]');
+const przekierowanieWylacz = document.querySelector('[data-akcja="wylacz-przekierowanie"]');
+
+function pokazStanPrzekierowania({ to, keepCopy }) {
+  przekierowanieInput.value = to;
+  przekierowanieKopia.checked = keepCopy;
+  przekierowanieWylacz.hidden = !to;
+  stan.przekierowanie = { to, keepCopy };
+}
+
+async function odswiezPrzekierowanie() {
+  try {
+    const { forwarding } = await api.przekierowanie();
+    pokazStanPrzekierowania(forwarding);
+  } catch {
+    /* sekcja zostaje z domyślnymi wartościami */
+  }
+}
+
+// Zapisujemy tylko przy realnej zmianie: inaczej każdy zapis ustawień
+// kasowałby przekierowanie, gdyby pole nie zdążyło się wczytać.
+async function zapiszPrzekierowanie() {
+  const to = przekierowanieInput.value.trim();
+  const keepCopy = przekierowanieKopia.checked;
+  const teraz = stan.przekierowanie ?? { to: '', keepCopy: true };
+  if (to === teraz.to && keepCopy === teraz.keepCopy) return true;
+  try {
+    const { forwarding } = await api.ustawPrzekierowanie({ to, keepCopy });
+    pokazStanPrzekierowania(forwarding);
+    return true;
+  } catch (blad) {
+    toast(blad.message, { blad: true });
+    return false;
+  }
+}
+
+przekierowanieWylacz.addEventListener('click', async () => {
+  przekierowanieInput.value = '';
+  if (await zapiszPrzekierowanie()) toast('Przesyłanie dalej wyłączone', { ikonaNazwa: 'mail' });
+});
 
 // --- Aliasy ---------------------------------------------------------------------
 
@@ -626,6 +672,9 @@ async function dodajAlias() {
 
 formularzUstawien.addEventListener('submit', async (e) => {
   e.preventDefault();
+  // Odrzucone przekierowanie (np. literówka w adresie) zatrzymuje zamknięcie okna,
+  // żeby błąd nie zniknął razem z nim.
+  if (!(await zapiszPrzekierowanie())) return;
   try {
     const { user } = await api.zapiszProfil({
       name: formularzUstawien.imie.value.trim(),

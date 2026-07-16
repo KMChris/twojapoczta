@@ -37,7 +37,7 @@ budowania. `node server/index.js` to całe wdrożenie.
 | `static.js`     | Bezpieczne serwowanie `public/`: ochrona przed path traversal, czyste adresy (`/logowanie` → `logowanie.html`), typy MIME, `Cache-Control`, `Last-Modified`/`304`. |
 | `db.js`         | Schemat SQLite i połączenie (WAL, `foreign_keys=ON`). Lekkie migracje przez `ensureColumn`. `openDb` (plik) i `openMemoryDb` (testy). |
 | `auth.js`       | scrypt + sól, `timingSafeEqual`, sesje w cookie `httpOnly`/`SameSite=Lax`, limit prób logowania (5 / 15 min na parę IP+login). |
-| `mail.js`       | Logika domenowa: foldery, doręczanie wewnętrzne, wyszukiwanie, wersje robocze, cykl życia wiadomości, doręczanie przychodzące (`deliverInbound`) i zlecanie wysyłki na zewnątrz. |
+| `mail.js`       | Logika domenowa: foldery, doręczanie wewnętrzne, wyszukiwanie, wersje robocze, zaplanowana wysyłka (`fireScheduled`), przesyłanie dalej (`forwardDelivered`), cykl życia wiadomości, doręczanie przychodzące (`deliverInbound`) i zlecanie wysyłki na zewnątrz. |
 | `api.js`        | Handlery HTTP: walidacja wejścia, strażnik sesji, warstwa JSON, odczyt ciała z limitami. |
 | `seed.js`       | Konta i wiadomości demonstracyjne (pomijane przy `TP_SEED=0`), treść listu powitalnego. |
 | `attachments.js`| Załączniki: bloby adresowane sha256 (deduplikacja treści), tokeny uploadu (jednorazowe, 24 h), odśmiecanie osieroconych blobów. |
@@ -54,16 +54,22 @@ u nadawcy (folder `sent`) i u każdego odbiorcy (`inbox`). Upraszcza to foldery,
 liczniki i usuwanie: każdy operuje wyłącznie na własnych wierszach.
 
 ```
-users(id, login·UNIQUE, name, password_hash, signature, theme, created_at)
+users(id, login·UNIQUE, name, password_hash, signature, theme, created_at,
+      forward_to, forward_keep)
 sessions(id, user_id→users, expires_at, created_at)
-messages(id, owner_id→users, folder, from_name, from_addr, to_addr,
-         subject, body, snippet, is_read, is_starred, is_priority,
-         attachments_count, sent_at)
+messages(id, owner_id→users, folder, from_name, from_addr, to_addr, cc_addr,
+         bcc_addr, subject, body, body_html, snippet, is_read, is_starred,
+         is_priority, attachments_count, sent_at, scheduled_at)
 aliases(id, user_id→users, alias·UNIQUE, created_at)
 blobs(hash·PK, data·BLOB, size)
 attachments(id, message_id→messages, filename, mime, size, blob_hash→blobs)
 uploads(token·PK, user_id→users, filename, mime, size, blob_hash, created_at)
 ```
+
+`body` trzyma zawsze wersję tekstową (z niej powstaje `snippet` i po niej
+szuka wyszukiwarka), `body_html` opcjonalną bogatą. `bcc_addr` wypełnia się
+tylko w kopii nadawcy w `sent`; kopie adresatów go nie widzą. `scheduled_at`
+ma sens wyłącznie w folderze `scheduled`.
 
 Treści załączników leżą raz w `blobs` (klucz = sha256 zawartości); wiele
 kopii wiadomości i wielu adresatów współdzieli te same bajty. Gdy ostatni
@@ -87,6 +93,21 @@ nadawcy jako priorytetowy „Zwrot do nadawcy" (`deliverBounce`).
 `DATA` tylko dla lokalnych skrzynek, parser rozkłada MIME, a doręczenie w jednej
 transakcji tworzy wiersz `inbox` i zapisuje załączniki (`storeAttachment`).
 
+**Wysyłka z terminem** (`scheduledAt`): list ląduje w folderze `scheduled`
+zamiast u adresatów. Strażnik `fireScheduled`, wołany przy starcie i co 30 s
+z `index.js`, nadaje wszystko, czego termin minął, i kasuje wiersz
+`scheduled`. Adresaci mogli w międzyczasie zniknąć: tacy wracają zwrotem,
+reszta dostaje list. Wyjście z folderu (`PATCH … folder`) zeruje `scheduled_at`,
+więc anulowanie wysyłki nie zostawia uzbrojonego terminu.
+
+**Przesyłanie dalej** (`forwardDelivered`): wołane **po** zatwierdzeniu każdego
+doręczenia do `inbox` (wysyłka wewnętrzna, nadanie zaplanowanego, odbiór z SMTP).
+Kopia wewnątrz domeny zachowuje oryginalnego nadawcę; na zewnątrz nadajemy
+z adresu właściciela skrzynki (żeby SPF/DKIM się zgadzały) z `Reply-To`
+na oryginalnego nadawcę. Pętle ucina zbiór odwiedzonych skrzynek plus limit
+`MAX_FORWARD_HOPS`, a wiadomości systemowe (`deliverSystemMessage`: powitania
+i zwroty) nie idą dalej; inaczej zwrot z przekierowania krążyłby w kółko.
+
 ## Frontend (`public/`)
 
 Bez frameworka i bez budowania. Trzy strony (strona główna `index.html`,
@@ -99,7 +120,8 @@ Bez frameworka i bez budowania. Trzy strony (strona główna `index.html`,
   - `api.js`: cienka warstwa nad REST-em (błędy niosą komunikat serwera po polsku),
   - `ui.js`: narzędzia DOM, formatowanie czasu/rozmiaru po polsku, awatary, toasty,
     bezpieczne wstawianie treści z linkami (zero `innerHTML` dla danych),
-  - `kompozycja.js`: okno pisania, autozapis i odrzucanie wersji roboczych, upload załączników, stempel,
+  - `kompozycja.js`: okno pisania, DW/UDW, nadawca z aliasu, autozapis i odrzucanie wersji roboczych, upload załączników, planowanie wysyłki, stempel,
+  - `edytor.js`: pasek formatowania nad `contenteditable` i czyszczenie HTML po liście dozwolonych znaczników (przy zapisie i przy renderze),
   - `skroty.js`: skróty klawiszowe i paleta poleceń,
   - `main.js`: rdzeń, czyli stan, foldery, lista, czytnik, ustawienia i spinanie całości.
 
@@ -118,11 +140,12 @@ każdy endpoint wymaga sesji.
 | `GET` / `PATCH /api/me`                  | profil (imię, podpis, motyw) |
 | `GET /api/messages?folder=&q=`           | lista + liczniki |
 | `GET /api/messages/:id`                  | treść (oznacza przeczytane) + załączniki |
-| `POST /api/messages`                     | wyślij lub zapisz wersję roboczą |
+| `POST /api/messages`                     | wyślij (od razu albo z `scheduledAt`) lub zapisz wersję roboczą |
 | `PATCH /api/messages/:id`                | `is_read` / `is_starred` / `folder` |
 | `DELETE /api/messages/:id`               | do kosza, a z kosza trwale |
 | `GET /api/counts`                        | nieprzeczytane per folder |
 | `GET` / `POST /api/aliases` · `DELETE …/:id` | aliasy |
+| `GET` / `PUT /api/forwarding`            | przesyłanie dalej (`to`, `keepCopy`) |
 | `POST /api/uploads`                      | wgraj załącznik (surowe ciało + nagłówki) |
 | `GET /api/messages/:id/attachments/:aid` | pobierz załącznik |
 

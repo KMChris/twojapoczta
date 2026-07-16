@@ -10,6 +10,8 @@ export const REAL_FOLDERS = ['inbox', 'sent', 'drafts', 'scheduled', 'archive', 
 export const SYSTEM_SENDER = { login: 'zespol', name: 'Zespół TwojaPoczta' };
 // Ile naraz można zaplanować do przodu; wentyl na literówki w dacie.
 export const MAX_SCHEDULE_AHEAD_MS = 366 * 24 * 3600_000;
+// Najdłuższy łańcuch przekierowań (A→B→C); dalej list się zatrzymuje.
+export const MAX_FORWARD_HOPS = 3;
 
 export function addressOf(login) {
   return `${login}@${DOMAIN}`;
@@ -251,16 +253,39 @@ function resolveRecipients(db, addresses) {
 }
 
 // Kopie u adresatów: „sent" u nadawcy, „inbox" u każdego odbiorcy (UDW bez śladu w kopiach).
+// Zwraca [{ id, ownerId, folder }]; właściciele są potrzebni do przesyłania dalej.
 function deliverCopies(db, ownerId, base, resolved, { bccAddr = '' } = {}) {
-  const copyIds = [insertMessage(db, ownerId, { ...base, folder: 'sent', is_read: 1, bcc_addr: bccAddr })];
+  const kopie = [
+    { id: insertMessage(db, ownerId, { ...base, folder: 'sent', is_read: 1, bcc_addr: bccAddr }), ownerId, folder: 'sent' },
+  ];
   for (const recipient of resolved) {
     if (recipient.id === ownerId) continue; // wysyłka do siebie: kopia w Odebranych niżej
-    copyIds.push(insertMessage(db, recipient.id, { ...base, folder: 'inbox', is_read: 0 }));
+    kopie.push({
+      id: insertMessage(db, recipient.id, { ...base, folder: 'inbox', is_read: 0 }),
+      ownerId: recipient.id,
+      folder: 'inbox',
+    });
   }
   if (resolved.some((r) => r.id === ownerId)) {
-    copyIds.push(insertMessage(db, ownerId, { ...base, folder: 'inbox', is_read: 0 }));
+    kopie.push({
+      id: insertMessage(db, ownerId, { ...base, folder: 'inbox', is_read: 0 }),
+      ownerId,
+      folder: 'inbox',
+    });
   }
-  return copyIds;
+  return kopie;
+}
+
+// Po zatwierdzeniu doręczenia: przesyła dalej każdą świeżą kopię w Odebranych.
+function forwardInboxCopies(db, kopie) {
+  for (const kopia of kopie) {
+    if (kopia.folder !== 'inbox') continue;
+    try {
+      forwardDelivered(db, kopia.ownerId, kopia.id);
+    } catch (err) {
+      console.error('[forward] nie udało się przesłać dalej', kopia.id, err);
+    }
+  }
 }
 
 // Internal delivery: a copy lands in the sender's "sent" and each recipient's "inbox".
@@ -321,40 +346,43 @@ export function sendMessage(db, user, { to, cc, bcc, from, subject, body, bodyHt
     }
   }
 
+  let kopie;
   db.exec('BEGIN');
   try {
-    const copyIds = deliverCopies(db, user.id, base, adresaci.resolved, { bccAddr: udw.join(', ') });
-    bindUploads(db, claimed.uploads, copyIds);
+    kopie = deliverCopies(db, user.id, base, adresaci.resolved, { bccAddr: udw.join(', ') });
+    bindUploads(db, claimed.uploads, kopie.map((k) => k.id));
     if (draftId) {
       db.prepare("DELETE FROM messages WHERE owner_id = ? AND id = ? AND folder = 'drafts'").run(user.id, draftId);
     }
     db.exec('COMMIT');
-
-    if (adresaci.zewnetrzni.length) {
-      const zalaczniki = claimed.uploads
-        .map((u) => ({
-          filename: u.filename,
-          mime: u.mime,
-          data: db.prepare('SELECT data FROM blobs WHERE hash = ?').get(u.blob_hash)?.data,
-        }))
-        .filter((z) => z.data);
-      dispatchExternal(db, user.id, {
-        from: { name: user.name, addr: fromAddr },
-        recipients: adresaci.zewnetrzni,
-        to: doKogo,
-        cc: dw,
-        subject: base.subject,
-        body: base.body,
-        html: base.body_html,
-        zalaczniki,
-      });
-    }
-
-    return { message: getMessage(db, user.id, copyIds[0]) };
   } catch (err) {
     db.exec('ROLLBACK');
     throw err;
   }
+
+  forwardInboxCopies(db, kopie);
+
+  if (adresaci.zewnetrzni.length) {
+    const zalaczniki = claimed.uploads
+      .map((u) => ({
+        filename: u.filename,
+        mime: u.mime,
+        data: db.prepare('SELECT data FROM blobs WHERE hash = ?').get(u.blob_hash)?.data,
+      }))
+      .filter((z) => z.data);
+    dispatchExternal(db, user.id, {
+      from: { name: user.name, addr: fromAddr },
+      recipients: adresaci.zewnetrzni,
+      to: doKogo,
+      cc: dw,
+      subject: base.subject,
+      body: base.body,
+      html: base.body_html,
+      zalaczniki,
+    });
+  }
+
+  return { message: getMessage(db, user.id, kopie[0].id) };
 }
 
 // Strażnik zaplanowanych: nadaje wszystko, czego termin właśnie minął. Zwraca liczbę nadanych.
@@ -406,11 +434,12 @@ function wyslijZaplanowana(db, msg) {
     sent_at: now(),
   };
 
+  let kopie;
   let sentId;
   db.exec('BEGIN');
   try {
-    const copyIds = deliverCopies(db, msg.owner_id, base, resolved, { bccAddr: msg.bcc_addr });
-    sentId = copyIds[0];
+    kopie = deliverCopies(db, msg.owner_id, base, resolved, { bccAddr: msg.bcc_addr });
+    sentId = kopie[0].id;
     // Załączniki wędrują z zaplanowanej na wszystkie kopie (bloby zostają wspólne).
     const zalaczniki = db
       .prepare('SELECT filename, mime, size, blob_hash FROM attachments WHERE message_id = ?')
@@ -419,9 +448,9 @@ function wyslijZaplanowana(db, msg) {
       const insert = db.prepare(
         'INSERT INTO attachments (message_id, filename, mime, size, blob_hash) VALUES (?, ?, ?, ?, ?)'
       );
-      for (const copyId of copyIds) {
-        for (const z of zalaczniki) insert.run(copyId, z.filename, z.mime, z.size, z.blob_hash);
-        db.prepare('UPDATE messages SET attachments_count = ? WHERE id = ?').run(zalaczniki.length, copyId);
+      for (const kopia of kopie) {
+        for (const z of zalaczniki) insert.run(kopia.id, z.filename, z.mime, z.size, z.blob_hash);
+        db.prepare('UPDATE messages SET attachments_count = ? WHERE id = ?').run(zalaczniki.length, kopia.id);
       }
     }
     db.prepare('DELETE FROM messages WHERE id = ?').run(msg.id);
@@ -430,6 +459,8 @@ function wyslijZaplanowana(db, msg) {
     db.exec('ROLLBACK');
     throw err;
   }
+
+  forwardInboxCopies(db, kopie);
 
   if (zewnetrzni.length) {
     const zalaczniki = db
@@ -452,12 +483,146 @@ function wyslijZaplanowana(db, msg) {
   if (nieosiagalni.length) deliverBounce(db, msg.owner_id, msg.subject, nieosiagalni);
 }
 
+// --- Przesyłanie dalej (automatyczne przekierowanie skrzynki) --------------------
+
+// Ustawia albo kasuje przekierowanie skrzynki. Pusty adres = wyłączone.
+export function setForwarding(db, user, { to, keepCopy = true }) {
+  const cel = String(to ?? '').trim().toLowerCase();
+  if (!cel) {
+    db.prepare("UPDATE users SET forward_to = '', forward_keep = 1 WHERE id = ?").run(user.id);
+    return { forwarding: { to: '', keepCopy: true } };
+  }
+
+  const at = cel.lastIndexOf('@');
+  if (at < 1 || !cel.slice(at + 1)) return { error: `Adres „${cel}" wygląda na niepoprawny.` };
+  const domena = cel.slice(at + 1);
+
+  if (domena === DOMAIN) {
+    const odbiorca = findMailbox(db, cel.slice(0, at));
+    if (!odbiorca) return { error: `Nie znaleziono skrzynki „${cel}".` };
+    // Przekierowanie na własny adres albo alias zapętliłoby skrzynkę na siebie.
+    if (odbiorca.id === user.id) return { error: 'Nie da się przesyłać poczty na własny adres.' };
+  } else {
+    if (process.env.TP_EXTERNAL !== '1') {
+      return { error: `Ta instalacja doręcza pocztę tylko w domenie @${DOMAIN}. Adres „${cel}" jest poza nią.` };
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cel)) return { error: `Adres „${cel}" wygląda na niepoprawny.` };
+  }
+
+  db.prepare('UPDATE users SET forward_to = ?, forward_keep = ? WHERE id = ?').run(cel, keepCopy ? 1 : 0, user.id);
+  return { forwarding: { to: cel, keepCopy: !!keepCopy } };
+}
+
+export function getForwarding(db, userId) {
+  const u = db.prepare('SELECT forward_to, forward_keep FROM users WHERE id = ?').get(userId);
+  return { to: u?.forward_to ?? '', keepCopy: u?.forward_keep !== 0 };
+}
+
+function kopiujZalaczniki(db, zId, doId) {
+  const zalaczniki = db
+    .prepare('SELECT filename, mime, size, blob_hash FROM attachments WHERE message_id = ?')
+    .all(zId);
+  if (!zalaczniki.length) return;
+  const insert = db.prepare(
+    'INSERT INTO attachments (message_id, filename, mime, size, blob_hash) VALUES (?, ?, ?, ?, ?)'
+  );
+  for (const z of zalaczniki) insert.run(doId, z.filename, z.mime, z.size, z.blob_hash);
+  db.prepare('UPDATE messages SET attachments_count = ? WHERE id = ?').run(zalaczniki.length, doId);
+}
+
+// Przesyła świeżo doręczoną wiadomość dalej, jeśli właściciel skrzynki tak ustawił.
+// Wołać PO zatwierdzeniu transakcji doręczenia. Zwraca adres celu albo null.
+//
+// Pętle: łańcuch A→B→A ucina zbiór odwiedzonych skrzynek, a długość ogranicza MAX_FORWARD_HOPS.
+// Wiadomości systemowe (powitanie, zwroty) nie idą dalej, żeby zwrot z przekierowania
+// nie wracał w kółko.
+export function forwardDelivered(db, ownerId, messageId, { hops = 0, odwiedzeni = new Set() } = {}) {
+  if (hops >= MAX_FORWARD_HOPS || odwiedzeni.has(ownerId)) return null;
+
+  const wlasciciel = db
+    .prepare('SELECT id, login, name, forward_to, forward_keep FROM users WHERE id = ?')
+    .get(ownerId);
+  if (!wlasciciel?.forward_to) return null;
+
+  const msg = db.prepare('SELECT * FROM messages WHERE id = ? AND owner_id = ?').get(messageId, ownerId);
+  if (!msg || msg.folder !== 'inbox') return null;
+
+  odwiedzeni.add(ownerId);
+  const cel = wlasciciel.forward_to;
+  const at = cel.lastIndexOf('@');
+  const domena = cel.slice(at + 1);
+
+  const odlozOryginal = () => {
+    // Bez „zostaw kopię" oryginał idzie do Archiwum; nie kasujemy poczty za plecami.
+    if (!wlasciciel.forward_keep) {
+      db.prepare("UPDATE messages SET folder = 'archive' WHERE id = ? AND owner_id = ?").run(messageId, ownerId);
+    }
+  };
+
+  if (domena === DOMAIN) {
+    const odbiorca = findMailbox(db, cel.slice(0, at));
+    if (!odbiorca) return null; // skrzynka celu zniknęła, przekierowanie milczy
+    let nowyId;
+    db.exec('BEGIN');
+    try {
+      // Kopia zachowuje oryginalnego nadawcę: wewnątrz domeny nie ma czego wyrównywać.
+      nowyId = insertMessage(db, odbiorca.id, {
+        folder: 'inbox',
+        from_name: msg.from_name,
+        from_addr: msg.from_addr,
+        to_addr: cel,
+        cc_addr: msg.cc_addr,
+        subject: msg.subject,
+        body: msg.body,
+        body_html: msg.body_html,
+        is_read: 0,
+        is_priority: msg.is_priority,
+        sent_at: msg.sent_at,
+      });
+      kopiujZalaczniki(db, msg.id, nowyId);
+      odlozOryginal();
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    // Cel też może mieć przekierowanie, więc łańcuch idzie dalej, aż do limitu.
+    forwardDelivered(db, odbiorca.id, nowyId, { hops: hops + 1, odwiedzeni });
+    return cel;
+  }
+
+  if (process.env.TP_EXTERNAL !== '1') return null;
+
+  const zalaczniki = db
+    .prepare(
+      `SELECT a.filename, a.mime, b.data FROM attachments a
+       JOIN blobs b ON b.hash = a.blob_hash WHERE a.message_id = ?`
+    )
+    .all(msg.id);
+  // Na zewnątrz nadajemy z własnego adresu, żeby SPF i DKIM się zgadzały; oryginalny
+  // nadawca zostaje w nazwie i w Reply-To, więc odpowiedź trafia tam, gdzie trzeba.
+  dispatchExternal(db, ownerId, {
+    from: { name: msg.from_name || msg.from_addr, addr: addressOf(wlasciciel.login) },
+    replyTo: msg.from_addr,
+    recipients: [cel],
+    to: [cel],
+    cc: [],
+    subject: msg.subject,
+    body: msg.body,
+    html: msg.body_html,
+    zalaczniki,
+  });
+  odlozOryginal();
+  return cel;
+}
+
 // Wysyłka na zewnątrz dzieje się po odpowiedzi HTTP; porażka wraca jako „Zwrot do nadawcy".
-function dispatchExternal(db, ownerId, { from, recipients, to, cc, subject, body, html, zalaczniki }) {
+function dispatchExternal(db, ownerId, { from, replyTo, recipients, to, cc, subject, body, html, zalaczniki }) {
   const raw = signMessage(
     buildRawMessage({
       domain: DOMAIN,
       from,
+      replyTo,
       to,
       cc,
       subject,
@@ -497,9 +662,10 @@ function deliverBounce(db, userId, subject, porazki) {
 
 // Delivery of a parsed external message (SMTP gateway) into a local inbox.
 export function deliverInbound(db, mailboxUserId, parsed, { toAddr }) {
+  let id;
   db.exec('BEGIN');
   try {
-    const id = insertMessage(db, mailboxUserId, {
+    id = insertMessage(db, mailboxUserId, {
       folder: 'inbox',
       from_name: parsed.from.name ?? '',
       from_addr: parsed.from.addr,
@@ -517,11 +683,17 @@ export function deliverInbound(db, mailboxUserId, parsed, { toAddr }) {
       db.prepare('UPDATE messages SET attachments_count = ? WHERE id = ?').run(zapisane, id);
     }
     db.exec('COMMIT');
-    return id;
   } catch (err) {
     db.exec('ROLLBACK');
     throw err;
   }
+
+  try {
+    forwardDelivered(db, mailboxUserId, id);
+  } catch (err) {
+    console.error('[forward] nie udało się przesłać dalej', id, err);
+  }
+  return id;
 }
 
 // Messages from the product itself (welcome mail, notifications).

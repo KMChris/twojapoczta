@@ -92,13 +92,14 @@ function czescAlternatywna(body, html) {
   return linie;
 }
 
-export function buildRawMessage({ domain, from, to, cc = [], subject, body, html, attachments = [] }) {
+export function buildRawMessage({ domain, from, replyTo, to, cc = [], subject, body, html, attachments = [] }) {
   const naglowki = [
     `Date: ${rfc822Date()}`,
     `From: ${from.name ? `${encodeHeaderWord(from.name)} ` : ''}<${from.addr}>`,
     `To: ${to.join(', ')}`,
   ];
   if (cc.length) naglowki.push(`Cc: ${cc.join(', ')}`);
+  if (replyTo) naglowki.push(`Reply-To: <${replyTo}>`);
   naglowki.push(
     `Subject: ${encodeHeaderWord(subject || '(bez tematu)')}`,
     `Message-ID: <${crypto.randomUUID()}@${domain}>`,

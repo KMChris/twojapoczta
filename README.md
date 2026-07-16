@@ -26,8 +26,13 @@ To wszystko. Bez `npm install`, bez Dockera, bez zewnętrznej bazy danych.
 
 ## Co potrafi
 
-- **Pełny webmail**: Odebrane, Z gwiazdką, Wysłane, Wersje robocze (z autozapisem),
-  Archiwum, Spam, Kosz (dwustopniowe usuwanie).
+- **Pełny webmail**: Odebrane, Z gwiazdką, Wysłane, Zaplanowane, Wersje robocze
+  (z autozapisem), Archiwum, Spam, Kosz (dwustopniowe usuwanie).
+- **Pisanie jak w dużych skrzynkach**: formatowanie treści (pogrubienie, kolory,
+  listy, cytaty, odnośniki, obrazki), DW i UDW, nadawanie spod aliasu
+  oraz wysyłka o zaplanowanej porze.
+- **Przesyłanie dalej**: cała nowa poczta leci automatycznie pod wskazany adres,
+  z kopią w Odebranych albo bez, z ochroną przed zapętleniem.
 - **Doręczanie wewnętrzne**: wiadomości między kontami w Twojej domenie
   trafiają do adresatów natychmiast.
 - **Bramka SMTP**: odbiór poczty ze świata (rekord MX + port 25) z pełnym

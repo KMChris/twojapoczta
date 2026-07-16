@@ -16,7 +16,9 @@ CREATE TABLE IF NOT EXISTS users (
   is_admin INTEGER NOT NULL DEFAULT 0,
   is_blocked INTEGER NOT NULL DEFAULT 0,
   quota_mb INTEGER,
-  last_login_at TEXT
+  last_login_at TEXT,
+  forward_to TEXT NOT NULL DEFAULT '',
+  forward_keep INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -132,6 +134,8 @@ function migrate(db) {
   ensureColumn(db, 'messages', 'cc_addr', "cc_addr TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, 'messages', 'bcc_addr', "bcc_addr TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, 'messages', 'scheduled_at', 'scheduled_at TEXT');
+  ensureColumn(db, 'users', 'forward_to', "forward_to TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, 'users', 'forward_keep', 'forward_keep INTEGER NOT NULL DEFAULT 1');
 }
 
 export function now() {

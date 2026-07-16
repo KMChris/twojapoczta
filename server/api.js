@@ -7,7 +7,7 @@ import {
 } from './auth.js';
 import {
   DOMAIN, addressOf, findMailbox, listMessages, getMessage, updateMessage, deleteMessage,
-  unreadCounts, sendMessage, saveDraft, deliverSystemMessage,
+  unreadCounts, sendMessage, saveDraft, deliverSystemMessage, setForwarding, getForwarding,
 } from './mail.js';
 import { WELCOME_SUBJECT, WELCOME_BODY } from './seed.js';
 import {
@@ -322,6 +322,22 @@ export function registerApiRoutes(router, db) {
     }
     db.prepare('INSERT INTO aliases (user_id, alias, created_at) VALUES (?, ?, ?)').run(user.id, alias, now());
     json(res, 201, { aliases: listAliases(user.id) });
+  });
+
+  // --- Przesyłanie dalej ---------------------------------------------------------
+
+  route('GET', '/api/forwarding', async (req, res, { user }) => {
+    json(res, 200, { forwarding: getForwarding(db, user.id) });
+  });
+
+  route('PUT', '/api/forwarding', async (req, res, { user }) => {
+    const body = await readBody(req);
+    if (body.to != null && typeof body.to !== 'string') {
+      return json(res, 400, { error: 'Nieprawidłowy format danych.' });
+    }
+    const wynik = setForwarding(db, user, { to: body.to, keepCopy: body.keepCopy !== false });
+    if (wynik.error) return json(res, 400, { error: wynik.error });
+    json(res, 200, wynik);
   });
 
   route('DELETE', '/api/aliases/:id', async (req, res, { user, params }) => {

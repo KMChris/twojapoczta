@@ -39,6 +39,7 @@ export function createRouter() {
   return {
     get: (p, h) => add('GET', p, h),
     post: (p, h) => add('POST', p, h),
+    put: (p, h) => add('PUT', p, h),
     patch: (p, h) => add('PATCH', p, h),
     delete: (p, h) => add('DELETE', p, h),
     match,

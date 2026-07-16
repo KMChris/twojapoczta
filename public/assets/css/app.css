@@ -1276,6 +1276,58 @@ body.app {
   background: var(--polecony-ciemny);
 }
 
+/* --- Przesyłanie dalej (ustawienia) -------------------------------------------- */
+
+.przekierowanie {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.przekierowanie input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5em 0.7em;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--atrament);
+  background: var(--papier-2);
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-m);
+  outline: none;
+}
+
+.przekierowanie input:focus {
+  border-color: var(--priorytet);
+  background: var(--papier);
+}
+
+.przekierowanie-wylacz {
+  padding: 0.5em 0.9em;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--atrament-2);
+  background: var(--papier-2);
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-m);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.przekierowanie-wylacz:hover {
+  color: var(--atrament);
+  border-color: var(--stempel);
+}
+
+.przekierowanie-kopia {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  font-size: 0.88rem;
+  color: var(--atrament-2);
+  cursor: pointer;
+}
+
 /* --- Baner zaplanowanej wiadomości w czytniku ---------------------------------- */
 
 .cz-zaplanowana {
