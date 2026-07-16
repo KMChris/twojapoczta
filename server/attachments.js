@@ -3,6 +3,7 @@
 
 import crypto from 'node:crypto';
 import { now } from './db.js';
+import { hasRoom } from './quota.js';
 
 export const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB na plik
 export const MAX_FILES_PER_MESSAGE = 10;
@@ -33,6 +34,9 @@ export function saveUpload(db, userId, { filename, mime, buffer }) {
     return { error: 'Załącznik może mieć najwyżej 5 MB.' };
   }
   if (!buffer.length) return { error: 'Plik jest pusty.' };
+  if (!hasRoom(db, userId, buffer.length)) {
+    return { error: 'Brak miejsca w skrzynce. Osiągnięto limit przydzielony przez administratora.' };
+  }
 
   const hash = crypto.createHash('sha256').update(buffer).digest('hex');
   db.prepare('INSERT OR IGNORE INTO blobs (hash, data, size) VALUES (?, ?, ?)').run(hash, buffer, buffer.length);

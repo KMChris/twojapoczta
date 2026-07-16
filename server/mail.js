@@ -2,6 +2,7 @@
 
 import { now } from './db.js';
 import { claimUploads, bindUploads, gcBlobs, storeAttachment } from './attachments.js';
+import { hasRoom } from './quota.js';
 import { buildRawMessage, deliverExternal } from './smtp-out.js';
 import { signMessage } from './dkim.js';
 
@@ -133,20 +134,6 @@ export function unreadCounts(db, userId) {
   for (const row of pelne) counts[row.folder] = row.n;
   for (const row of rows) counts[row.folder] = row.n;
   return counts;
-}
-
-// Zajętość skrzynki w bajtach: treści wiadomości + rozmiary załączników.
-export function storageUsage(db, userId) {
-  const tresci = db
-    .prepare('SELECT COALESCE(SUM(LENGTH(CAST(body AS BLOB))), 0) AS b FROM messages WHERE owner_id = ?')
-    .get(userId);
-  const zalaczniki = db
-    .prepare(
-      `SELECT COALESCE(SUM(a.size), 0) AS b FROM attachments a
-       JOIN messages m ON m.id = a.message_id WHERE m.owner_id = ?`
-    )
-    .get(userId);
-  return tresci.b + zalaczniki.b;
 }
 
 function insertMessage(db, ownerId, msg) {
@@ -305,6 +292,17 @@ export function sendMessage(db, user, { to, cc, bcc, from, subject, body, bodyHt
   const claimed = claimUploads(db, user.id, uploads);
   if (claimed.error) return { error: claimed.error };
 
+  // Limit miejsca odbiorców: kopia do Odebranych musi się zmieścić.
+  const przybywa =
+    Buffer.byteLength(body ?? '', 'utf8') +
+    Buffer.byteLength(bodyHtml ?? '', 'utf8') +
+    claimed.uploads.reduce((suma, u) => suma + u.size, 0);
+  for (const recipient of adresaci.resolved) {
+    if (!hasRoom(db, recipient.id, przybywa)) {
+      return { error: `Skrzynka „${addressOf(recipient.login)}" jest pełna. Wiadomość nie została wysłana.` };
+    }
+  }
+
   const base = {
     from_name: user.name,
     from_addr: fromAddr,
@@ -404,7 +402,15 @@ function wyslijZaplanowana(db, msg) {
   const wszyscy = [
     ...new Set([...parseRecipients(msg.to_addr), ...parseRecipients(msg.cc_addr), ...parseRecipients(msg.bcc_addr)]),
   ];
-  // Adresaci mogli zniknąć między zaplanowaniem a nadaniem; tych pomijamy i zgłaszamy zwrot.
+  // Adresaci mogli zniknąć albo zapełnić skrzynkę między zaplanowaniem
+  // a nadaniem; tych pomijamy i zgłaszamy zwrot.
+  const zalacznikiBajty = db
+    .prepare('SELECT COALESCE(SUM(size), 0) AS b FROM attachments WHERE message_id = ?')
+    .get(msg.id).b;
+  const przybywa =
+    Buffer.byteLength(msg.body ?? '', 'utf8') +
+    Buffer.byteLength(msg.body_html ?? '', 'utf8') +
+    zalacznikiBajty;
   const resolved = [];
   const zewnetrzni = [];
   const nieosiagalni = [];
@@ -413,8 +419,13 @@ function wyslijZaplanowana(db, msg) {
     const domena = addr.slice(at + 1);
     if (domena === DOMAIN) {
       const recipient = findMailbox(db, addr.slice(0, at));
-      if (recipient && !resolved.some((r) => r.id === recipient.id)) resolved.push(recipient);
-      else if (!recipient) nieosiagalni.push({ adres: addr, powod: 'skrzynka nie istnieje' });
+      if (!recipient) {
+        nieosiagalni.push({ adres: addr, powod: 'skrzynka nie istnieje' });
+      } else if (!hasRoom(db, recipient.id, przybywa)) {
+        nieosiagalni.push({ adres: addr, powod: 'skrzynka odbiorcy jest pełna' });
+      } else if (!resolved.some((r) => r.id === recipient.id)) {
+        resolved.push(recipient);
+      }
     } else if (process.env.TP_EXTERNAL === '1') {
       zewnetrzni.push(addr);
     } else {
@@ -562,6 +573,12 @@ export function forwardDelivered(db, ownerId, messageId, { hops = 0, odwiedzeni 
   if (domena === DOMAIN) {
     const odbiorca = findMailbox(db, cel.slice(0, at));
     if (!odbiorca) return null; // skrzynka celu zniknęła, przekierowanie milczy
+    // Pełna skrzynka celu: pomijamy przekierowanie, oryginał zostaje na miejscu.
+    const przybywa =
+      Buffer.byteLength(msg.body ?? '', 'utf8') +
+      Buffer.byteLength(msg.body_html ?? '', 'utf8') +
+      db.prepare('SELECT COALESCE(SUM(size), 0) AS b FROM attachments WHERE message_id = ?').get(msg.id).b;
+    if (!hasRoom(db, odbiorca.id, przybywa)) return null;
     let nowyId;
     db.exec('BEGIN');
     try {

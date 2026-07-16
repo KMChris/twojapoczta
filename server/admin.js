@@ -2,7 +2,8 @@
 // Wyłącznie liczby i metadane, nigdy treści wiadomości (tajemnica korespondencji).
 
 import { now } from './db.js';
-import { addressOf, storageUsage } from './mail.js';
+import { addressOf } from './mail.js';
+import { storageUsage } from './quota.js';
 import { gcBlobs } from './attachments.js';
 
 export function grantAdmin(db, login) {

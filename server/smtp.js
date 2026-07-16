@@ -5,6 +5,8 @@
 import net from 'node:net';
 import { DOMAIN, findMailbox, deliverInbound } from './mail.js';
 import { parseMessage } from './mime.js';
+import { hasRoom } from './quota.js';
+import { catchallLogin } from './settings.js';
 
 export const MAX_MESSAGE_BYTES = 10 * 1024 * 1024;
 const MAX_RECIPIENTS = 50;
@@ -98,8 +100,14 @@ export function startSmtpServer(db, { port, host = '0.0.0.0', hostname = `mx.${D
         const adres = match[1].trim().toLowerCase();
         const [local, domena] = adres.split('@');
         if (!domena || domena !== DOMAIN) return wyslij('554 5.7.1 Relay access denied');
-        const skrzynka = findMailbox(db, local);
+        // Nieznany adres w domenie próbuje jeszcze skrzynki catch-all (o ile ustawiona).
+        let skrzynka = findMailbox(db, local);
+        if (!skrzynka) {
+          const zbiorczy = catchallLogin(db);
+          if (zbiorczy) skrzynka = findMailbox(db, zbiorczy);
+        }
         if (!skrzynka) return wyslij('550 5.1.1 No such mailbox');
+        if (!hasRoom(db, skrzynka.id)) return wyslij('552 5.2.2 Mailbox full');
         if (koperta.rcpt.length >= MAX_RECIPIENTS) return wyslij('452 4.5.3 Too many recipients');
         if (!koperta.rcpt.some((r) => r.id === skrzynka.id)) {
           koperta.rcpt.push({ ...skrzynka, adres });
