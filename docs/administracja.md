@@ -14,13 +14,19 @@ obowiązuje też administratora.
 
 - Na instalacji demonstracyjnej rolę ma konto `demo`.
 - Na produkcji (`TP_SEED=0`) pierwszemu kontu nadaje się rolę z konsoli
-  serwera:
+  serwera. Katalog danych wskazujemy wprost, bo `TP_DATA_DIR` jest ustawiony
+  w unicie systemd, a nie w Twojej powłoce:
 
   ```bash
-  npm run admin -- twoj-login
-  # albo wprost:
-  TP_DATA_DIR=/var/lib/twojapoczta node server/index.js --admin twoj-login
+  cd /opt/twojapoczta
+  sudo -u poczta env TP_DATA_DIR=/var/lib/twojapoczta \
+    node server/index.js --admin twoj-login
   ```
+
+  Samo `npm run admin -- twoj-login` celuje w domyślny katalog `data/` obok
+  kodu. Polecenie to wykryje i odmówi z podpowiedzią, zamiast założyć tam
+  pustą bazę i twierdzić, że nie ma takiego konta. Na lokalnej instalacji,
+  gdzie dane leżą właśnie obok kodu, skrót `npm run admin` jest w porządku.
 
 - Kolejnym kontom rolę nadaje (i odbiera) administrator w panelu,
   w karcie konta.

@@ -2,6 +2,7 @@
 
 import http from 'node:http';
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { openDb } from './db.js';
 import { createRouter } from './router.js';
@@ -121,11 +122,26 @@ if (isMain && process.argv.includes('--admin')) {
     console.error('Użycie: node server/index.js --admin <login>');
     process.exit(1);
   }
-  const db = openDb(process.env.TP_DATA_DIR ?? path.join(ROOT, 'data'));
+  const katalogDanych = process.env.TP_DATA_DIR ?? path.join(ROOT, 'data');
+  // openDb zakłada katalog i schemat, więc bez tej kontroli polecenie uruchomione
+  // bez TP_DATA_DIR (a na wdrożeniu zmienna siedzi tylko w unicie systemd) tworzy
+  // obok kodu pustą bazę i melduje „nie znaleziono konta" o koncie, które ma się
+  // dobrze w tej właściwej. Lepiej powiedzieć wprost, w co celujemy.
+  if (!existsSync(path.join(katalogDanych, 'twojapoczta.db'))) {
+    console.error(`Nie ma bazy w katalogu ${katalogDanych}.`);
+    console.error('Wskaż katalog danych zmienną TP_DATA_DIR, na przykład:');
+    console.error(`  sudo -u poczta env TP_DATA_DIR=/var/lib/twojapoczta node server/index.js --admin ${login}`);
+    process.exit(1);
+  }
+  const db = openDb(katalogDanych);
   const nadano = grantAdmin(db, login);
   db.close();
-  console.log(nadano ? `Konto ${login} ma teraz uprawnienia administratora.` : `Nie znaleziono konta „${login}".`);
-  process.exit(nadano ? 0 : 1);
+  if (!nadano) {
+    console.error(`Nie znaleziono konta „${login}" w bazie ${katalogDanych}.`);
+    process.exit(1);
+  }
+  console.log(`Konto ${login} ma teraz uprawnienia administratora.`);
+  process.exit(0);
 }
 
 if (isMain) {
