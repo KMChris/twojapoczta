@@ -12,6 +12,7 @@ import { startSmtpServer } from './smtp.js';
 import { initDkim, dnsRecord, dkimConfigured } from './dkim.js';
 import { DOMAIN, fireScheduled } from './mail.js';
 import { grantAdmin } from './admin.js';
+import { registerAdminRoutes } from './api-admin.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -44,6 +45,7 @@ export async function createApp({ dataDir, db } = {}) {
 
   const router = createRouter();
   const api = registerApiRoutes(router, database);
+  registerAdminRoutes(router, database, { dataDir: resolvedDataDir });
   const serveStatic = createStaticHandler(path.join(ROOT, 'public'));
 
   // Zaplanowane wiadomości: nadaj zaległe od razu (np. po restarcie), potem co pół minuty.
