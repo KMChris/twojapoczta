@@ -306,6 +306,10 @@ body.app {
   color: var(--atrament);
 }
 
+a.boczny-link {
+  text-decoration: none;
+}
+
 /* --- Lista wiadomości ------------------------------------------------------------ */
 
 .lista {

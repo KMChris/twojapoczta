@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panel administratora · TwojaPoczta</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="/assets/img/favicon.svg">
+  <link rel="stylesheet" href="/assets/css/fonts.css">
+  <link rel="stylesheet" href="/assets/css/tokens.css">
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/admin.css">
+  <script type="module" src="/assets/js/admin/main.js"></script>
+</head>
+<body class="panel-admina">
+
+<svg hidden aria-hidden="true">
+  <defs>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h4l2 3h6l2-3h4M5 5h14l2 8v6H3v-6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><path d="M3 6h18v12H3zM3 7l9 6 9-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-spam" viewBox="0 0 24 24"><path d="M12 3l9.5 16.5h-19zM12 10v4m0 3.2v.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 3v4h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13M10 11v5m4-5v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3L10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-ustawienia" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M9 11.5a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8zM3.2 20.2c.5-3.8 2.7-5.7 5.8-5.7s5.3 1.9 5.8 5.7M15 4.9a3.2 3.2 0 0 1 1.4 6.2M17.3 14.8c2.3.5 3.4 2.2 3.8 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 12h17M12 3.5c2.5 2.4 3.8 5.2 3.8 8.5s-1.3 6.1-3.8 8.5c-2.5-2.4-3.8-5.2-3.8-8.5s1.3-6.1 3.8-8.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4.5 20.5h16M6.5 20v-7M11.5 20V4.5M16.5 20v-10M21 20V8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-log" viewBox="0 0 24 24"><path d="M4.5 6h1.5M10 6h9.5M4.5 12h1.5M10 12h9.5M4.5 18h1.5M10 18h6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="12" r="3.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M11.6 12H20.5M17.3 12v3.2M20.5 12v2.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 15.5V5.5A1.5 1.5 0 0 1 6.5 4h9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L19.5 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-block" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6.2 6.2l11.6 11.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 2.8v6.1c0 4.3-2.9 7.3-7 9.1-4.1-1.8-7-4.8-7-9.1V5.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<header class="pasek">
+  <a class="pasek-logo" href="/admin" aria-label="TwojaPoczta · panel administratora">
+    <svg class="logo-znak" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.4"/>
+      <circle cx="16" cy="16" r="10" fill="none" stroke="currentColor" stroke-width="1"/>
+      <text x="16" y="20.5" text-anchor="middle" font-size="11.5" font-weight="800">TP</text>
+    </svg>
+    <span>TwojaPoczta</span>
+  </a>
+  <span class="naklejka naklejka-panel">Zaplecze poczty</span>
+
+  <div class="pasek-akcje">
+    <a class="powrot-skrzynka" href="/app">
+      <svg aria-hidden="true"><use href="#i-inbox"/></svg>
+      <span>Wróć do skrzynki</span>
+    </a>
+  </div>
+</header>
+
+<div class="uklad-admina">
+  <aside class="boczny">
+    <nav class="foldery" aria-label="Sekcje panelu">
+      <button class="folder" data-sekcja="pulpit"><svg><use href="#i-chart"/></svg> Pulpit</button>
+      <button class="folder" data-sekcja="uzytkownicy"><svg><use href="#i-users"/></svg> Użytkownicy</button>
+      <button class="folder" data-sekcja="domena"><svg><use href="#i-globe"/></svg> Domena i DNS</button>
+      <button class="folder" data-sekcja="ustawienia"><svg><use href="#i-ustawienia"/></svg> Ustawienia</button>
+      <button class="folder" data-sekcja="dziennik"><svg><use href="#i-log"/></svg> Dziennik zdarzeń</button>
+    </nav>
+
+    <div class="boczny-stopka">
+      <p class="boczny-adres" data-adres></p>
+      <button class="boczny-link" data-akcja="wyloguj">Wyloguj się</button>
+    </div>
+  </aside>
+
+  <main class="tresc-admina" tabindex="-1">
+    <section data-widok="pulpit" aria-label="Pulpit" hidden></section>
+    <section data-widok="uzytkownicy" aria-label="Użytkownicy" hidden></section>
+    <section data-widok="domena" aria-label="Domena i DNS" hidden></section>
+    <section data-widok="ustawienia" aria-label="Ustawienia" hidden></section>
+    <section data-widok="dziennik" aria-label="Dziennik zdarzeń" hidden></section>
+  </main>
+</div>
+
+<!-- Modale wypełniane przez JS -->
+<dialog class="modal" data-modal-nowe aria-label="Nowe konto"></dialog>
+<dialog class="modal modal-konto" data-modal-konta aria-label="Konto"></dialog>
+
+<div class="toast-strefa" data-toasty aria-live="polite"></div>
+
+</body>
+</html>

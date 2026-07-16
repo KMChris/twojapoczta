@@ -730,6 +730,8 @@ function odswiezAwatar() {
     wezel.textContent = `@${domena}`;
   }
   document.querySelector('[data-formularz-kompozycji]').do.placeholder = `adres@${domena}`;
+  // Wejście do panelu administratora widzą tylko konta z rolą.
+  document.querySelector('[data-admin-link]').hidden = !stan.user.is_admin;
 }
 
 const app = {

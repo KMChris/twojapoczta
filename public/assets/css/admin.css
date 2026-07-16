@@ -1,0 +1,634 @@
+/* Panel administratora · zaplecze poczty na tokenach Datownika.
+   Reużywa app.css (pasek, foldery, modale, formularze, toasty);
+   tu tylko układ panelu, kafle, tabele-druki i naklejki statusów. */
+
+:root {
+  --zielen: #0f7a4d;
+  --zielen-tlo: #e4f2ea;
+  --uwaga: #8a5a2b;
+  --uwaga-tlo: #f4ead8;
+}
+
+[data-theme='dark'] {
+  --zielen: #52c58d;
+  --zielen-tlo: #17301f;
+  --uwaga: #d8ab6b;
+  --uwaga-tlo: #2f2617;
+}
+
+body.panel-admina {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.uklad-admina {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+.tresc-admina {
+  min-width: 0;
+  padding: 1.5rem clamp(1rem, 3vw, 2.4rem) 3.5rem;
+  overflow-y: auto;
+}
+
+.tresc-admina section {
+  max-width: 1060px;
+  margin-inline: auto;
+}
+
+/* --- Nagłówki sekcji ------------------------------------------------------- */
+
+.sekcja-naglowek {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.3rem;
+}
+
+.sekcja-naglowek h1 {
+  font-size: 1.35rem;
+  font-weight: 780;
+  font-stretch: 112%;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.sekcja-naglowek .prawa {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto;
+}
+
+/* --- Naklejki statusów (jak nalepki R / PRIORYTET) --------------------------- */
+
+.naklejka {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  padding: 0.22em 0.6em;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--stempel);
+  background: var(--papier-2);
+  border: 1px solid var(--linia-2);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.naklejka-panel {
+  color: var(--polecony);
+  background: var(--polecony-tlo);
+  border-color: transparent;
+}
+
+.naklejka-admin {
+  color: var(--priorytet-ciemny);
+  background: var(--priorytet-tlo);
+  border-color: transparent;
+}
+
+.naklejka-blokada {
+  color: var(--polecony-ciemny);
+  background: var(--polecony-tlo);
+  border-color: transparent;
+}
+
+.naklejka-ok {
+  color: var(--zielen);
+  background: var(--zielen-tlo);
+  border-color: transparent;
+}
+
+.naklejka-uwaga {
+  color: var(--uwaga);
+  background: var(--uwaga-tlo);
+  border-color: transparent;
+}
+
+/* --- Powrót do skrzynki w pasku ---------------------------------------------- */
+
+.powrot-skrzynka {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45em 0.9em;
+  font-size: 0.88rem;
+  font-weight: 620;
+  text-decoration: none;
+  color: var(--atrament-2);
+  border: 1.5px solid var(--linia-2);
+  border-radius: 99px;
+  transition: color var(--przejscie), border-color var(--przejscie), background var(--przejscie);
+}
+
+.powrot-skrzynka:hover {
+  color: var(--atrament);
+  background: var(--papier-2);
+}
+
+.powrot-skrzynka svg {
+  width: 16px;
+  height: 16px;
+}
+
+.pasek-akcje {
+  margin-left: auto;
+}
+
+/* --- Karty-druki --------------------------------------------------------------- */
+
+.karta {
+  margin-bottom: 1.2rem;
+  background: var(--papier);
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-l);
+  box-shadow: var(--cien-1);
+  overflow: hidden;
+}
+
+.karta-naglowek {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.85rem 1.2rem;
+  border-bottom: 1px dashed var(--linia-2);
+}
+
+.karta-naglowek h2 {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--stempel);
+}
+
+.karta-naglowek .prawa {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.karta-tresc {
+  padding: 1.1rem 1.2rem;
+}
+
+.karta-opis {
+  margin-top: 0.55rem;
+  font-size: 0.84rem;
+  color: var(--stempel);
+}
+
+/* --- Kafle statystyk ------------------------------------------------------------ */
+
+.kafle {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 1.2rem;
+}
+
+.kafel {
+  padding: 0.95rem 1.1rem;
+  background: var(--papier);
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-l);
+  box-shadow: var(--cien-1);
+}
+
+.kafel .eyebrow {
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.kafel b {
+  display: block;
+  font-family: var(--mono);
+  font-size: 1.65rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.kafel small {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--stempel);
+}
+
+/* --- Wykres ruchu ----------------------------------------------------------------- */
+
+.wykres svg {
+  width: 100%;
+  height: auto;
+}
+
+.wykres-slupek {
+  transition: opacity var(--przejscie);
+}
+
+.wykres-legenda {
+  display: flex;
+  gap: 1.2rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--atrament-2);
+}
+
+.wykres-legenda i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 0.35rem;
+  border-radius: 2px;
+  font-style: normal;
+}
+
+/* --- Tabele-druki -------------------------------------------------------------------- */
+
+.tabela-zwoj {
+  overflow-x: auto;
+}
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.tabela th {
+  padding: 0.55rem 0.9rem;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--stempel);
+  border-bottom: 1.5px solid var(--linia-2);
+  white-space: nowrap;
+}
+
+.tabela td {
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--linia);
+  vertical-align: middle;
+}
+
+.tabela tr:last-child td {
+  border-bottom: none;
+}
+
+.tabela tbody tr[data-klik] {
+  cursor: pointer;
+  transition: background var(--przejscie);
+}
+
+.tabela tbody tr[data-klik]:hover {
+  background: var(--papier-2);
+}
+
+.tabela .mono,
+.mono {
+  font-family: var(--mono);
+  font-size: 0.82em;
+}
+
+.tabela .przycisk-wiersza {
+  white-space: nowrap;
+}
+
+.komorka-adres b {
+  display: block;
+  font-weight: 640;
+}
+
+.komorka-adres span {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--stempel);
+}
+
+.tabela-pusta {
+  padding: 1.6rem;
+  text-align: center;
+  color: var(--stempel);
+}
+
+/* --- Pasek narzędzi listy --------------------------------------------------------------- */
+
+.narzedzia {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.narzedzia .szukaj {
+  margin-inline: 0;
+  max-width: 340px;
+}
+
+.btn-glowny {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.58em 1.15em;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 660;
+  color: #fff;
+  background: var(--polecony);
+  border: none;
+  border-radius: var(--r-m);
+  cursor: pointer;
+  transition: background var(--przejscie);
+}
+
+.btn-glowny:hover {
+  background: var(--polecony-ciemny);
+}
+
+.btn-glowny svg {
+  width: 15px;
+  height: 15px;
+}
+
+.btn-drugi {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5em 1em;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 620;
+  color: var(--atrament-2);
+  background: none;
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-m);
+  cursor: pointer;
+  transition: color var(--przejscie), border-color var(--przejscie), background var(--przejscie);
+}
+
+.btn-drugi:hover {
+  color: var(--atrament);
+  background: var(--papier-2);
+}
+
+.btn-drugi svg {
+  width: 15px;
+  height: 15px;
+}
+
+.btn-drugi.grozny {
+  color: var(--polecony);
+  border-color: var(--polecony);
+}
+
+.btn-drugi.grozny:hover {
+  color: #fff;
+  background: var(--polecony);
+}
+
+/* --- Rekordy DNS / DKIM ------------------------------------------------------------------- */
+
+.rekord {
+  display: block;
+  padding: 0.7rem 0.85rem;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  word-break: break-all;
+  color: var(--atrament);
+  background: var(--papier-2);
+  border: 1px solid var(--linia);
+  border-radius: var(--r-m);
+}
+
+.rekord-wiersz {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+}
+
+.rekord-wiersz .rekord {
+  flex: 1;
+  min-width: 0;
+}
+
+.dns-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 620;
+  white-space: nowrap;
+}
+
+.dns-status svg {
+  width: 15px;
+  height: 15px;
+}
+
+.dns-status.ok { color: var(--zielen); }
+.dns-status.zle { color: var(--polecony); }
+.dns-status.uwaga { color: var(--uwaga); }
+
+/* --- Definicje (serwer, środowisko) --------------------------------------------------------- */
+
+.definicje {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.45rem 1.4rem;
+  margin: 0;
+}
+
+.definicje dt {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--stempel);
+  align-self: center;
+}
+
+.definicje dd {
+  margin: 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+/* --- Formularze panelu (na bazie .ustawienia-formularz) -------------------------------------- */
+
+.formularz-admina input[type='number'] {
+  width: 110px;
+  padding: 0.55em 0.7em;
+  font: inherit;
+  font-size: 0.92rem;
+  font-family: var(--mono);
+  color: var(--atrament);
+  background: var(--papier-2);
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-m);
+}
+
+.formularz-admina input[type='number']:focus,
+.formularz-admina input[type='password']:focus {
+  outline: none;
+  border-color: var(--priorytet);
+}
+
+.formularz-admina input[type='password'] {
+  width: 100%;
+  padding: 0.65em 0.85em;
+  font: inherit;
+  font-size: 0.92rem;
+  color: var(--atrament);
+  background: var(--papier-2);
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-m);
+}
+
+.pole-obok {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.pole-obok input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* --- Modal konta ------------------------------------------------------------------------------ */
+
+.modal-konto {
+  display: flex;
+  flex-direction: column;
+  width: min(620px, 94vw);
+  max-height: min(86dvh, 860px);
+}
+
+.modal-konto:not([open]) {
+  display: none;
+}
+
+.modal-konto .konto-siatka {
+  overflow-y: auto;
+}
+
+.konto-siatka {
+  display: grid;
+  gap: 1.15rem;
+  padding: 1.3rem 1.4rem;
+}
+
+.konto-rzad {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.konto-rzad .opis {
+  font-size: 0.84rem;
+  color: var(--stempel);
+  flex-basis: 100%;
+  margin-top: -0.25rem;
+}
+
+.konto-naglowek-adres {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  color: var(--stempel);
+}
+
+.grupa-tytul {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--stempel);
+  border-bottom: 1px dashed var(--linia-2);
+  padding-bottom: 0.35rem;
+}
+
+/* --- Dziennik zdarzeń --------------------------------------------------------------------------- */
+
+.filtr-dziennika {
+  padding: 0.5em 0.8em;
+  font: inherit;
+  font-size: 0.88rem;
+  color: var(--atrament);
+  background: var(--papier-2);
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-m);
+}
+
+.filtr-dziennika:focus {
+  outline: none;
+  border-color: var(--priorytet);
+}
+
+/* --- Responsywność ------------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  body.panel-admina {
+    height: auto;
+    overflow: auto;
+  }
+
+  .uklad-admina {
+    grid-template-columns: 1fr;
+  }
+
+  /* app.css robi z .boczny wysuwaną szufladę, a w panelu nawigacja
+     ma zostać w dokumencie jako poziomy rząd zakładek. */
+  .uklad-admina .boczny {
+    position: static;
+    width: auto;
+    transform: none;
+    transition: none;
+    box-shadow: none;
+    border-right: none;
+    border-bottom: 1px solid var(--linia);
+  }
+
+  .foldery {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .boczny-stopka {
+    display: none;
+  }
+
+  .powrot-skrzynka span {
+    display: none;
+  }
+
+  .definicje {
+    grid-template-columns: 1fr;
+    gap: 0.1rem 0;
+  }
+
+  .definicje dd {
+    margin-bottom: 0.5rem;
+  }
+}
