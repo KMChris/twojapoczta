@@ -6,6 +6,7 @@ import { openMemoryDb, now } from '../server/db.js';
 import {
   MAX_FOLDER_NAME, normalizeName, listFolders, createFolder, renameFolder, deleteFolder,
 } from '../server/folders.js';
+import { listMessages, updateMessage, unreadCounts, deleteMessage, BUILTIN_FOLDERS } from '../server/mail.js';
 
 // Konto pod testy: minimum kolumn, resztę dosypuje schemat.
 function konto(db, login) {
@@ -194,5 +195,112 @@ test('listFolders liczy wiadomości w folderze', () => {
   assert.equal(listFolders(db, id)[0].count, 0);
   wiadomoscWFolderze(db, id, f.id);
   assert.equal(listFolders(db, id)[0].count, 1);
+  db.close();
+});
+
+test('listMessages zwraca wiadomości z folderu własnego po folderId', () => {
+  const db = openMemoryDb();
+  const id = konto(db, 'ala');
+  const f = createFolder(db, id, 'Faktury').folder;
+  const g = createFolder(db, id, 'Umowy').folder;
+  wiadomoscWFolderze(db, id, f.id);
+  wiadomoscWFolderze(db, id, g.id);
+
+  assert.equal(listMessages(db, id, { folderId: f.id }).length, 1);
+  assert.equal(listMessages(db, id, { folderId: g.id }).length, 1);
+  // Bez folderId Odebrane zostają puste: obie wiadomości są w folderach własnych.
+  assert.equal(listMessages(db, id, { folder: 'inbox' }).length, 0);
+  db.close();
+});
+
+// Wartownik jest wartością wewnętrzną, nie folderem do przeglądania.
+test('listMessages nie pozwala przeglądać wszystkiego przez folder=custom', () => {
+  const db = openMemoryDb();
+  const id = konto(db, 'ala');
+  const f = createFolder(db, id, 'Faktury').folder;
+  wiadomoscWFolderze(db, id, f.id);
+  assert.deepEqual(listMessages(db, id, { folder: 'custom' }), []);
+  assert.ok(!BUILTIN_FOLDERS.includes('custom'));
+  db.close();
+});
+
+test('listMessages: gwiazdka pokazuje też wiadomości z folderów własnych', () => {
+  const db = openMemoryDb();
+  const id = konto(db, 'ala');
+  const f = createFolder(db, id, 'Faktury').folder;
+  const w = wiadomoscWFolderze(db, id, f.id);
+  db.prepare('UPDATE messages SET is_starred = 1 WHERE id = ?').run(w);
+  assert.equal(listMessages(db, id, { folder: 'starred' }).length, 1);
+  db.close();
+});
+
+test('updateMessage przenosi do folderu własnego i ustawia wartownika sam', () => {
+  const db = openMemoryDb();
+  const id = konto(db, 'ala');
+  const f = createFolder(db, id, 'Faktury').folder;
+  const w = wiadomoscWFolderze(db, id, null, { folder: 'inbox' });
+
+  const po = updateMessage(db, id, w, { folder_id: f.id });
+  assert.equal(po.folder, 'custom');
+  assert.equal(po.folder_id, f.id);
+  db.close();
+});
+
+// To jest ta pułapka: gołe folder='custom' zostawiłoby wiadomość nigdzie.
+test('updateMessage odrzuca folder=custom bez wskazania folderu', () => {
+  const db = openMemoryDb();
+  const id = konto(db, 'ala');
+  const w = wiadomoscWFolderze(db, id, null, { folder: 'inbox' });
+  assert.equal(updateMessage(db, id, w, { folder: 'custom' }), null);
+  assert.equal(db.prepare('SELECT folder FROM messages WHERE id = ?').get(w).folder, 'inbox');
+  db.close();
+});
+
+test('updateMessage odrzuca cudzy folder', () => {
+  const db = openMemoryDb();
+  const a = konto(db, 'ala');
+  const b = konto(db, 'bob');
+  const cudzy = createFolder(db, b, 'Cudze').folder;
+  const w = wiadomoscWFolderze(db, a, null, { folder: 'inbox' });
+  assert.equal(updateMessage(db, a, w, { folder_id: cudzy.id }), null);
+  assert.equal(db.prepare('SELECT folder FROM messages WHERE id = ?').get(w).folder, 'inbox');
+  db.close();
+});
+
+test('updateMessage: powrót do folderu wbudowanego zeruje folder_id', () => {
+  const db = openMemoryDb();
+  const id = konto(db, 'ala');
+  const f = createFolder(db, id, 'Faktury').folder;
+  const w = wiadomoscWFolderze(db, id, f.id);
+  const po = updateMessage(db, id, w, { folder: 'inbox' });
+  assert.equal(po.folder, 'inbox');
+  assert.equal(po.folder_id, null);
+  db.close();
+});
+
+// Bez tego usunięcie folderu wskrzesiłoby wiadomości z kosza do Archiwum.
+test('deleteMessage zeruje folder_id przy przenoszeniu do kosza', () => {
+  const db = openMemoryDb();
+  const id = konto(db, 'ala');
+  const f = createFolder(db, id, 'Faktury').folder;
+  const w = wiadomoscWFolderze(db, id, f.id);
+  deleteMessage(db, id, w);
+  const po = db.prepare('SELECT folder, folder_id FROM messages WHERE id = ?').get(w);
+  assert.equal(po.folder, 'trash');
+  assert.equal(po.folder_id, null);
+  db.close();
+});
+
+test('unreadCounts liczy nieprzeczytane w folderach własnych', () => {
+  const db = openMemoryDb();
+  const id = konto(db, 'ala');
+  const f = createFolder(db, id, 'Faktury').folder;
+  const przeczytana = wiadomoscWFolderze(db, id, f.id);
+  db.prepare('UPDATE messages SET is_read = 1 WHERE id = ?').run(przeczytana);
+  wiadomoscWFolderze(db, id, f.id);
+
+  const liczniki = unreadCounts(db, id);
+  assert.equal(liczniki.custom[f.id], 1);
+  assert.equal(liczniki.inbox, 0);
   db.close();
 });

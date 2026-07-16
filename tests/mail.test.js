@@ -339,7 +339,9 @@ test('deliverSystemMessage: wiadomość od Zespołu, priorytet i nieprzeczytana'
 });
 
 test('REAL_FOLDERS zawiera oczekiwane katalogi', () => {
-  assert.deepEqual(REAL_FOLDERS, ['inbox', 'sent', 'drafts', 'scheduled', 'archive', 'spam', 'trash']);
+  // 'custom' to wartownik folderu własnego (Task 4): legalna wartość messages.folder,
+  // ale nie osobny katalog do przeglądania — po to istnieje BUILTIN_FOLDERS.
+  assert.deepEqual(REAL_FOLDERS, ['inbox', 'sent', 'drafts', 'scheduled', 'archive', 'spam', 'trash', 'custom']);
 });
 
 // --- Wycofanie transakcji (ROLLBACK) na błędzie ------------------------------

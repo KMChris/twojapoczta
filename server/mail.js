@@ -7,7 +7,11 @@ import { buildRawMessage, deliverExternal } from './smtp-out.js';
 import { signMessage } from './dkim.js';
 
 export const DOMAIN = process.env.TP_DOMAIN || 'twojapoczta.com';
-export const REAL_FOLDERS = ['inbox', 'sent', 'drafts', 'scheduled', 'archive', 'spam', 'trash'];
+// Dozwolone wartości messages.folder. 'custom' to wartownik: mówi „folder własny",
+// a który konkretnie — mówi folder_id.
+export const REAL_FOLDERS = ['inbox', 'sent', 'drafts', 'scheduled', 'archive', 'spam', 'trash', 'custom'];
+// Foldery wbudowane: te, po których da się nawigować i które wolno podać wprost.
+export const BUILTIN_FOLDERS = REAL_FOLDERS.filter((f) => f !== 'custom');
 export const SYSTEM_SENDER = { login: 'zespol', name: 'Zespół TwojaPoczta' };
 // Ile naraz można zaplanować do przodu; wentyl na literówki w dacie.
 export const MAX_SCHEDULE_AHEAD_MS = 366 * 24 * 3600_000;
@@ -44,13 +48,17 @@ export function parseRecipients(raw) {
     .filter(Boolean);
 }
 
-export function listMessages(db, userId, { folder = 'inbox', q = '', limit = 100 } = {}) {
+export function listMessages(db, userId, { folder = 'inbox', folderId = null, q = '', limit = 100 } = {}) {
   const where = ['owner_id = ?'];
   const params = [userId];
 
-  if (folder === 'starred') {
+  if (folderId) {
+    where.push("folder = 'custom' AND folder_id = ?");
+    params.push(folderId);
+  } else if (folder === 'starred') {
+    // Foldery własne zostają: gwiazdka omija tylko kosz i spam.
     where.push("is_starred = 1 AND folder NOT IN ('trash', 'spam')");
-  } else if (REAL_FOLDERS.includes(folder)) {
+  } else if (BUILTIN_FOLDERS.includes(folder)) {
     where.push('folder = ?');
     params.push(folder);
   } else {
@@ -91,10 +99,20 @@ export function updateMessage(db, userId, id, patch) {
     sets.push('is_starred = ?');
     params.push(patch.is_starred ? 1 : 0);
   }
-  if ('folder' in patch) {
+  if ('folder_id' in patch) {
+    // Folder własny wchodzi wyłącznie tędy, a wartownika ustawiamy sami.
+    // Dzięki temu nie da się wpisać folder='custom' bez wskazania folderu
+    // i zostawić wiadomości poza każdym widokiem.
+    const folderId = Number(patch.folder_id);
+    const wlasny = db.prepare('SELECT id FROM folders WHERE id = ? AND user_id = ?').get(folderId, userId);
+    if (!wlasny) return null;
+    sets.push("folder = 'custom'", 'folder_id = ?', 'scheduled_at = NULL');
+    params.push(folderId);
+  } else if ('folder' in patch) {
     // Do „Zaplanowanych" wiadomości trafiają tylko przez wysyłkę z terminem.
-    if (!REAL_FOLDERS.includes(patch.folder) || patch.folder === 'scheduled') return null;
-    sets.push('folder = ?', 'scheduled_at = NULL');
+    // BUILTIN_FOLDERS nie zawiera 'custom', więc wartownik odpada tu sam.
+    if (!BUILTIN_FOLDERS.includes(patch.folder) || patch.folder === 'scheduled') return null;
+    sets.push('folder = ?', 'folder_id = NULL', 'scheduled_at = NULL');
     params.push(patch.folder);
   }
   if (!sets.length) return getMessage(db, userId, id);
@@ -112,7 +130,9 @@ export function deleteMessage(db, userId, id) {
     if (msg.attachments_count) gcBlobs(db);
     return { deleted: true, purged: true };
   }
-  db.prepare("UPDATE messages SET folder = 'trash', scheduled_at = NULL WHERE owner_id = ? AND id = ?").run(userId, id);
+  db.prepare(
+    "UPDATE messages SET folder = 'trash', folder_id = NULL, scheduled_at = NULL WHERE owner_id = ? AND id = ?"
+  ).run(userId, id);
   return { deleted: true, purged: false };
 }
 
@@ -130,9 +150,17 @@ export function unreadCounts(db, userId) {
        WHERE owner_id = ? AND folder IN ('drafts', 'scheduled') GROUP BY folder`
     )
     .all(userId);
-  const counts = { inbox: 0, spam: 0, drafts: 0, scheduled: 0 };
+  const wlasne = db
+    .prepare(
+      `SELECT folder_id, COUNT(*) AS n FROM messages
+       WHERE owner_id = ? AND is_read = 0 AND folder = 'custom' AND folder_id IS NOT NULL
+       GROUP BY folder_id`
+    )
+    .all(userId);
+  const counts = { inbox: 0, spam: 0, drafts: 0, scheduled: 0, custom: {} };
   for (const row of pelne) counts[row.folder] = row.n;
   for (const row of rows) counts[row.folder] = row.n;
+  for (const row of wlasne) counts.custom[row.folder_id] = row.n;
   return counts;
 }
 
