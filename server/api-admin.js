@@ -13,12 +13,14 @@ import { DOMAIN, addressOf, findMailbox, deliverSystemMessage, SYSTEM_SENDER } f
 import { WELCOME_SUBJECT, WELCOME_BODY } from './seed.js';
 import { registrationOpen, passwordMinLength, catchallLogin, setSetting } from './settings.js';
 import { logEvent, listEvents } from './audit.js';
-import { dkimConfigured } from './dkim.js';
+import { dkimConfigured, initDkim, dnsRecord } from './dkim.js';
+import { checkDns } from './dns-check.js';
 import { now } from './db.js';
 
 const MAX_QUOTA_MB = 1_048_576; // 1 TB: wentyl na literówki, nie limit produktu
+const SELECTOR_RE = /^[a-z0-9][a-z0-9-]{0,30}$/;
 
-export function registerAdminRoutes(router, db, { dataDir = null } = {}) {
+export function registerAdminRoutes(router, db, { dataDir = null, resolver } = {}) {
   function route(method, pattern, handler) {
     router[method.toLowerCase()](pattern, async (req, res, ctx) => {
       if (!ctx.user?.is_admin) {
@@ -303,6 +305,41 @@ export function registerAdminRoutes(router, db, { dataDir = null } = {}) {
         registration: registrationOpen(db),
       },
     });
+  });
+
+  // --- DKIM i DNS -------------------------------------------------------------------
+
+  route('GET', '/api/admin/dkim', async (req, res) => {
+    if (!dkimConfigured()) return json(res, 200, { configured: false, selector: null, record: null });
+    const record = dnsRecord();
+    json(res, 200, { configured: true, selector: record.nazwa.split('._domainkey.')[0], record });
+  });
+
+  route('POST', '/api/admin/dkim', async (req, res, { user }) => {
+    const body = await readBody(req);
+    const selector = body.selector == null ? undefined : String(body.selector).trim().toLowerCase();
+    if (selector !== undefined && !SELECTOR_RE.test(selector)) {
+      return json(res, 400, { error: 'Selektor DKIM: 1–31 znaków, małe litery, cyfry i myślniki.' });
+    }
+    const wynik = initDkim(dataDir, { domain: DOMAIN, ...(selector ? { selector } : {}) });
+    audyt(req, user, 'dkim.generate', wynik.selector, wynik.wygenerowano ? 'nowy klucz' : 'wczytano istniejący');
+    json(res, 200, {
+      configured: true,
+      selector: wynik.selector,
+      generated: wynik.wygenerowano,
+      record: dnsRecord(),
+    });
+  });
+
+  route('POST', '/api/admin/dns-check', async (req, res) => {
+    const hostname = process.env.TP_SMTP_HOSTNAME ?? `mx.${DOMAIN}`;
+    let dkim = null;
+    if (dkimConfigured()) {
+      const record = dnsRecord();
+      dkim = { name: record.nazwa, value: record.wartosc };
+    }
+    const checks = await checkDns({ domain: DOMAIN, hostname, dkim, ...(resolver ? { resolver } : {}) });
+    json(res, 200, { domain: DOMAIN, hostname, checks });
   });
 
   route('GET', '/api/admin/audit', async (req, res, { url }) => {

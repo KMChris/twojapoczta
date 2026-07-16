@@ -29,7 +29,7 @@ function setSecurityHeaders(res) {
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 }
 
-export async function createApp({ dataDir, db } = {}) {
+export async function createApp({ dataDir, db, dnsResolver } = {}) {
   const resolvedDataDir = dataDir ?? path.join(ROOT, 'data');
   const database = db ?? openDb(resolvedDataDir);
   await seedIfEmpty(database);
@@ -45,7 +45,7 @@ export async function createApp({ dataDir, db } = {}) {
 
   const router = createRouter();
   const api = registerApiRoutes(router, database);
-  registerAdminRoutes(router, database, { dataDir: resolvedDataDir });
+  registerAdminRoutes(router, database, { dataDir: resolvedDataDir, resolver: dnsResolver });
   const serveStatic = createStaticHandler(path.join(ROOT, 'public'));
 
   // Zaplanowane wiadomości: nadaj zaległe od razu (np. po restarcie), potem co pół minuty.

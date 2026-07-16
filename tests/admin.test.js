@@ -4,15 +4,35 @@
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createApp } from '../server/index.js';
 import { openMemoryDb, now } from '../server/db.js';
 import { grantAdmin } from '../server/admin.js';
 import { setSetting } from '../server/settings.js';
 import { listEvents } from '../server/audit.js';
+import { configureDkim } from '../server/dkim.js';
 
 let server;
 let base;
 let db;
+let dataDir;
+
+// Fałszywy resolver: MX i A domeny testowej istnieją, reszta strefy pusta.
+const fakeResolver = {
+  async resolveMx(name) {
+    if (name === 'twojapoczta.com') return [{ priority: 10, exchange: 'mx.twojapoczta.com' }];
+    throw Object.assign(new Error('queryNotFound'), { code: 'ENOTFOUND' });
+  },
+  async resolve4(name) {
+    if (name === 'mx.twojapoczta.com') return ['203.0.113.7'];
+    throw Object.assign(new Error('queryNotFound'), { code: 'ENOTFOUND' });
+  },
+  async resolveTxt() {
+    throw Object.assign(new Error('queryNotFound'), { code: 'ENOTFOUND' });
+  },
+};
 
 function client() {
   let cookie = '';
@@ -41,13 +61,18 @@ async function adminClient() {
 
 before(async () => {
   db = openMemoryDb();
-  const app = await createApp({ db });
+  dataDir = mkdtempSync(path.join(os.tmpdir(), 'tp-admin-'));
+  const app = await createApp({ db, dataDir, dnsResolver: fakeResolver });
   server = app.server;
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
 });
 
-after(() => new Promise((resolve) => server.close(resolve)));
+after(() => {
+  configureDkim(null); // testowe klucze nie mogą przeciekać do innych testów
+  rmSync(dataDir, { recursive: true, force: true });
+  return new Promise((resolve) => server.close(resolve));
+});
 
 // --- Rola administratora -------------------------------------------------------
 
@@ -390,6 +415,50 @@ test('GET /api/admin/stats zwraca przekrój instancji', async () => {
   assert.equal(r.data.gateway.domain, 'twojapoczta.com');
   assert.equal(typeof r.data.gateway.external, 'boolean');
   assert.equal(typeof r.data.gateway.dkim, 'boolean');
+});
+
+// --- DKIM i DNS ----------------------------------------------------------------------
+
+test('DKIM: generowanie, ponowne wczytanie i rotacja selektorem', async () => {
+  const admin = await adminClient();
+  const przed = await admin('GET', '/api/admin/dkim');
+  assert.equal(przed.data.configured, false);
+
+  assert.equal((await admin('POST', '/api/admin/dkim', { selector: 'ZŁY SELEKTOR!' })).status, 400);
+
+  const pierwszy = await admin('POST', '/api/admin/dkim', {});
+  assert.equal(pierwszy.status, 200);
+  assert.equal(pierwszy.data.generated, true);
+  assert.equal(pierwszy.data.selector, 'tp1');
+  assert.match(pierwszy.data.record.nazwa, /^tp1\._domainkey\.twojapoczta\.com$/);
+  assert.match(pierwszy.data.record.wartosc, /^v=DKIM1; k=rsa; p=/);
+
+  const drugi = await admin('POST', '/api/admin/dkim', { selector: 'tp1' });
+  assert.equal(drugi.data.generated, false, 'istniejący klucz jest wczytywany, nie nadpisywany');
+
+  const rotacja = await admin('POST', '/api/admin/dkim', { selector: 'tp2' });
+  assert.equal(rotacja.data.generated, true);
+  assert.match(rotacja.data.record.nazwa, /^tp2\._domainkey\./);
+
+  const po = await admin('GET', '/api/admin/dkim');
+  assert.equal(po.data.configured, true);
+  assert.equal(po.data.selector, 'tp2');
+  assert.ok(listEvents(db, { action: 'dkim.generate' }).length >= 2);
+});
+
+test('POST /api/admin/dns-check raportuje stan rekordów przez resolver', async () => {
+  const admin = await adminClient();
+  const r = await admin('POST', '/api/admin/dns-check');
+  assert.equal(r.status, 200);
+  assert.equal(r.data.domain, 'twojapoczta.com');
+  assert.equal(r.data.hostname, 'mx.twojapoczta.com');
+
+  const stany = Object.fromEntries(r.data.checks.map((c) => [c.id, c.status]));
+  assert.equal(stany.mx, 'ok');
+  assert.equal(stany.a, 'ok');
+  assert.equal(stany.spf, 'missing');
+  assert.equal(stany.dmarc, 'missing');
+  assert.equal(stany.dkim, 'missing', 'klucz wygenerowany, ale TXT nieopublikowany');
 });
 
 test('GET /api/admin/audit zwraca dziennik z filtrem po akcji', async () => {
