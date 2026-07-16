@@ -85,6 +85,26 @@ test('getSessionUser kasuje i odrzuca wygasłą sesję', () => {
   db.close();
 });
 
+test('getSessionUser niesie flagi is_admin i is_blocked', () => {
+  const { db, userId } = freshDbWithUser();
+  db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(userId);
+  const sid = createSession(db, userId);
+  const user = getSessionUser(db, { headers: { cookie: `${SESSION_COOKIE}=${sid}` } });
+  assert.equal(user.is_admin, 1);
+  assert.equal(user.is_blocked, 0);
+  db.close();
+});
+
+test('sesja zablokowanego konta jest unieważniana i kasowana', () => {
+  const { db, userId } = freshDbWithUser();
+  const sid = createSession(db, userId);
+  db.prepare('UPDATE users SET is_blocked = 1 WHERE id = ?').run(userId);
+  const req = { headers: { cookie: `${SESSION_COOKIE}=${sid}` } };
+  assert.equal(getSessionUser(db, req), null);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM sessions WHERE id = ?').get(sid).n, 0);
+  db.close();
+});
+
 test('destroySession usuwa sesję', () => {
   const { db, userId } = freshDbWithUser();
   const sid = createSession(db, userId);

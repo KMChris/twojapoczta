@@ -43,12 +43,13 @@ export function getSessionUser(db, req) {
   if (!sessionId) return null;
   const row = db
     .prepare(
-      `SELECT u.id, u.login, u.name, u.signature, u.theme, s.id AS session_id, s.expires_at
+      `SELECT u.id, u.login, u.name, u.signature, u.theme, u.is_admin, u.is_blocked,
+              s.id AS session_id, s.expires_at
        FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ?`
     )
     .get(sessionId);
   if (!row) return null;
-  if (row.expires_at < now()) {
+  if (row.expires_at < now() || row.is_blocked) {
     destroySession(db, sessionId);
     return null;
   }

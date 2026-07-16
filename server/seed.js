@@ -58,6 +58,8 @@ export async function seedIfEmpty(db) {
     const r = insertUser.run(login, name, password, signature, 'system', now());
     users[login] = Number(r.lastInsertRowid);
   }
+  // Demo pokazuje też panel administratora.
+  db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(users.demo);
 
   const insert = db.prepare(
     `INSERT INTO messages

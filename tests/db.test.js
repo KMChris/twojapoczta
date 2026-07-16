@@ -35,6 +35,30 @@ test('openMemoryDb ma komplet tabel', () => {
   db.close();
 });
 
+test('schemat ma kolumny panelu administratora i tabele settings/audit_log', () => {
+  const db = openMemoryDb();
+  const users = db.prepare('PRAGMA table_info(users)').all().map((k) => k.name);
+  for (const k of ['is_admin', 'is_blocked', 'quota_mb', 'last_login_at']) {
+    assert.ok(users.includes(k), `brak kolumny users.${k}`);
+  }
+  const tabele = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((t) => t.name);
+  for (const t of ['settings', 'audit_log']) assert.ok(tabele.includes(t), `brak tabeli ${t}`);
+  db.close();
+});
+
+test('migracja dokłada kolumny panelu do istniejącej bazy na dysku', () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'tp-db-'));
+  try {
+    openDb(dir).close();
+    const db = openDb(dir);
+    const users = db.prepare('PRAGMA table_info(users)').all().map((k) => k.name);
+    assert.ok(users.includes('is_admin'));
+    db.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('now() zwraca znacznik ISO 8601', () => {
   assert.match(now(), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
 });

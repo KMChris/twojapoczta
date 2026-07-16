@@ -74,6 +74,7 @@ function publicUser(user) {
     address: addressOf(user.login),
     signature: user.signature,
     theme: user.theme,
+    is_admin: !!user.is_admin,
   };
 }
 
@@ -144,8 +145,13 @@ export function registerApiRoutes(router, db) {
       recordLoginFailure(ip, login);
       return json(res, 401, { error: 'Nieprawidłowy login lub hasło.' });
     }
+    // Dopiero po poprawnym haśle: 403 przy złym haśle zdradzałoby istnienie konta.
+    if (user.is_blocked) {
+      return json(res, 403, { error: 'Konto jest zablokowane. Skontaktuj się z administratorem.' });
+    }
 
     clearLoginFailures(ip, login);
+    db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').run(now(), user.id);
     const session = createSession(db, user.id);
     res.setHeader('Set-Cookie', sessionCookie(session, req));
     json(res, 200, { user: publicUser(user) });

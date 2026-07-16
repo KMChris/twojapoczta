@@ -12,7 +12,11 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   signature TEXT NOT NULL DEFAULT '',
   theme TEXT NOT NULL DEFAULT 'system',
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  is_admin INTEGER NOT NULL DEFAULT 0,
+  is_blocked INTEGER NOT NULL DEFAULT 0,
+  quota_mb INTEGER,
+  last_login_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -74,6 +78,22 @@ CREATE TABLE IF NOT EXISTS uploads (
   blob_hash TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  actor_login TEXT NOT NULL,
+  action TEXT NOT NULL,
+  target TEXT NOT NULL DEFAULT '',
+  details TEXT NOT NULL DEFAULT '',
+  ip TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
 `;
 
 // Dostawia kolumnę do istniejącej bazy (migracja bez narzędzi zewnętrznych).
@@ -104,6 +124,10 @@ export function openMemoryDb() {
 
 function migrate(db) {
   ensureColumn(db, 'messages', 'attachments_count', 'attachments_count INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'users', 'is_admin', 'is_admin INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'users', 'is_blocked', 'is_blocked INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'users', 'quota_mb', 'quota_mb INTEGER');
+  ensureColumn(db, 'users', 'last_login_at', 'last_login_at TEXT');
 }
 
 export function now() {

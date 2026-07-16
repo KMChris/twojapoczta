@@ -11,6 +11,7 @@ import { seedIfEmpty } from './seed.js';
 import { startSmtpServer } from './smtp.js';
 import { initDkim, dnsRecord, dkimConfigured } from './dkim.js';
 import { DOMAIN } from './mail.js';
+import { grantAdmin } from './admin.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -92,6 +93,20 @@ if (isMain && process.argv.includes('--dkim')) {
   console.log(`  "${rekord.wartosc}"`);
   console.log('');
   process.exit(0);
+}
+
+// `npm run admin -- <login>`: nadaje kontu uprawnienia administratora bez UI.
+if (isMain && process.argv.includes('--admin')) {
+  const login = process.argv[process.argv.indexOf('--admin') + 1];
+  if (!login) {
+    console.error('Użycie: node server/index.js --admin <login>');
+    process.exit(1);
+  }
+  const db = openDb(process.env.TP_DATA_DIR ?? path.join(ROOT, 'data'));
+  const nadano = grantAdmin(db, login);
+  db.close();
+  console.log(nadano ? `Konto ${login} ma teraz uprawnienia administratora.` : `Nie znaleziono konta „${login}".`);
+  process.exit(nadano ? 0 : 1);
 }
 
 if (isMain) {
