@@ -247,7 +247,7 @@ export function registerApiRoutes(router, db) {
 
     if (body.draft) {
       const draft = saveDraft(db, user, body);
-      if (!draft) return json(res, 404, { error: 'Nie znaleziono szkicu.' });
+      if (!draft) return json(res, 404, { error: 'Nie znaleziono wersji roboczej.' });
       return json(res, 200, { message: draft, draft: true });
     }
 

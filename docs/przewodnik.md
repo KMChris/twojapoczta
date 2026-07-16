@@ -21,15 +21,15 @@ widok, a foldery chowają się pod ikoną menu.
 
 ### Foldery
 
-| Folder       | Co w nim jest |
-| ------------ | ------------- |
-| Odebrane     | Poczta przychodząca. Licznik pokazuje nieprzeczytane. |
-| Z gwiazdką   | Wiadomości oznaczone gwiazdką (z dowolnego folderu poza Koszem i Spamem). |
-| Wysłane      | Kopie tego, co wysłałeś. |
-| Szkice       | Zaczęte, jeszcze niewysłane wiadomości; zapisują się same. |
-| Archiwum     | Uprzątnięte z Odebranych, ale nieusunięte. |
-| Spam         | Zgłoszone albo złapane jako niechciane. |
-| Kosz         | Usunięte. Kolejne skasowanie usuwa trwale. |
+| Folder         | Co w nim jest |
+| -------------- | ------------- |
+| Odebrane       | Poczta przychodząca. Licznik pokazuje nieprzeczytane. |
+| Z gwiazdką     | Wiadomości oznaczone gwiazdką (z dowolnego folderu poza Koszem i Spamem). |
+| Wysłane        | Kopie tego, co wysłałeś. |
+| Wersje robocze | Zaczęte, jeszcze niewysłane wiadomości; zapisują się same. |
+| Archiwum       | Uprzątnięte z Odebranych, ale nieusunięte. |
+| Spam           | Zgłoszone albo złapane jako niechciane. |
+| Kosz           | Usunięte. Kolejne skasowanie usuwa trwale. |
 
 ### Pisanie wiadomości
 
@@ -38,8 +38,11 @@ dolnym rogu. Wpisz adresata, temat i treść. Możesz podać kilku adresatów
 po przecinku.
 
 - **Załączniki**: ikona spinacza dodaje pliki (do 10 sztuk po 5 MB).
-- **Szkic zapisuje się sam** kilka sekund po tym, jak przestaniesz pisać.
-  Zamknięcie okna z niepustą treścią też odkłada wiadomość do Szkiców.
+- **Wersja robocza zapisuje się sama** kilka sekund po tym, jak przestaniesz
+  pisać. Zamknięcie okna z niepustą treścią też odkłada wiadomość do Wersji
+  roboczych.
+- **Odrzucanie**: ikona kosza w oknie kompozycji porzuca pisaną wiadomość,
+  a zapisaną wersję roboczą przenosi do Kosza.
 - **Wysyłka**: przycisk „Wyślij" albo `Ctrl+Enter`. Na wysłaną wiadomość
   przybija się pieczęć „WYSŁANO" z dzisiejszą datą.
 

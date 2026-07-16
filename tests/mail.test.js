@@ -1,5 +1,5 @@
-// Jednostkowe testy logiki poczty: adresy, foldery, doręczanie wewnętrzne,
-// szkice, wyszukiwanie, cykl życia wiadomości. Każdy test = świeża baza in-memory.
+// Jednostkowe testy logiki poczty: adresy, foldery, doręczanie wewnętrzne, wersje
+// robocze, wyszukiwanie, cykl życia wiadomości. Każdy test = świeża baza in-memory.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -159,9 +159,24 @@ test('deleteMessage: trwałe usunięcie z załącznikiem odpala GC blobów', () 
   db.close();
 });
 
+test('deleteMessage: odrzucona wersja robocza trafia do kosza i znika z licznika', () => {
+  const { db, user } = fresh();
+  const demo = user('demo');
+  const robocza = saveDraft(db, demo, { to: '', subject: 'W', body: 'x' });
+  assert.equal(unreadCounts(db, demo.id).drafts, 1);
+
+  assert.deepEqual(deleteMessage(db, demo.id, robocza.id), { deleted: true, purged: false });
+  assert.equal(getMessage(db, demo.id, robocza.id).folder, 'trash');
+  assert.equal(unreadCounts(db, demo.id).drafts, 0);
+
+  assert.deepEqual(deleteMessage(db, demo.id, robocza.id), { deleted: true, purged: true });
+  assert.equal(getMessage(db, demo.id, robocza.id), undefined);
+  db.close();
+});
+
 // --- unreadCounts ------------------------------------------------------------
 
-test('unreadCounts: liczy nieprzeczytane w inbox/spam i szkice', () => {
+test('unreadCounts: liczy nieprzeczytane w inbox/spam i wersje robocze', () => {
   const { db, user } = fresh();
   const demo = user('demo');
   deliverSystemMessage(db, demo.id, { subject: 'a', body: 'x' });
@@ -178,7 +193,7 @@ test('unreadCounts: liczy nieprzeczytane w inbox/spam i szkice', () => {
 
 // --- saveDraft ---------------------------------------------------------------
 
-test('saveDraft: tworzy i aktualizuje szkic', () => {
+test('saveDraft: tworzy i aktualizuje wersję roboczą', () => {
   const { db, user } = fresh();
   const demo = user('demo');
   const d = saveDraft(db, demo, { to: 'ania@twojapoczta.com', subject: 'Szkic', body: 'wersja 1' });
@@ -190,7 +205,7 @@ test('saveDraft: tworzy i aktualizuje szkic', () => {
   db.close();
 });
 
-test('saveDraft: aktualizacja nieistniejącego lub nie-szkicu → null', () => {
+test('saveDraft: aktualizacja nieistniejącej lub nie-roboczej wiadomości → null', () => {
   const { db, user } = fresh();
   const demo = user('demo');
   assert.equal(saveDraft(db, demo, { id: 9999, to: '', subject: 'x', body: 'x' }), null);
@@ -273,7 +288,7 @@ test('sendMessage: alias + adres wprost = jedna kopia u odbiorcy', () => {
   db.close();
 });
 
-test('sendMessage: pusty temat → „(bez tematu)”, draftId kasuje szkic', () => {
+test('sendMessage: pusty temat → „(bez tematu)”, draftId kasuje wersję roboczą', () => {
   const { db, user } = fresh();
   const demo = user('demo');
   const draft = saveDraft(db, demo, { to: addressOf('ania'), subject: 'szkic', body: 'x' });

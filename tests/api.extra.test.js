@@ -140,11 +140,13 @@ test('GET/PATCH/DELETE nieistniejącej wiadomości → 404', async () => {
   assert.equal((await api('DELETE', '/api/messages/999999')).status, 404);
 });
 
-test('POST /api/messages: za długi temat → 400, szkic z błędnym id → 404', async () => {
+test('POST /api/messages: za długi temat → 400, wersja robocza z błędnym id → 404', async () => {
   const api = client();
   await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
   assert.equal((await api('POST', '/api/messages', { to: 'ania@twojapoczta.com', subject: 't'.repeat(201), body: 'x' })).status, 400);
-  assert.equal((await api('POST', '/api/messages', { draft: true, id: 999999, to: '', subject: 'x', body: 'x' })).status, 404);
+  const brak = await api('POST', '/api/messages', { draft: true, id: 999999, to: '', subject: 'x', body: 'x' });
+  assert.equal(brak.status, 404);
+  assert.equal(brak.data.error, 'Nie znaleziono wersji roboczej.');
 });
 
 test('GET /api/counts zwraca liczniki', async () => {

@@ -1,4 +1,4 @@
-// Okno pisania wiadomości: szkice z autozapisem i stempel „WYSŁANO" przy wysyłce.
+// Okno pisania wiadomości: wersje robocze z autozapisem i stempel „WYSŁANO" przy wysyłce.
 
 import { api } from './api.js';
 import { el, ikona, toast, formatujRozmiar } from './ui.js';
@@ -7,7 +7,7 @@ export function initKompozycja(app) {
   const panel = document.querySelector('[data-kompozycja]');
   const formularz = document.querySelector('[data-formularz-kompozycji]');
   const tytul = document.querySelector('[data-kompozycja-tytul]');
-  const status = document.querySelector('[data-status-szkicu]');
+  const status = document.querySelector('[data-status-zapisu]');
   const stempel = document.querySelector('[data-stempel-wyslano]');
   const stempelData = document.querySelector('[data-stempel-data]');
   const przyciskWyslij = formularz.querySelector('.btn-wyslij');
@@ -16,19 +16,24 @@ export function initKompozycja(app) {
 
   let draftId = null;
   let zapisNaHoryzoncie = null;
+  let zapisWToku = null;
+  // Odrzucenie albo ponowne otwarcie unieważnia spóźnione odpowiedzi autozapisu.
+  let generacja = 0;
   let zmienione = false;
   let zalaczniki = [];
   let uploadyWToku = 0;
 
   function otworz({ do: doKogo = '', temat = '', tresc = '', draft = null } = {}) {
+    generacja += 1;
     draftId = draft?.id ?? null;
+    zapisWToku = null;
     zmienione = false;
     zalaczniki = [];
     renderujZalaczniki();
     formularz.do.value = draft?.to_addr ?? doKogo;
     formularz.temat.value = draft?.subject ?? temat;
     formularz.tresc.value = draft?.body ?? tresc;
-    tytul.textContent = draftId ? 'Szkic' : 'Nowa wiadomość';
+    tytul.textContent = draftId ? 'Wersja robocza' : 'Nowa wiadomość';
     status.textContent = '';
     stempel.classList.remove('przybity');
     panel.hidden = false;
@@ -123,17 +128,23 @@ export function initKompozycja(app) {
     return !to && !subject && !body.trim();
   }
 
-  async function zapiszSzkic() {
-    if (puste()) return;
+  async function zapiszRobocza() {
+    if (puste()) return null;
+    const gen = generacja;
+    const obietnica = api.wyslij({ draft: true, id: draftId, ...pola() }).then((w) => w.message.id);
+    zapisWToku = obietnica.catch(() => null);
     try {
-      const wynik = await api.wyslij({ draft: true, id: draftId, ...pola() });
-      draftId = wynik.message.id;
+      const id = await obietnica;
+      if (gen !== generacja) return id;
+      draftId = id;
       zmienione = false;
       const teraz = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
-      status.textContent = `Szkic zapisany ${teraz}`;
+      status.textContent = `Wersja robocza zapisana ${teraz}`;
       if (app.stan.folder === 'drafts') app.odswiezListe({ cicho: true });
+      return id;
     } catch {
-      status.textContent = 'Nie udało się zapisać szkicu';
+      if (gen === generacja) status.textContent = 'Nie udało się zapisać wersji roboczej';
+      return null;
     }
   }
 
@@ -141,7 +152,7 @@ export function initKompozycja(app) {
     zmienione = true;
     status.textContent = '';
     clearTimeout(zapisNaHoryzoncie);
-    zapisNaHoryzoncie = setTimeout(zapiszSzkic, 1600);
+    zapisNaHoryzoncie = setTimeout(zapiszRobocza, 1600);
   }
 
   formularz.addEventListener('input', zaplanujZapis);
@@ -149,10 +160,35 @@ export function initKompozycja(app) {
   async function zamknij({ zapisz = true } = {}) {
     clearTimeout(zapisNaHoryzoncie);
     if (zapisz && zmienione && !puste()) {
-      await zapiszSzkic();
-      toast('Zapisano w szkicach', { ikonaNazwa: 'draft' });
+      await zapiszRobocza();
+      toast('Zapisano wersję roboczą', { ikonaNazwa: 'draft' });
     }
     panel.hidden = true;
+  }
+
+  // Odrzucenie: porzuca pisany tekst, a zapisaną wersję roboczą przenosi do Kosza.
+  async function odrzuc() {
+    clearTimeout(zapisNaHoryzoncie);
+    generacja += 1;
+    const znanyId = draftId;
+    const zapis = zapisWToku;
+    draftId = null;
+    zapisWToku = null;
+    zmienione = false;
+    panel.hidden = true;
+
+    // Autozapis mógł być w drodze, więc poczekaj, żeby świeżo utworzony zapis też sprzątnąć.
+    const id = znanyId ?? (zapis ? await zapis : null);
+    if (id) {
+      try {
+        await api.usun(id);
+      } catch (blad) {
+        return toast(blad.message, { blad: true });
+      }
+      if (app.stan.folder === 'drafts') app.odswiezListe({ cicho: true });
+      app.odswiezLiczniki();
+    }
+    toast('Odrzucono wersję roboczą', { ikonaNazwa: 'trash' });
   }
 
   formularz.addEventListener('submit', async (e) => {
@@ -166,6 +202,8 @@ export function initKompozycja(app) {
     clearTimeout(zapisNaHoryzoncie);
     przyciskWyslij.disabled = true;
     try {
+      // Autozapis w locie mógł właśnie utworzyć zapis; bez tego id wysyłka by go osierociła.
+      if (zapisWToku) draftId = (await zapisWToku) ?? draftId;
       await api.wyslij({ to, subject, body, draftId, uploads: zalaczniki.map((z) => z.token) });
       const dzis = new Date();
       stempelData.textContent = dzis.toLocaleDateString('pl-PL');
@@ -174,7 +212,10 @@ export function initKompozycja(app) {
         panel.hidden = true;
         stempel.classList.remove('przybity');
         toast('Wysłano ✓', { ikonaNazwa: 'send' });
+        clearTimeout(zapisNaHoryzoncie);
+        generacja += 1;
         draftId = null;
+        zapisWToku = null;
         zmienione = false;
         zalaczniki = [];
         renderujZalaczniki();
@@ -193,6 +234,10 @@ export function initKompozycja(app) {
   document
     .querySelector('[data-akcja="zamknij-kompozycje"]')
     .addEventListener('click', () => zamknij());
+
+  document
+    .querySelector('[data-akcja="odrzuc-robocza"]')
+    .addEventListener('click', odrzuc);
 
   return { otworz, zamknij, otwarte };
 }

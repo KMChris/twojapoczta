@@ -68,14 +68,14 @@ Environment=TP_SMTP_ROUTE=smtp.twoj-hosting.pl:25
 
 ## Rekordy DNS: ściąga
 
-| Typ | Nazwa                          | Wartość                         |
-| --- | ------------------------------ | ------------------------------- |
-| A   | `twojadomena.pl`               | IP serwera                      |
-| A   | `mx.twojadomena.pl`            | IP serwera                      |
-| MX  | `twojadomena.pl`               | `10 mx.twojadomena.pl`          |
-| TXT | `twojadomena.pl`               | `v=spf1 a mx -all`              |
-| TXT | `tp1._domainkey.twojadomena.pl` | wydruk z `npm run dkim`        |
-| PTR | (panel dostawcy VPS)           | `mx.twojadomena.pl`             |
+| Typ | Nazwa                           | Wartość                         |
+| --- | ------------------------------- | ------------------------------- |
+| A   | `twojadomena.pl`                | IP serwera                      |
+| A   | `mx.twojadomena.pl`             | IP serwera                      |
+| MX  | `twojadomena.pl`                | `10 mx.twojadomena.pl`          |
+| TXT | `twojadomena.pl`                | `v=spf1 a mx -all`              |
+| TXT | `tp1._domainkey.twojadomena.pl` | wydruk z `npm run dkim`         |
+| PTR | (panel dostawcy VPS)            | `mx.twojadomena.pl`             |
 
 > `npm run dkim` bez zmiennych czyta domyślne `./data` i `twojapoczta.com`.
 > Na produkcji uruchom je z tym samym `TP_DOMAIN` i `TP_DATA_DIR`, co usługa.

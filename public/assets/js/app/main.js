@@ -8,20 +8,23 @@ import { initKompozycja, zbudujOdpowiedz, zbudujPrzekazanie } from './kompozycja
 import { initSkroty } from './skroty.js';
 
 const NAZWY = {
-  inbox: 'Odebrane', starred: 'Z gwiazdką', sent: 'Wysłane', drafts: 'Szkice',
+  inbox: 'Odebrane', starred: 'Z gwiazdką', sent: 'Wysłane', drafts: 'Wersje robocze',
   archive: 'Archiwum', spam: 'Spam', trash: 'Kosz',
 };
 const SLUGI = {
-  odebrane: 'inbox', gwiazdka: 'starred', wyslane: 'sent', szkice: 'drafts',
+  odebrane: 'inbox', gwiazdka: 'starred', wyslane: 'sent',
+  szkice: 'drafts', // dawna nazwa, stare zakładki mają dalej działać
+  'wersje-robocze': 'drafts',
   archiwum: 'archive', spam: 'spam', kosz: 'trash',
 };
+// Przy dublujących się slugach do adresu trafia późniejszy wpis.
 const SLUG_FOLDERU = Object.fromEntries(Object.entries(SLUGI).map(([s, f]) => [f, s]));
 
 const PUSTE_TEKSTY = {
   inbox: 'Pusta skrzynka. Cisza jak w niedzielę na poczcie.',
   starred: 'Nic tu jeszcze nie błyszczy.\nOtwórz wiadomość i naciśnij „s”.',
   sent: 'Jeszcze nic stąd nie wysłano.\nNaciśnij „c” i nadaj pierwszy list.',
-  drafts: 'Brak szkiców. Wszystko, co zaczniesz pisać,\nzapisze się tu samo.',
+  drafts: 'Brak wersji roboczych. Wszystko, co zaczniesz pisać,\nzapisze się tu samo.',
   archive: 'Archiwum świeci pustkami.',
   spam: 'Zero spamu. Tak trzymać.',
   trash: 'Kosz jest pusty.',

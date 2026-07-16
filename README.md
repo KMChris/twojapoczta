@@ -26,7 +26,7 @@ To wszystko. Bez `npm install`, bez Dockera, bez zewnętrznej bazy danych.
 
 ## Co potrafi
 
-- **Pełny webmail**: Odebrane, Z gwiazdką, Wysłane, Szkice (z autozapisem),
+- **Pełny webmail**: Odebrane, Z gwiazdką, Wysłane, Wersje robocze (z autozapisem),
   Archiwum, Spam, Kosz (dwustopniowe usuwanie).
 - **Doręczanie wewnętrzne**: wiadomości między kontami w Twojej domenie
   trafiają do adresatów natychmiast.

@@ -10,21 +10,21 @@ budowania. `node server/index.js` to całe wdrożenie.
 
 ```
                       ┌─────────────────────────────────────┐
-   przeglądarka  ──►  │  node:http  (server/index.js)        │
-   (public/*)         │    ├─ /api/*  → router → api.js      │
-                      │    └─ /*      → static.js → public/  │
+   przeglądarka  ──►  │  node:http  (server/index.js)       │
+   (public/*)         │    ├─ /api/*  → router → api.js     │
+                      │    └─ /*      → static.js → public/ │
                       └───────────────┬─────────────────────┘
                                       │
    obcy serwer   ──►  ┌───────────────┴──────────┐
    pocztowy :25       │  node:net  (smtp.js)     │
-                      │    └─ mime.js → mail.js   │
+                      │    └─ mime.js → mail.js  │
                       └───────────────┬──────────┘
                                       ▼
                           node:sqlite (db.js)  ── data/twojapoczta.db
                                       ▲
    wysyłka na       ┌────────────────┴──────────────┐
-   zewnątrz    ◄──  │ smtp-out.js (MX, STARTTLS)     │
-                    │   └─ dkim.js (podpis)          │
+   zewnątrz    ◄──  │ smtp-out.js (MX, STARTTLS)    │
+                    │   └─ dkim.js (podpis)         │
                     └───────────────────────────────┘
 ```
 
@@ -37,7 +37,7 @@ budowania. `node server/index.js` to całe wdrożenie.
 | `static.js`     | Bezpieczne serwowanie `public/`: ochrona przed path traversal, czyste adresy (`/logowanie` → `logowanie.html`), typy MIME, `Cache-Control`, `Last-Modified`/`304`. |
 | `db.js`         | Schemat SQLite i połączenie (WAL, `foreign_keys=ON`). Lekkie migracje przez `ensureColumn`. `openDb` (plik) i `openMemoryDb` (testy). |
 | `auth.js`       | scrypt + sól, `timingSafeEqual`, sesje w cookie `httpOnly`/`SameSite=Lax`, limit prób logowania (5 / 15 min na parę IP+login). |
-| `mail.js`       | Logika domenowa: foldery, doręczanie wewnętrzne, wyszukiwanie, szkice, cykl życia wiadomości, doręczanie przychodzące (`deliverInbound`) i zlecanie wysyłki na zewnątrz. |
+| `mail.js`       | Logika domenowa: foldery, doręczanie wewnętrzne, wyszukiwanie, wersje robocze, cykl życia wiadomości, doręczanie przychodzące (`deliverInbound`) i zlecanie wysyłki na zewnątrz. |
 | `api.js`        | Handlery HTTP: walidacja wejścia, strażnik sesji, warstwa JSON, odczyt ciała z limitami. |
 | `seed.js`       | Konta i wiadomości demonstracyjne (pomijane przy `TP_SEED=0`), treść listu powitalnego. |
 | `attachments.js`| Załączniki: bloby adresowane sha256 (deduplikacja treści), tokeny uploadu (jednorazowe, 24 h), odśmiecanie osieroconych blobów. |
@@ -99,7 +99,7 @@ Bez frameworka i bez budowania. Trzy strony (strona główna `index.html`,
   - `api.js`: cienka warstwa nad REST-em (błędy niosą komunikat serwera po polsku),
   - `ui.js`: narzędzia DOM, formatowanie czasu/rozmiaru po polsku, awatary, toasty,
     bezpieczne wstawianie treści z linkami (zero `innerHTML` dla danych),
-  - `kompozycja.js`: okno pisania, autozapis szkiców, upload załączników, stempel,
+  - `kompozycja.js`: okno pisania, autozapis i odrzucanie wersji roboczych, upload załączników, stempel,
   - `skroty.js`: skróty klawiszowe i paleta poleceń,
   - `main.js`: rdzeń, czyli stan, foldery, lista, czytnik, ustawienia i spinanie całości.
 
@@ -118,7 +118,7 @@ każdy endpoint wymaga sesji.
 | `GET` / `PATCH /api/me`                  | profil (imię, podpis, motyw) |
 | `GET /api/messages?folder=&q=`           | lista + liczniki |
 | `GET /api/messages/:id`                  | treść (oznacza przeczytane) + załączniki |
-| `POST /api/messages`                     | wyślij lub zapisz szkic |
+| `POST /api/messages`                     | wyślij lub zapisz wersję roboczą |
 | `PATCH /api/messages/:id`                | `is_read` / `is_starred` / `folder` |
 | `DELETE /api/messages/:id`               | do kosza, a z kosza trwale |
 | `GET /api/counts`                        | nieprzeczytane per folder |

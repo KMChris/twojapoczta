@@ -163,7 +163,7 @@ Serwerownia.pl`,
 
 • Wyszukiwarka rozumie teraz zapytania po nadawcy i temacie.
 • Tryb ciemny „nocna sortownia" dostał poprawiony kontrast.
-• Szkice zapisują się same, zanim zdążysz o tym pomyśleć.
+• Wersje robocze zapisują się same, zanim zdążysz o tym pomyśleć.
 
 Cały changelog znajdziesz na stronie projektu.
 

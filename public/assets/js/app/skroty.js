@@ -14,7 +14,7 @@ export function initSkroty(app, kompozycja) {
     { tytul: 'Odebrane', ikona: 'inbox', skrot: 'g i', wykonaj: () => app.przejdzDoFolderu('inbox') },
     { tytul: 'Z gwiazdką', ikona: 'star', wykonaj: () => app.przejdzDoFolderu('starred') },
     { tytul: 'Wysłane', ikona: 'send', skrot: 'g s', wykonaj: () => app.przejdzDoFolderu('sent') },
-    { tytul: 'Szkice', ikona: 'draft', wykonaj: () => app.przejdzDoFolderu('drafts') },
+    { tytul: 'Wersje robocze', ikona: 'draft', wykonaj: () => app.przejdzDoFolderu('drafts') },
     { tytul: 'Archiwum', ikona: 'archive', wykonaj: () => app.przejdzDoFolderu('archive') },
     { tytul: 'Spam', ikona: 'spam', wykonaj: () => app.przejdzDoFolderu('spam') },
     { tytul: 'Kosz', ikona: 'trash', wykonaj: () => app.przejdzDoFolderu('trash') },

@@ -80,7 +80,7 @@
       <button class="folder" data-folder="inbox"><svg><use href="#i-inbox"/></svg> Odebrane <em data-licznik="inbox" hidden></em></button>
       <button class="folder" data-folder="starred"><svg><use href="#i-star"/></svg> Z gwiazdką</button>
       <button class="folder" data-folder="sent"><svg><use href="#i-send"/></svg> Wysłane</button>
-      <button class="folder" data-folder="drafts"><svg><use href="#i-draft"/></svg> Szkice <em data-licznik="drafts" hidden></em></button>
+      <button class="folder" data-folder="drafts"><svg><use href="#i-draft"/></svg> Wersje robocze <em data-licznik="drafts" hidden></em></button>
       <button class="folder" data-folder="archive"><svg><use href="#i-archive"/></svg> Archiwum</button>
       <button class="folder" data-folder="spam"><svg><use href="#i-spam"/></svg> Spam <em data-licznik="spam" hidden></em></button>
       <button class="folder" data-folder="trash"><svg><use href="#i-trash"/></svg> Kosz</button>
@@ -144,7 +144,10 @@
         <svg><use href="#i-attach"/></svg>
       </button>
       <input type="file" data-plik-input multiple hidden>
-      <span class="kompozycja-status" data-status-szkicu></span>
+      <span class="kompozycja-status" data-status-zapisu></span>
+      <button type="button" class="ikona-btn kompozycja-odrzuc" data-akcja="odrzuc-robocza" title="Odrzuć wersję roboczą" aria-label="Odrzuć wersję roboczą">
+        <svg><use href="#i-trash"/></svg>
+      </button>
     </footer>
   </form>
   <svg class="kompozycja-stempel" data-stempel-wyslano viewBox="0 0 200 200" aria-hidden="true">

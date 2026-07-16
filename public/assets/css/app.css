@@ -958,6 +958,10 @@ body.app {
   color: var(--stempel);
 }
 
+.kompozycja-odrzuc {
+  margin-left: auto;
+}
+
 .kompozycja-stempel {
   position: absolute;
   top: 46%;
@@ -1279,8 +1283,8 @@ body.app {
   color: var(--atrament);
   background: var(--papier-2);
   border: 1.5px solid var(--linia-2);
-  border-right: 0;
-  border-radius: var(--r-m) 0 0 var(--r-m);
+  border-right: 0 !important;
+  border-radius: var(--r-m) 0 0 var(--r-m) !important;
 }
 
 .alias-dodawanie input:focus {
