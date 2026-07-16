@@ -97,6 +97,16 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
+
+CREATE TABLE IF NOT EXISTS folders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_folders_user ON folders(user_id, position);
 `;
 
 // Dostawia kolumnę do istniejącej bazy (migracja bez narzędzi zewnętrznych).
@@ -139,6 +149,13 @@ function migrate(db) {
   ensureColumn(db, 'messages', 'scheduled_at', 'scheduled_at TEXT');
   ensureColumn(db, 'users', 'forward_to', "forward_to TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, 'users', 'forward_keep', 'forward_keep INTEGER NOT NULL DEFAULT 1');
+  // Folder własny: wartownik folder='custom' + folder_id. Kolumna jest NULLowalna,
+  // więc ALTER TABLE z REFERENCES przechodzi (SQLite wymaga tu domyślnego NULL).
+  ensureColumn(db, 'messages', 'folder_id', 'folder_id INTEGER REFERENCES folders(id)');
+  // Indeks musi powstać PO kolumnie, dlatego nie leży w SCHEMA.
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_messages_owner_folderid ON messages(owner_id, folder_id, sent_at DESC)'
+  );
 }
 
 export function now() {
