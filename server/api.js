@@ -14,6 +14,8 @@ import {
   saveUpload, listAttachments, getAttachment, MAX_FILE_BYTES,
 } from './attachments.js';
 import { now } from './db.js';
+import { registrationOpen, passwordMinLength } from './settings.js';
+import { logEvent } from './audit.js';
 
 const LOGIN_RE = /^[a-z0-9][a-z0-9.-]{2,29}$/;
 const BODY_LIMIT = 512 * 1024;
@@ -93,11 +95,11 @@ export function registerApiRoutes(router, db) {
   // --- Auth ----------------------------------------------------------------
 
   route('GET', '/api/config', async (req, res) => {
-    json(res, 200, { domain: DOMAIN, registration: process.env.TP_REGISTER !== '0' });
+    json(res, 200, { domain: DOMAIN, registration: registrationOpen(db) });
   }, { auth: false });
 
   route('POST', '/api/register', async (req, res) => {
-    if (process.env.TP_REGISTER === '0') {
+    if (!registrationOpen(db)) {
       return json(res, 403, { error: 'Rejestracja nowych kont jest wyłączona na tym serwerze.' });
     }
     const body = await readBody(req);
@@ -111,7 +113,10 @@ export function registerApiRoutes(router, db) {
       });
     }
     if (!name || name.length > 60) return json(res, 400, { error: 'Podaj imię i nazwisko (do 60 znaków).' });
-    if (password.length < 8) return json(res, 400, { error: 'Hasło musi mieć co najmniej 8 znaków.' });
+    const minHasla = passwordMinLength(db);
+    if (password.length < minHasla) {
+      return json(res, 400, { error: `Hasło musi mieć co najmniej ${minHasla} znaków.` });
+    }
 
     const taken = db.prepare('SELECT id FROM users WHERE login = ?').get(login);
     if (taken) return json(res, 409, { error: `Adres ${addressOf(login)} jest już zajęty.` });
@@ -123,6 +128,7 @@ export function registerApiRoutes(router, db) {
     const userId = Number(result.lastInsertRowid);
 
     deliverSystemMessage(db, userId, { subject: WELCOME_SUBJECT, body: WELCOME_BODY, priority: true });
+    logEvent(db, { actor: login, action: 'user.register', ip: clientIp(req) });
 
     const session = createSession(db, userId);
     res.setHeader('Set-Cookie', sessionCookie(session, req));
@@ -143,15 +149,18 @@ export function registerApiRoutes(router, db) {
     const valid = user && (await verifyPassword(user.password_hash, password));
     if (!valid) {
       recordLoginFailure(ip, login);
+      logEvent(db, { actor: login, action: 'login.failed', ip });
       return json(res, 401, { error: 'Nieprawidłowy login lub hasło.' });
     }
     // Dopiero po poprawnym haśle: 403 przy złym haśle zdradzałoby istnienie konta.
     if (user.is_blocked) {
+      logEvent(db, { actor: login, action: 'login.failed', details: 'konto zablokowane', ip });
       return json(res, 403, { error: 'Konto jest zablokowane. Skontaktuj się z administratorem.' });
     }
 
     clearLoginFailures(ip, login);
     db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').run(now(), user.id);
+    logEvent(db, { actor: login, action: 'login', ip });
     const session = createSession(db, user.id);
     res.setHeader('Set-Cookie', sessionCookie(session, req));
     json(res, 200, { user: publicUser(user) });

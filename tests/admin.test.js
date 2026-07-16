@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import { createApp } from '../server/index.js';
 import { openMemoryDb, now } from '../server/db.js';
 import { grantAdmin } from '../server/admin.js';
+import { setSetting } from '../server/settings.js';
+import { listEvents } from '../server/audit.js';
 
 let server;
 let base;
@@ -89,6 +91,52 @@ test('zablokowane konto: logowanie 403, a żywa sesja gaśnie', async () => {
   const ponowne = await api('POST', '/api/login', { login: 'pechowiec', password: 'haslo1234' });
   assert.equal(ponowne.status, 403);
   assert.match(ponowne.data.error, /zablokowane/i);
+});
+
+// --- Ustawienia sterują rejestracją i polityką haseł -----------------------------
+
+test('wpis registration=0 zamyka rejestrację i /api/config to raportuje', async () => {
+  const api = client();
+  setSetting(db, 'registration', '0');
+  try {
+    const config = await api('GET', '/api/config');
+    assert.equal(config.data.registration, false);
+    const rejestracja = await api('POST', '/api/register', { login: 'spozniony', name: 'Spóźniony Gość', password: 'haslo1234' });
+    assert.equal(rejestracja.status, 403);
+  } finally {
+    setSetting(db, 'registration', null);
+  }
+});
+
+test('password_min podnosi wymaganą długość hasła przy rejestracji', async () => {
+  const api = client();
+  setSetting(db, 'password_min', '12');
+  try {
+    const zaKrotkie = await api('POST', '/api/register', { login: 'krotki', name: 'Krótki Test', password: 'haslo1234' });
+    assert.equal(zaKrotkie.status, 400);
+    assert.match(zaKrotkie.data.error, /12/);
+  } finally {
+    setSetting(db, 'password_min', null);
+  }
+});
+
+// --- Dziennik zdarzeń przy logowaniu ---------------------------------------------
+
+test('logowanie udane i nieudane zostawia wpisy w dzienniku', async () => {
+  const api = client();
+  await api('POST', '/api/login', { login: 'michal', password: 'demo1234' });
+  await api('POST', '/api/login', { login: 'michal', password: 'zle-haslo' });
+
+  const udane = listEvents(db, { action: 'login' });
+  assert.ok(udane.some((w) => w.actor_login === 'michal'));
+  const nieudane = listEvents(db, { action: 'login.failed' });
+  assert.ok(nieudane.some((w) => w.actor_login === 'michal'));
+});
+
+test('rejestracja konta zostawia wpis w dzienniku', async () => {
+  const api = client();
+  await api('POST', '/api/register', { login: 'dziennikowy', name: 'Dziennikowy Test', password: 'haslo1234' });
+  assert.ok(listEvents(db, { action: 'user.register' }).some((w) => w.actor_login === 'dziennikowy'));
 });
 
 // --- Ślad logowania ----------------------------------------------------------------
