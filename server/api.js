@@ -209,7 +209,7 @@ export function registerApiRoutes(router, db) {
 
   route('GET', '/api/messages', async (req, res, { user, url }) => {
     const folder = url.searchParams.get('folder') ?? 'inbox';
-    // Number('') to 0, a Number('abc') to NaN — oba padają na || null.
+    // Number('') to 0, a Number('abc') to NaN, oba padają na || null.
     const folderId = Number(url.searchParams.get('folderId')) || null;
     const q = (url.searchParams.get('q') ?? '').trim().slice(0, 200);
     json(res, 200, {

@@ -31,7 +31,7 @@ const PUSTE_TEKSTY = {
   archive: 'Archiwum świeci pustkami.',
   spam: 'Zero spamu. Tak trzymać.',
   trash: 'Kosz jest pusty.',
-  custom: 'Ten folder jest pusty.\nPrzeciągnij tu pocztę akcją „Przenieś do".',
+  custom: 'Ten folder jest pusty.\nOtwórz wiadomość i przenieś ją tu ikoną teczki.',
 };
 
 const stan = {
@@ -451,7 +451,7 @@ async function przelaczGwiazdke(id) {
   }
 }
 
-// Cofnięcie przeniesienia: list wraca tam, skąd wyszedł — także do folderu własnego.
+// Cofnięcie przeniesienia: list wraca tam, skąd wyszedł, także do folderu własnego.
 async function przywrocDoFolderu(id, folder, folderId = null) {
   try {
     await api.zmien(id, folderId ? { folder_id: folderId } : { folder });
@@ -494,7 +494,7 @@ async function przeniesDoFolderu() {
   const skadId = w.folder_id ?? null;
   try {
     await api.zmien(w.id, { folder_id: cel });
-    toast(`Przeniesiono do „${foldery.nazwa(cel)}"`, {
+    toast(`Przeniesiono do „${foldery.nazwa(cel)}”`, {
       ikonaNazwa: 'folder',
       cofnij: () => przywrocDoFolderu(w.id, skad, skadId),
     });

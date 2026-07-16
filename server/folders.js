@@ -2,7 +2,7 @@
 //
 // Niezmiennik całej funkcji: wiadomość w folderze własnym ma folder='custom'
 // ORAZ folder_id=N. Każde miejsce ustawiające folder musi wyzerować folder_id
-// w tym samym UPDATE — inaczej wiadomość zniknie z każdego widoku.
+// w tym samym UPDATE, inaczej wiadomość zniknie z każdego widoku.
 
 import { now } from './db.js';
 
@@ -50,7 +50,7 @@ export function listFolders(db, userId) {
     .prepare(
       `SELECT f.id, f.name, f.position,
               (SELECT COUNT(*) FROM messages m
-                WHERE m.owner_id = f.user_id AND m.folder_id = f.id) AS count
+                WHERE m.owner_id = f.user_id AND m.folder_id = f.id AND m.folder = 'custom') AS count
        FROM folders f WHERE f.user_id = ? ORDER BY f.position, f.id`
     )
     .all(userId);
@@ -88,7 +88,7 @@ export function renameFolder(db, userId, id, rawName) {
 // wiadomości, które z tego folderu poszły do kosza (mają jeszcze folder_id,
 // gdyby ktoś kiedyś złamał niezmiennik) i wskrzesili je w Archiwum.
 //
-// Reguły przenoszące do tego folderu wyłącza faza 3 — tabeli rules jeszcze nie ma.
+// Reguły przenoszące do tego folderu wyłącza faza 3: tabeli rules jeszcze nie ma.
 export function deleteFolder(db, userId, id) {
   const folder = db.prepare('SELECT id, name FROM folders WHERE id = ? AND user_id = ?').get(id, userId);
   if (!folder) return { error: 'Nie znaleziono folderu.', notFound: true };

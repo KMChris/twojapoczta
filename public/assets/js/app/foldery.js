@@ -1,5 +1,5 @@
 // TwojaPoczta · foldery użytkownika w panelu bocznym.
-// Widok i CRUD. Nawigację prowadzi main.js — tutaj tylko lista, okno i akcje.
+// Widok i CRUD. Nawigację prowadzi main.js. Tutaj tylko lista, okno i akcje.
 
 import { api } from './api.js';
 import { el, ikona, toast } from './ui.js';
@@ -46,11 +46,17 @@ export function initFoldery(app) {
               class: 'folder-edytuj',
               role: 'button',
               tabindex: '0',
-              title: `Zmień nazwę albo usuń „${f.name}"`,
-              'aria-label': `Zmień nazwę albo usuń „${f.name}"`,
-              onclick: (e) => {
+              title: `Zmień nazwę albo usuń „${f.name}”`,
+              'aria-label': `Zmień nazwę albo usuń „${f.name}”`,
+              onclick: async (e) => {
                 e.stopPropagation();
-                otworzEdycje(f);
+                await otworzEdycje(f);
+              },
+              onkeydown: (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  otworzEdycje(f);
+                }
               },
             },
             ikona('wiecej')
@@ -81,17 +87,22 @@ export function initFoldery(app) {
     formularz.nazwa.focus();
   }
 
-  function otworzEdycje(folder) {
-    stan.edytowany = folder;
+  async function otworzEdycje(folder) {
+    // Licznik musi być świeży w chwili, gdy pytamy o usunięcie: przeniesienie
+    // wiadomości do folderu nie odświeża listy, więc bez tego okno potrafiłoby
+    // powiedzieć „Folder jest pusty" nad folderem pełnym poczty.
+    await odswiez();
+    const swiezy = stan.foldery.find((f) => f.id === folder.id) ?? folder;
+    stan.edytowany = swiezy;
     tytulOkna.textContent = 'Folder';
     przyciskZapisz.textContent = 'Zapisz';
     przyciskUsun.hidden = false;
     // Liczba mówi wprost, o co toczy się gra przy usuwaniu.
     opisOkna.hidden = false;
-    opisOkna.textContent = folder.count
-      ? `Usunięcie folderu przeniesie ${folder.count} ${wiadomosciWord(folder.count)} do Archiwum. Nic nie przepadnie.`
+    opisOkna.textContent = swiezy.count
+      ? `Usunięcie folderu przeniesie ${swiezy.count} ${wiadomosciWord(swiezy.count)} do Archiwum. Nic nie przepadnie.`
       : 'Folder jest pusty.';
-    formularz.nazwa.value = folder.name;
+    formularz.nazwa.value = swiezy.name;
     okno.showModal();
     formularz.nazwa.select();
   }
@@ -142,7 +153,7 @@ export function initFoldery(app) {
   document.querySelector('[data-akcja="nowy-folder"]').addEventListener('click', otworzNowy);
 
   // Zwraca id wybranego folderu albo null. pomijId wycina folder, w którym
-  // wiadomość już leży — przenoszenie do samego siebie nie ma sensu.
+  // wiadomość już leży: przenoszenie do samego siebie nie ma sensu.
   //
   // Wynik rozstrzygamy w kliknięciu pozycji, nie w zdarzeniu 'close' okna.
   // Powód jest praktyczny: część środowisk (panel Browser na Electronie) nie

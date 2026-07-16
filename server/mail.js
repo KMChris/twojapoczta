@@ -8,7 +8,7 @@ import { signMessage } from './dkim.js';
 
 export const DOMAIN = process.env.TP_DOMAIN || 'twojapoczta.com';
 // Dozwolone wartości messages.folder. 'custom' to wartownik: mówi „folder własny",
-// a który konkretnie — mówi folder_id.
+// a folder_id mówi który konkretnie.
 export const REAL_FOLDERS = ['inbox', 'sent', 'drafts', 'scheduled', 'archive', 'spam', 'trash', 'custom'];
 // Foldery wbudowane: te, po których da się nawigować i które wolno podać wprost.
 export const BUILTIN_FOLDERS = REAL_FOLDERS.filter((f) => f !== 'custom');
@@ -594,7 +594,9 @@ export function forwardDelivered(db, ownerId, messageId, { hops = 0, odwiedzeni 
   const odlozOryginal = () => {
     // Bez „zostaw kopię" oryginał idzie do Archiwum; nie kasujemy poczty za plecami.
     if (!wlasciciel.forward_keep) {
-      db.prepare("UPDATE messages SET folder = 'archive' WHERE id = ? AND owner_id = ?").run(messageId, ownerId);
+      db.prepare(
+        "UPDATE messages SET folder = 'archive', folder_id = NULL WHERE id = ? AND owner_id = ?"
+      ).run(messageId, ownerId);
     }
   };
 

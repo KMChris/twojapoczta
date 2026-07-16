@@ -157,7 +157,7 @@ test('deleteFolder przenosi wiadomości do Archiwum, nie do Odebranych', () => {
   db.close();
 });
 
-test('deleteFolder nie rusza wiadomości z kosza, które kiedyś tam leżały', () => {
+test('deleteFolder nie rusza wiadomości w koszu, których folder_id jest już NULL', () => {
   const db = openMemoryDb();
   const id = konto(db, 'ala');
   const f = createFolder(db, id, 'Faktury').folder;
@@ -167,6 +167,24 @@ test('deleteFolder nie rusza wiadomości z kosza, które kiedyś tam leżały', 
 
   assert.equal(deleteFolder(db, id, f.id).moved, 1);
   assert.equal(db.prepare('SELECT folder FROM messages WHERE id = ?').get(wKoszu).folder, 'trash');
+  db.close();
+});
+
+test('deleteFolder woli głośny błąd niż ciche wskrzeszenie listu z kosza', () => {
+  const db = openMemoryDb();
+  const id = konto(db, 'ala');
+  const f = createFolder(db, id, 'Faktury').folder;
+  // Stan łamiący niezmiennik: w koszu, ale folder_id wciąż wskazuje folder.
+  // Strażnik „AND folder = 'custom'" pomija taki wiersz w UPDATE, więc DELETE
+  // trafia na klucz obcy i cała transakcja się wycofuje. O to chodzi:
+  // wolimy hałas niż wiadomość, która sama wraca z kosza do Archiwum.
+  db.prepare(
+    `INSERT INTO messages (owner_id, folder, folder_id, from_addr, subject, sent_at)
+     VALUES (?, 'trash', ?, 'kto@example.com', 'Temat', ?)`
+  ).run(id, f.id, now());
+
+  assert.throws(() => deleteFolder(db, id, f.id), /FOREIGN KEY|constraint/i);
+  assert.equal(listFolders(db, id).length, 1, 'transakcja musi się wycofać');
   db.close();
 });
 
