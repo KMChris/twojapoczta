@@ -3,6 +3,9 @@
 Krótki obchód po TwojejPoczcie: od pierwszego logowania po skróty, dzięki
 którym ręce nie zejdą z klawiatury.
 
+Administrujesz serwerem? Panel instancji opisuje osobny dokument:
+[panel administratora](administracja.md).
+
 ## Pierwsze kroki
 
 1. **Załóż konto** na `/rejestracja`. Wybierasz login (to część adresu przed

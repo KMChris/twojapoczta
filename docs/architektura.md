@@ -32,7 +32,7 @@ budowania. `node server/index.js` to całe wdrożenie.
 
 | Plik            | Odpowiedzialność |
 | --------------- | ---------------- |
-| `index.js`      | Punkt wejścia. Składa aplikację (`createApp`), nakłada nagłówki bezpieczeństwa (CSP, `X-Content-Type-Options`…), rozdziela ruch `/api/*` od statyki, startuje serwer HTTP i opcjonalnie SMTP. Obsługuje też `--dkim`. |
+| `index.js`      | Punkt wejścia. Składa aplikację (`createApp`), nakłada nagłówki bezpieczeństwa (CSP, `X-Content-Type-Options`…), rozdziela ruch `/api/*` od statyki, startuje serwer HTTP i opcjonalnie SMTP. Obsługuje też CLI `--dkim` i `--admin <login>`. |
 | `router.js`     | Mini-router: dopasowanie metody i ścieżki ze wzorcami `:param`. Bez zależności. |
 | `static.js`     | Bezpieczne serwowanie `public/`: ochrona przed path traversal, czyste adresy (`/logowanie` → `logowanie.html`), typy MIME, `Cache-Control`, `Last-Modified`/`304`. |
 | `db.js`         | Schemat SQLite i połączenie (WAL, `foreign_keys=ON`). Lekkie migracje przez `ensureColumn`. `openDb` (plik) i `openMemoryDb` (testy). |
@@ -45,6 +45,12 @@ budowania. `node server/index.js` to całe wdrożenie.
 | `smtp.js`       | Przychodzący SMTP na `node:net`: EHLO/MAIL/RCPT/DATA, dot-stuffing, limity, twarda ochrona przed relayem. |
 | `smtp-out.js`   | Wychodzący SMTP: budowanie MIME, lookup MX, oportunistyczny STARTTLS, smarthost, kolejkowanie per domena. |
 | `dkim.js`       | Podpisy DKIM (rsa-sha256, relaxed/relaxed), generowanie i przechowywanie klucza, rekord DNS. |
+| `settings.js`   | Ustawienia instancji w tabeli `settings` (rejestracja, min. długość hasła, catch-all) z fallbackiem do env: decyzje produktowe zmienialne w locie. |
+| `audit.js`      | Dziennik zdarzeń: działania administracyjne i logowania, aktor jako tekst (wpis przeżywa usunięcie konta), retencja 90 dni czyszczona leniwie. |
+| `quota.js`      | Limity miejsca: zużycie skrzynki (treści + załączniki) i decyzja `hasRoom`. Bez zależności, importują go mail/attachments/smtp. |
+| `admin.js`      | Logika panelu: przegląd kont z metadanymi, tworzenie/usuwanie kont, sesje, statystyki i ruch dzienny. Wyłącznie liczby, nigdy treści wiadomości. |
+| `api-admin.js`  | Trasy `/api/admin/*`: strażnik roli, walidacja, guardy ostatniego administratora, wpisy audytu przy każdej mutacji. |
+| `dns-check.js`  | Weryfikacja rekordów DNS (MX/A/SPF/DKIM/DMARC) na `node:dns` z wstrzykiwalnym resolverem (testy bez sieci). |
 
 ## Model danych
 
@@ -55,6 +61,7 @@ liczniki i usuwanie: każdy operuje wyłącznie na własnych wierszach.
 
 ```
 users(id, login·UNIQUE, name, password_hash, signature, theme, created_at,
+      is_admin, is_blocked, quota_mb·NULL, last_login_at,
       forward_to, forward_keep)
 sessions(id, user_id→users, expires_at, created_at)
 messages(id, owner_id→users, folder, from_name, from_addr, to_addr, cc_addr,
@@ -64,6 +71,8 @@ aliases(id, user_id→users, alias·UNIQUE, created_at)
 blobs(hash·PK, data·BLOB, size)
 attachments(id, message_id→messages, filename, mime, size, blob_hash→blobs)
 uploads(token·PK, user_id→users, filename, mime, size, blob_hash, created_at)
+settings(key·PK, value)
+audit_log(id, actor_login, action, target, details, ip, created_at)
 ```
 
 `body` trzyma zawsze wersję tekstową (z niej powstaje `snippet` i po niej
@@ -110,8 +119,9 @@ i zwroty) nie idą dalej; inaczej zwrot z przekierowania krążyłby w kółko.
 
 ## Frontend (`public/`)
 
-Bez frameworka i bez budowania. Trzy strony (strona główna `index.html`,
-`logowanie`/`rejestracja`, webmail `app.html`) plus `404.html`.
+Bez frameworka i bez budowania. Cztery strony (strona główna `index.html`,
+`logowanie`/`rejestracja`, webmail `app.html`, panel administratora
+`admin.html`) plus `404.html`.
 
 - `assets/css/`: `tokens.css` (zmienne systemu „Datownik", motywy), `fonts.css`
   (własne woff2), oraz style per strona (`landing`, `auth`, `app`).
@@ -124,6 +134,11 @@ Bez frameworka i bez budowania. Trzy strony (strona główna `index.html`,
   - `edytor.js`: pasek formatowania nad `contenteditable` i czyszczenie HTML po liście dozwolonych znaczników (przy zapisie i przy renderze),
   - `skroty.js`: skróty klawiszowe i paleta poleceń,
   - `main.js`: rdzeń, czyli stan, foldery, lista, czytnik, ustawienia i spinanie całości.
+- `assets/js/admin/`: panel administratora (osobna strona, hash-routing jak
+  w apce, reuse `ui.js` i tokenów): `main.js` (strażnik roli, nawigacja),
+  `api.js`, widoki `pulpit` (statystyki + wykres SVG), `uzytkownicy`
+  (tabela + karta konta), `domena` (DKIM + weryfikacja DNS), `ustawienia`
+  (zasady instancji + broadcast), `dziennik` (audyt). Style w `admin.css`.
 
 Interfejs jest po polsku; sufiks domeny pobiera z `GET /api/config`, więc
 instalacja pod własną domeną nie wymaga dotykania plików frontendu.
@@ -149,6 +164,23 @@ każdy endpoint wymaga sesji.
 | `POST /api/uploads`                      | wgraj załącznik (surowe ciało + nagłówki) |
 | `GET /api/messages/:id/attachments/:aid` | pobierz załącznik |
 
+Trasy panelu administratora (`/api/admin/*`) wymagają dodatkowo roli
+`is_admin`; pozostali dostają 403. Każda mutacja zostawia wpis w audycie.
+
+| Metoda i ścieżka                              | Rola |
+| --------------------------------------------- | ---- |
+| `GET /api/admin/stats`                        | pulpit: konta, wiadomości, zajętość, ruch 14 dni, proces, bramki |
+| `GET` / `POST /api/admin/users`               | lista kont z metadanymi · załóż konto |
+| `PATCH` / `DELETE /api/admin/users/:id`       | imię, rola, blokada, limit · usuń konto |
+| `POST /api/admin/users/:id/password`          | ustaw nowe hasło (unieważnia sesje) |
+| `POST /api/admin/users/:id/logout`            | wyloguj ze wszystkich urządzeń |
+| `POST` / `DELETE /api/admin/users/:id/aliases[/:aliasId]` | aliasy dowolnego konta |
+| `GET` / `PATCH /api/admin/settings`           | rejestracja, min. hasło, catch-all + podgląd env |
+| `POST /api/admin/broadcast`                   | komunikat systemowy do wszystkich skrzynek |
+| `GET /api/admin/audit?action=&limit=`         | dziennik zdarzeń |
+| `GET` / `POST /api/admin/dkim`                | status/rekord · generowanie lub rotacja klucza |
+| `POST /api/admin/dns-check`                   | żywa weryfikacja MX/A/SPF/DKIM/DMARC |
+
 ## Bezpieczeństwo
 
 - Hasła: scrypt z solą, porównanie w czasie stałym.
@@ -160,20 +192,27 @@ każdy endpoint wymaga sesji.
 - Niebezpieczne typy załączników (`text/html`, `image/svg+xml`…) serwowane
   jako `application/octet-stream` z `Content-Disposition: attachment`.
 - Limity rozmiaru na każdym wejściu (ciało JSON, upload, wiadomość SMTP).
+- Panel administratora: rola sprawdzana serwerowo przy każdej trasie,
+  sesje kont zablokowanych unieważniane natychmiast, guardy ostatniego
+  administratora (nie można go zdegradować, zablokować ani usunąć),
+  komunikat 403 przy złym haśle nie zdradza istnienia konta, pełny audyt
+  mutacji z adresem IP. Panel nie ma wglądu w treści wiadomości.
 
 ## Testy
 
-`npm test` uruchamia 212 testów na `node:test` (baza w pamięci, zero
+`npm test` uruchamia 265 testów na `node:test` (baza w pamięci, zero
 instalacji); `npm run test:coverage` dolicza raport pokrycia linii i gałęzi.
 
 - Scenariusze przekrojowe: `tests/api.test.js` (pełen obieg REST: konta,
-  foldery, doręczanie, aliasy, załączniki, przełączniki produkcyjne)
-  i `tests/smtp.test.js` (parser MIME, serwer przychodzący, pętla out→in,
-  odbicia, ochrona przed relayem).
+  foldery, doręczanie, aliasy, załączniki, przełączniki produkcyjne),
+  `tests/smtp.test.js` (parser MIME, serwer przychodzący, pętla out→in,
+  odbicia, ochrona przed relayem) i `tests/admin.test.js` (panel: strażnik
+  roli, konta, blokady, ustawienia, broadcast, DKIM, weryfikacja DNS
+  na fałszywym resolverze).
 - Testy jednostkowe per moduł: `auth`, `mail`, `mime`, `attachments`,
   `router`, `static`, `db`, `smtp-in`, `smtp-out`, `dkim-init`, `api.extra`,
-  `index`. Każdy test dostaje świeżą bazę w pamięci, więc nic nie współdzieli
-  z pozostałymi.
+  `index`, `settings`, `audit`, `quota`, `dns-check`. Każdy test dostaje
+  świeżą bazę w pamięci, więc nic nie współdzieli z pozostałymi.
 - `tests/dkim.test.js`: wektory kanonizacji z RFC 6376 i **niezależny
   weryfikator** sprawdzający podpis na wyemitowanych, pofoldowanych bajtach.
 

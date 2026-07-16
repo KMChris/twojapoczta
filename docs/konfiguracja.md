@@ -1,7 +1,10 @@
 # Konfiguracja
 
-Cała konfiguracja odbywa się zmiennymi środowiskowymi, nie ma pliku
-konfiguracyjnego. W systemd ustawia się je liniami `Environment=`.
+Konfiguracja infrastruktury (porty, domena, bramki) odbywa się zmiennymi
+środowiskowymi, nie ma pliku konfiguracyjnego. W systemd ustawia się je
+liniami `Environment=`. Decyzje produktowe (rejestracja, polityka haseł,
+catch-all) można zmieniać w locie w [panelu administratora](administracja.md);
+są trzymane w bazie i mają pierwszeństwo przed env.
 
 ## Zmienne środowiskowe
 
@@ -20,7 +23,7 @@ konfiguracyjnego. W systemd ustawia się je liniami `Environment=`.
 | `TP_DOMAIN`   | `twojapoczta.com` | Domena adresów e-mail (część po `@`). Interfejs pobiera ją z serwera, więc w plikach frontendu nie trzeba nic zmieniać. |
 | `TP_DATA_DIR` | `./data`          | Katalog danych: baza `twojapoczta.db` (+ pliki WAL) i podkatalog `dkim/` z kluczem prywatnym. |
 | `TP_SEED`     | brak (włączony)   | `0` wyłącza tworzenie kont demonstracyjnych przy pierwszym starcie z pustą bazą. **Na produkcji zawsze `0`**: seed zakłada konto `demo` z publicznie znanym hasłem. |
-| `TP_REGISTER` | brak (otwarta)    | `0` zamyka rejestrację: `POST /api/register` zwraca 403, formularz pokazuje komunikat. Istniejące konta logują się normalnie. |
+| `TP_REGISTER` | brak (otwarta)    | `0` zamyka rejestrację: `POST /api/register` zwraca 403, formularz pokazuje komunikat. Istniejące konta logują się normalnie. Przełącznik w panelu administratora nadpisuje tę zmienną. |
 
 ### Bramka SMTP
 
@@ -81,6 +84,20 @@ Environment=TP_SMTP_ROUTE=smtp.twoj-hosting.pl:25
 > Na produkcji uruchom je z tym samym `TP_DOMAIN` i `TP_DATA_DIR`, co usługa.
 > Pełne polecenie znajdziesz w [samouczku wdrożenia](wdrozenie.md) (krok 8).
 
+## Ustawienia z panelu administratora
+
+Trzy rzeczy konfiguruje się w panelu (`/admin` → Ustawienia), bez restartu:
+
+| Ustawienie | Domyślnie | Opis |
+| ---------- | --------- | ---- |
+| Rejestracja | wg `TP_REGISTER` | Otwarta/zamknięta. Wpis z panelu ma pierwszeństwo przed env. |
+| Min. długość hasła | 8 | 4–128 znaków; obowiązuje przy rejestracji i zmianach haseł. |
+| Catch-all | wyłączony | Skrzynka zbiorcza na pocztę SMTP do nieistniejących adresów w domenie. |
+
+Rolę administratora nadaje się pierwszemu kontu z konsoli:
+`npm run admin -- <login>` (z tym samym `TP_DATA_DIR`, co usługa).
+Szczegóły: [panel administratora](administracja.md).
+
 ## Limity aplikacji
 
 | Co | Limit |
@@ -96,6 +113,8 @@ Environment=TP_SMTP_ROUTE=smtp.twoj-hosting.pl:25
 | Sesja | 30 dni |
 | Logowanie | 5 nieudanych prób / 15 min (na parę IP+login) |
 | Token uploadu załącznika | jednorazowy, ważny 24 h |
+| Limit miejsca skrzynki | domyślnie brak; per konto w panelu administratora (pełna skrzynka: SMTP `552 5.2.2`) |
+| Dziennik zdarzeń | 90 dni wstecz |
 
 ## Struktura katalogu danych
 

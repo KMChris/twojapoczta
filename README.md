@@ -21,6 +21,7 @@ To wszystko. Bez `npm install`, bez Dockera, bez zewnętrznej bazy danych.
 | -------- | ------ |
 | [Wdrożenie krok po kroku](docs/wdrozenie.md) | Od świeżego VPS-a do publicznej poczty z HTTPS i DKIM. |
 | [Konfiguracja](docs/konfiguracja.md) | Wszystkie zmienne środowiskowe, rekordy DNS, limity. |
+| [Panel administratora](docs/administracja.md) | Konta, limity, DKIM, weryfikacja DNS, dziennik zdarzeń. |
 | [Przewodnik użytkownika](docs/przewodnik.md) | Skróty, paleta poleceń, aliasy, ustawienia. |
 | [Architektura](docs/architektura.md) | Budowa kodu, model danych, API. Dla współtwórców. |
 
@@ -46,6 +47,11 @@ To wszystko. Bez `npm install`, bez Dockera, bez zewnętrznej bazy danych.
 - **Wyszukiwarka pełnotekstowa**: nadawca, temat, treść.
 - **Tryb ciemny „nocna sortownia"**: jasny, ciemny albo jak system.
 - **List powitalny** dla każdego nowego konta i gotowa skrzynka demo.
+- **Panel administratora** pod `/admin`: konta (role, blokady, hasła,
+  limity miejsca, aliasy), klucze DKIM z panelu, żywa weryfikacja rekordów
+  DNS (MX/SPF/DKIM/DMARC), rejestracja i polityka haseł bez restartu,
+  catch-all, komunikaty do wszystkich skrzynek, dziennik zdarzeń
+  i statystyki instancji. Bez wglądu w treść cudzych wiadomości.
 
 ## Architektura
 
@@ -63,7 +69,8 @@ wbudowane w Node 24:
 
 ```
 server/          # backend: http, router, static, db, auth, mail, api, seed,
-                 #          attachments, mime, smtp (in), smtp-out, dkim
+                 #          attachments, mime, smtp (in), smtp-out, dkim,
+                 #          settings, audit, quota, admin, api-admin, dns-check
 public/          # strona główna, logowanie/rejestracja, aplikacja /app
 tests/           # testy node:test (in-memory SQLite): api, smtp, dkim
 data/            # tworzony przy starcie; cała poczta w jednym pliku
