@@ -15,6 +15,7 @@ import {
 } from './attachments.js';
 import { now } from './db.js';
 import { registrationOpen, passwordMinLength } from './settings.js';
+import { aliasLimit, aliasCount, aliasesWord } from './aliases.js';
 import { logEvent } from './audit.js';
 
 export const LOGIN_RE = /^[a-z0-9][a-z0-9.-]{2,29}$/;
@@ -303,8 +304,11 @@ export function registerApiRoutes(router, db) {
       .all(userId)
       .map((a) => ({ ...a, address: addressOf(a.alias) }));
 
+  // Limit jedzie razem z listą: interfejs nie zna go z góry, bo ustawia go administrator.
+  const aliasesView = (userId) => ({ aliases: listAliases(userId), limit: aliasLimit(db, userId) });
+
   route('GET', '/api/aliases', async (req, res, { user }) => {
-    json(res, 200, { aliases: listAliases(user.id) });
+    json(res, 200, aliasesView(user.id));
   });
 
   route('POST', '/api/aliases', async (req, res, { user }) => {
@@ -315,13 +319,16 @@ export function registerApiRoutes(router, db) {
         error: 'Alias może mieć 3–30 znaków: małe litery, cyfry, kropki i myślniki.',
       });
     }
-    const count = db.prepare('SELECT COUNT(*) AS n FROM aliases WHERE user_id = ?').get(user.id);
-    if (count.n >= 5) return json(res, 400, { error: 'Możesz mieć najwyżej 5 aliasów.' });
+    const limit = aliasLimit(db, user.id);
+    if (limit === 0) return json(res, 400, { error: 'Administrator wyłączył aliasy na tym koncie.' });
+    if (limit !== null && aliasCount(db, user.id) >= limit) {
+      return json(res, 400, { error: `Możesz mieć najwyżej ${limit} ${aliasesWord(limit)}.` });
+    }
     if (findMailbox(db, alias)) {
       return json(res, 409, { error: `Adres ${addressOf(alias)} jest już zajęty.` });
     }
     db.prepare('INSERT INTO aliases (user_id, alias, created_at) VALUES (?, ?, ?)').run(user.id, alias, now());
-    json(res, 201, { aliases: listAliases(user.id) });
+    json(res, 201, aliasesView(user.id));
   });
 
   // --- Przesyłanie dalej ---------------------------------------------------------
@@ -345,7 +352,7 @@ export function registerApiRoutes(router, db) {
       .prepare('DELETE FROM aliases WHERE id = ? AND user_id = ?')
       .run(Number(params.id), user.id);
     if (!result.changes) return json(res, 404, { error: 'Nie znaleziono aliasu.' });
-    json(res, 200, { aliases: listAliases(user.id) });
+    json(res, 200, aliasesView(user.id));
   });
 
   return {

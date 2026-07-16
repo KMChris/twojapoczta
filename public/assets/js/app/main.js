@@ -611,17 +611,28 @@ przekierowanieWylacz.addEventListener('click', async () => {
 
 // --- Aliasy ---------------------------------------------------------------------
 
+const OPIS_ALIASOW = 'Wiadomości wysłane na alias trafią do Twojej skrzynki.';
+
 async function odswiezAliasy() {
   try {
-    const { aliases } = await api.aliasy();
-    renderujAliasy(aliases);
+    const { aliases, limit } = await api.aliasy();
+    renderujAliasy(aliases, limit);
   } catch {
     /* sekcja zostaje pusta */
   }
 }
 
-function renderujAliasy(aliasy) {
+// Limit ustala administrator: null = bez limitu (wtedy nie strasz użytkownika liczbą),
+// 0 = aliasy wyłączone.
+function renderujAliasy(aliasy, limit) {
   const lista = document.querySelector('[data-aliasy]');
+  const opis = document.querySelector('[data-aliasy-opis]');
+  const dodawanie = document.querySelector('[data-alias-dodawanie]');
+
+  if (limit === 0) opis.textContent = 'Administrator wyłączył aliasy na tym koncie.';
+  else opis.textContent = limit == null ? OPIS_ALIASOW : `${OPIS_ALIASOW} Najwyżej ${limit}.`;
+  dodawanie.hidden = limit != null && aliasy.length >= limit;
+
   lista.replaceChildren();
   if (!aliasy.length) {
     lista.append(el('li', { class: 'aliasy-brak' }, 'Nie masz jeszcze żadnego aliasu.'));
@@ -641,8 +652,8 @@ function renderujAliasy(aliasy) {
             'aria-label': `Usuń alias ${wpis.address}`,
             onclick: async () => {
               try {
-                const { aliases } = await api.usunAlias(wpis.id);
-                renderujAliasy(aliases);
+                const { aliases, limit: swiezyLimit } = await api.usunAlias(wpis.id);
+                renderujAliasy(aliases, swiezyLimit);
                 toast('Usunięto alias', { ikonaNazwa: 'trash' });
               } catch (blad) {
                 toast(blad.message, { blad: true });
@@ -661,9 +672,9 @@ async function dodajAlias() {
   const alias = input.value.trim().toLowerCase();
   if (!alias) return input.focus();
   try {
-    const { aliases } = await api.dodajAlias(alias);
+    const { aliases, limit } = await api.dodajAlias(alias);
     input.value = '';
-    renderujAliasy(aliases);
+    renderujAliasy(aliases, limit);
     toast('Dodano alias', { ikonaNazwa: 'mail' });
   } catch (blad) {
     toast(blad.message, { blad: true });

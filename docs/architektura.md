@@ -48,6 +48,7 @@ budowania. `node server/index.js` to całe wdrożenie.
 | `settings.js`   | Ustawienia instancji w tabeli `settings` (rejestracja, min. długość hasła, catch-all) z fallbackiem do env: decyzje produktowe zmienialne w locie. |
 | `audit.js`      | Dziennik zdarzeń: działania administracyjne i logowania, aktor jako tekst (wpis przeżywa usunięcie konta), retencja 90 dni czyszczona leniwie. |
 | `quota.js`      | Limity miejsca: zużycie skrzynki (treści + załączniki) i decyzja `hasRoom`. Bez zależności, importują go mail/attachments/smtp. |
+| `aliases.js`    | Limity aliasów per konto: odczyt limitu (`NULL` = bez limitu, `0` = wyłączone), liczenie i polska odmiana liczebnika. |
 | `admin.js`      | Logika panelu: przegląd kont z metadanymi, tworzenie/usuwanie kont, sesje, statystyki i ruch dzienny. Wyłącznie liczby, nigdy treści wiadomości. |
 | `api-admin.js`  | Trasy `/api/admin/*`: strażnik roli, walidacja, guardy ostatniego administratora, wpisy audytu przy każdej mutacji. |
 | `dns-check.js`  | Weryfikacja rekordów DNS (MX/A/SPF/DKIM/DMARC) na `node:dns` z wstrzykiwalnym resolverem (testy bez sieci). |
@@ -61,7 +62,7 @@ liczniki i usuwanie: każdy operuje wyłącznie na własnych wierszach.
 
 ```
 users(id, login·UNIQUE, name, password_hash, signature, theme, created_at,
-      is_admin, is_blocked, quota_mb·NULL, last_login_at,
+      is_admin, is_blocked, quota_mb·NULL, last_login_at, alias_limit,
       forward_to, forward_keep)
 sessions(id, user_id→users, expires_at, created_at)
 messages(id, owner_id→users, folder, from_name, from_addr, to_addr, cc_addr,

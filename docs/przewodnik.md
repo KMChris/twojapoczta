@@ -125,10 +125,11 @@ Kliknij swój awatar w prawym górnym rogu:
 - **Podpis**: tekst doklejany pod nową wiadomością i odpowiedzią.
 - **Motyw**: jasny, „nocna sortownia" (ciemny w granacie atramentu) albo
   jak system.
-- **Aliasy**: do 5 dodatkowych adresów (np. `biuro@…`, `sklep@…`), które
-  wpadają do tej samej skrzynki. Wygodne do rozdzielania korespondencji
-  bez zakładania kolejnych kont. Spod aliasu możesz też nadawać: wybierz go
-  w polu „Od" w oknie pisania.
+- **Aliasy**: dodatkowe adresy (np. `biuro@…`, `sklep@…`), które wpadają do
+  tej samej skrzynki. Wygodne do rozdzielania korespondencji bez zakładania
+  kolejnych kont. Spod aliasu możesz też nadawać: wybierz go w polu „Od"
+  w oknie pisania. Ile ich możesz mieć, ustala administrator (domyślnie 5);
+  gdy limit nie obowiązuje, pod polem nie zobaczysz żadnej liczby.
 - **Przesyłanie dalej**: podaj adres, a każda nowa wiadomość poleci tam
   automatycznie. Domyślnie kopia zostaje w Odebranych; po odznaczeniu
   „Zostaw kopię w Odebranych" oryginał schodzi do Archiwum, więc nic nie ginie.

@@ -43,7 +43,8 @@ export function userAliases(db, userId) {
     .map((a) => ({ ...a, address: addressOf(a.alias) }));
 }
 
-const USER_FIELDS = 'id, login, name, is_admin, is_blocked, quota_mb, created_at, last_login_at';
+const USER_FIELDS =
+  'id, login, name, is_admin, is_blocked, quota_mb, alias_limit, created_at, last_login_at';
 
 function decorate(db, row) {
   return {

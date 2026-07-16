@@ -12,6 +12,7 @@ import {
 import { DOMAIN, addressOf, findMailbox, deliverSystemMessage, SYSTEM_SENDER } from './mail.js';
 import { WELCOME_SUBJECT, WELCOME_BODY } from './seed.js';
 import { registrationOpen, passwordMinLength, catchallLogin, setSetting } from './settings.js';
+import { aliasLimit, aliasCount, aliasesWord, MAX_ALIAS_LIMIT } from './aliases.js';
 import { logEvent, listEvents } from './audit.js';
 import { dkimConfigured, initDkim, dnsRecord } from './dkim.js';
 import { checkDns } from './dns-check.js';
@@ -119,6 +120,20 @@ export function registerAdminRoutes(router, db, { dataDir = null, resolver } = {
       zdarzenia.push(['user.quota', limit === null ? 'zniesiono limit' : `limit ${limit} MB`]);
     }
 
+    if ('alias_limit' in body) {
+      const limit = body.alias_limit;
+      if (limit !== null && (!Number.isInteger(limit) || limit < 0 || limit > MAX_ALIAS_LIMIT)) {
+        return json(res, 400, { error: `Limit aliasów: liczba 0–${MAX_ALIAS_LIMIT} albo brak limitu.` });
+      }
+      // Obniżenie limitu nie kasuje aliasów, które konto już ma; po prostu nie doda kolejnych.
+      sets.push('alias_limit = ?');
+      values.push(limit);
+      zdarzenia.push([
+        'user.alias_limit',
+        limit === null ? 'zniesiono limit aliasów' : `limit ${limit} ${aliasesWord(limit)}`,
+      ]);
+    }
+
     if (sets.length) {
       values.push(konto.id);
       db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...values);
@@ -175,8 +190,12 @@ export function registerAdminRoutes(router, db, { dataDir = null, resolver } = {
     if (!LOGIN_RE.test(alias)) {
       return json(res, 400, { error: 'Alias może mieć 3–30 znaków: małe litery, cyfry, kropki i myślniki.' });
     }
-    const ile = db.prepare('SELECT COUNT(*) AS n FROM aliases WHERE user_id = ?').get(konto.id);
-    if (ile.n >= 5) return json(res, 400, { error: 'To konto ma już 5 aliasów.' });
+    const limit = aliasLimit(db, konto.id);
+    if (limit !== null && aliasCount(db, konto.id) >= limit) {
+      return json(res, 400, {
+        error: `To konto osiągnęło limit aliasów (${limit}). Podnieś limit, żeby dodać kolejny.`,
+      });
+    }
     if (findMailbox(db, alias)) {
       return json(res, 409, { error: `Adres ${addressOf(alias)} jest już zajęty.` });
     }

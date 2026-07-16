@@ -106,7 +106,7 @@ Szczegóły: [panel administratora](administracja.md).
 | Załącznik | 5 MB / plik, 10 plików na wiadomość |
 | Wiadomość przychodząca SMTP | 10 MB, 50 adresatów |
 | Login / alias | 3–30 znaków: `a-z`, `0-9`, `.`, `-` (start od litery lub cyfry) |
-| Aliasy | 5 na konto |
+| Aliasy | domyślnie 5 na konto; limit per konto w panelu administratora (0 wyłącza, puste = bez limitu) |
 | Hasło | min. 8 znaków |
 | Temat | 200 znaków |
 | Podpis | 500 znaków |

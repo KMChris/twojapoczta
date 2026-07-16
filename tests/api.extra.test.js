@@ -196,14 +196,18 @@ test('aliasy: lista, walidacja, zajęty, limit 5, usunięcie nieistniejącego', 
   const api = client();
   await api('POST', '/api/register', { login: 'aliaser', name: 'Alias User', password: 'haslo12345' });
 
-  assert.deepEqual((await api('GET', '/api/aliases')).data.aliases, []);
+  const puste = await api('GET', '/api/aliases');
+  assert.deepEqual(puste.data.aliases, []);
+  assert.equal(puste.data.limit, 5, 'interfejs bierze limit z serwera');
   assert.equal((await api('POST', '/api/aliases', { alias: 'ZŁY!' })).status, 400);
   assert.equal((await api('POST', '/api/aliases', { alias: 'demo' })).status, 409);
 
   for (const a of ['alias-a', 'alias-b', 'alias-c', 'alias-d', 'alias-e']) {
     assert.equal((await api('POST', '/api/aliases', { alias: a })).status, 201);
   }
-  assert.equal((await api('POST', '/api/aliases', { alias: 'alias-f' })).status, 400);
+  const szosty = await api('POST', '/api/aliases', { alias: 'alias-f' });
+  assert.equal(szosty.status, 400);
+  assert.match(szosty.data.error, /najwyżej 5 aliasów/);
   assert.equal((await api('DELETE', '/api/aliases/999999')).status, 404);
 });
 

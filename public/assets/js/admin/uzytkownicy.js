@@ -103,7 +103,7 @@ export function initUzytkownicy(stan) {
         ),
         el('td', { class: 'mono' }, String(u.messages)),
         el('td', { class: 'mono' }, formatujRozmiar(u.storage_bytes) + (u.quota_mb ? ` / ${u.quota_mb} MB` : '')),
-        el('td', { class: 'mono' }, u.aliases.length ? String(u.aliases.length) : '—'),
+        el('td', { class: 'mono' }, String(u.aliases.length) + (u.alias_limit == null ? '' : ` / ${u.alias_limit}`)),
         el('td', { class: 'mono' }, u.last_login_at ? krotkiCzas(u.last_login_at) : '—')
       )
     );
@@ -244,7 +244,24 @@ export function initUzytkownicy(stan) {
       el('p', { class: 'opis' }, toJa ? 'Zmiana własnego hasła nie wylogowuje z tej sesji.' : 'Nowe hasło wylogowuje konto ze wszystkich urządzeń.')
     );
 
-    // Aliasy
+    // Aliasy: limit konta + lista z dodawaniem
+    const limitAliasow = el('input', {
+      type: 'number', min: '0', step: '1', value: u.alias_limit ?? '', placeholder: 'bez',
+      'aria-label': 'Maksymalna liczba aliasów',
+    });
+    const limitAliasowRzad = el('div', { class: 'konto-rzad' },
+      limitAliasow,
+      el('span', {}, 'aliasów'),
+      el('button', {
+        class: 'btn-drugi',
+        onclick: () => {
+          const surowe = limitAliasow.value.trim();
+          zastosuj(u.id, () => api.zmienKonto(u.id, { alias_limit: surowe === '' ? null : Number(surowe) }), 'Zapisano limit aliasów');
+        },
+      }, 'Zapisz limit'),
+      el('p', { class: 'opis' }, 'Puste pole = bez limitu (użytkownik nie zobaczy wtedy żadnej liczby). Zero wyłącza aliasy. Obniżenie limitu nie kasuje aliasów, które konto już ma.')
+    );
+
     const aliasInput = el('input', { type: 'text', maxlength: '30', autocapitalize: 'none', spellcheck: 'false', placeholder: 'np. biuro', 'aria-label': 'Nowy alias' });
     const aliasyLista = el('ul', { class: 'aliasy' },
       ...(u.aliases.length
@@ -329,6 +346,7 @@ export function initUzytkownicy(stan) {
         el('p', { class: 'grupa-tytul' }, 'Hasło'),
         hasloRzad,
         el('p', { class: 'grupa-tytul' }, 'Aliasy'),
+        limitAliasowRzad,
         aliasyBlok,
         usun ? el('p', { class: 'grupa-tytul' }, 'Strefa ostrożności') : null,
         usun ? el('div', { class: 'konto-rzad' }, usun) : null

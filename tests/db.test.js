@@ -38,7 +38,7 @@ test('openMemoryDb ma komplet tabel', () => {
 test('schemat ma kolumny panelu administratora i tabele settings/audit_log', () => {
   const db = openMemoryDb();
   const users = db.prepare('PRAGMA table_info(users)').all().map((k) => k.name);
-  for (const k of ['is_admin', 'is_blocked', 'quota_mb', 'last_login_at']) {
+  for (const k of ['is_admin', 'is_blocked', 'quota_mb', 'last_login_at', 'alias_limit']) {
     assert.ok(users.includes(k), `brak kolumny users.${k}`);
   }
   const tabele = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((t) => t.name);
@@ -51,8 +51,10 @@ test('migracja dokłada kolumny panelu do istniejącej bazy na dysku', () => {
   try {
     openDb(dir).close();
     const db = openDb(dir);
-    const users = db.prepare('PRAGMA table_info(users)').all().map((k) => k.name);
-    assert.ok(users.includes('is_admin'));
+    const users = db.prepare('PRAGMA table_info(users)').all();
+    assert.ok(users.some((k) => k.name === 'is_admin'));
+    // Konta sprzed migracji mają zachować dotychczasowy limit 5, nie „bez limitu".
+    assert.equal(users.find((k) => k.name === 'alias_limit').dflt_value, '5');
     db.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });

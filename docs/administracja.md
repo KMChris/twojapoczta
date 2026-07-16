@@ -50,7 +50,8 @@ Tabela wszystkich kont z filtrem. Kliknięcie wiersza otwiera kartę konta:
 | Zablokuj/odblokuj | Blokada natychmiast unieważnia sesje konta i uniemożliwia logowanie. Poczta nadal jest doręczana. |
 | Limit miejsca | W MB; puste pole = bez limitu. Pełna skrzynka przestaje przyjmować pocztę (SMTP odpowiada `552 5.2.2`, nadawca wewnętrzny dostaje czytelny błąd), ale nadal może wysyłać. |
 | Ustaw hasło | Nowe hasło wylogowuje konto ze wszystkich urządzeń (poza sytuacją, gdy admin zmienia własne). |
-| Aliasy | Do 5 na konto, jak w ustawieniach użytkownika. |
+| Limit aliasów | Ile aliasów może mieć konto (domyślnie 5). Puste pole = bez limitu; wtedy użytkownik nie widzi w ustawieniach żadnej liczby. Zero wyłącza aliasy. Obniżenie limitu nie kasuje aliasów, które konto już ma, tylko wstrzymuje dokładanie kolejnych. |
+| Aliasy | Dodawanie i usuwanie aliasów konta, w granicach jego limitu. |
 | Wyloguj ze wszystkich urządzeń | Unieważnia wszystkie sesje konta. |
 | Usuń konto | Kasuje konto z całą pocztą, aliasami i sesjami (dwuetapowe potwierdzenie). Własnego konta nie można usunąć. |
 

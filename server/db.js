@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
   is_blocked INTEGER NOT NULL DEFAULT 0,
   quota_mb INTEGER,
   last_login_at TEXT,
+  alias_limit INTEGER DEFAULT 5,
   forward_to TEXT NOT NULL DEFAULT '',
   forward_keep INTEGER NOT NULL DEFAULT 1
 );
@@ -130,6 +131,8 @@ function migrate(db) {
   ensureColumn(db, 'users', 'is_blocked', 'is_blocked INTEGER NOT NULL DEFAULT 0');
   ensureColumn(db, 'users', 'quota_mb', 'quota_mb INTEGER');
   ensureColumn(db, 'users', 'last_login_at', 'last_login_at TEXT');
+  // DEFAULT 5 wypełnia istniejące konta piątką, więc limit sprzed panelu zostaje w mocy.
+  ensureColumn(db, 'users', 'alias_limit', 'alias_limit INTEGER DEFAULT 5');
   ensureColumn(db, 'messages', 'body_html', "body_html TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, 'messages', 'cc_addr', "cc_addr TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, 'messages', 'bcc_addr', "bcc_addr TEXT NOT NULL DEFAULT ''");

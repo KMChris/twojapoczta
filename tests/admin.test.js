@@ -206,6 +206,7 @@ test('GET /api/admin/users zwraca konta z metadanymi', async () => {
   assert.ok(demo.storage_bytes > 0);
   assert.ok(Array.isArray(demo.aliases));
   assert.ok('quota_mb' in demo && 'is_blocked' in demo && 'last_login_at' in demo && 'created_at' in demo);
+  assert.equal(demo.alias_limit, 5, 'konta z seedu mają domyślny limit aliasów');
 });
 
 test('POST /api/admin/users zakłada konto nawet przy zamkniętej rejestracji', async () => {
@@ -353,6 +354,75 @@ test('administrator zarządza aliasami dowolnego konta', async () => {
   const usuniety = await admin('DELETE', `/api/admin/users/${aniaId}/aliases/${aliasId}`);
   assert.equal(usuniety.status, 200);
   assert.ok(!usuniety.data.aliases.some((a) => a.alias === 'recepcja'));
+});
+
+// --- Limit aliasów per konto ----------------------------------------------------------------
+
+test('PATCH /api/admin/users/:id: limit aliasów, zniesienie limitu i walidacja', async () => {
+  const admin = await adminClient();
+  const created = await admin('POST', '/api/admin/users', { login: 'aliasowy', name: 'Aliasowy Typ', password: 'haslo1234' });
+  const id = created.data.user.id;
+  assert.equal(created.data.user.alias_limit, 5, 'nowe konto dostaje domyślny limit');
+
+  const dwa = await admin('PATCH', `/api/admin/users/${id}`, { alias_limit: 2 });
+  assert.equal(dwa.status, 200);
+  assert.equal(dwa.data.user.alias_limit, 2);
+
+  const bez = await admin('PATCH', `/api/admin/users/${id}`, { alias_limit: null });
+  assert.equal(bez.data.user.alias_limit, null, 'null = bez limitu');
+
+  assert.equal((await admin('PATCH', `/api/admin/users/${id}`, { alias_limit: -1 })).status, 400);
+  assert.equal((await admin('PATCH', `/api/admin/users/${id}`, { alias_limit: 1.5 })).status, 400);
+  assert.equal((await admin('PATCH', `/api/admin/users/${id}`, { alias_limit: 'dużo' })).status, 400);
+  assert.equal((await admin('PATCH', `/api/admin/users/${id}`, { alias_limit: 101 })).status, 400);
+  assert.ok(listEvents(db, { action: 'user.alias_limit' }).some((w) => w.target === 'aliasowy'));
+});
+
+test('administrator dokłada aliasy tylko do granicy limitu konta', async () => {
+  const admin = await adminClient();
+  const created = await admin('POST', '/api/admin/users', { login: 'jeden.alias', name: 'Jeden Alias', password: 'haslo1234' });
+  const id = created.data.user.id;
+  await admin('PATCH', `/api/admin/users/${id}`, { alias_limit: 1 });
+
+  assert.equal((await admin('POST', `/api/admin/users/${id}/aliases`, { alias: 'pierwszy' })).status, 201);
+  const drugi = await admin('POST', `/api/admin/users/${id}/aliases`, { alias: 'drugi' });
+  assert.equal(drugi.status, 400);
+  assert.match(drugi.data.error, /limit aliasów \(1\)/);
+});
+
+test('limit 0 wyłącza aliasy, a zniesienie limitu przepuszcza więcej niż piątkę', async () => {
+  const admin = await adminClient();
+  const uzytkownik = client();
+  await uzytkownik('POST', '/api/register', { login: 'wolny.alias', name: 'Wolny Alias', password: 'haslo1234' });
+  const id = db.prepare("SELECT id FROM users WHERE login = 'wolny.alias'").get().id;
+
+  await admin('PATCH', `/api/admin/users/${id}`, { alias_limit: 0 });
+  const zero = await uzytkownik('POST', '/api/aliases', { alias: 'niemozliwy' });
+  assert.equal(zero.status, 400);
+  assert.match(zero.data.error, /wyłączył/i);
+  assert.equal((await uzytkownik('GET', '/api/aliases')).data.limit, 0);
+
+  await admin('PATCH', `/api/admin/users/${id}`, { alias_limit: null });
+  for (const alias of ['w-a', 'w-b', 'w-c', 'w-d', 'w-e', 'w-f']) {
+    assert.equal((await uzytkownik('POST', '/api/aliases', { alias })).status, 201, alias);
+  }
+  const lista = await uzytkownik('GET', '/api/aliases');
+  assert.equal(lista.data.limit, null, 'bez limitu, interfejs nie pokaże liczby');
+  assert.equal(lista.data.aliases.length, 6);
+});
+
+test('obniżenie limitu nie kasuje aliasów, które konto już ma', async () => {
+  const admin = await adminClient();
+  const created = await admin('POST', '/api/admin/users', { login: 'nadmiarowy', name: 'Nadmiarowy Typ', password: 'haslo1234' });
+  const id = created.data.user.id;
+  for (const alias of ['n-a', 'n-b', 'n-c']) {
+    assert.equal((await admin('POST', `/api/admin/users/${id}/aliases`, { alias })).status, 201);
+  }
+
+  const obnizony = await admin('PATCH', `/api/admin/users/${id}`, { alias_limit: 1 });
+  assert.equal(obnizony.data.user.alias_limit, 1);
+  assert.equal(obnizony.data.user.aliases.length, 3, 'istniejące aliasy zostają nietknięte');
+  assert.equal((await admin('POST', `/api/admin/users/${id}/aliases`, { alias: 'n-d' })).status, 400);
 });
 
 // --- Ustawienia instancji ------------------------------------------------------------------

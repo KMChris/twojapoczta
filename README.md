@@ -40,7 +40,8 @@ To wszystko. Bez `npm install`, bez Dockera, bez zewnętrznej bazy danych.
   parserem MIME; wysyłka na zewnątrz opcjonalnie (`TP_EXTERNAL=1`)
   z podpisami **DKIM**, nieudane doręczenia wracają jako „Zwrot do nadawcy".
 - **Załączniki**: do 10 plików po 5 MB, przechowywane z deduplikacją treści.
-- **Aliasy adresów**: do 5 dodatkowych adresów wpadających do Twojej skrzynki.
+- **Aliasy adresów**: dodatkowe adresy wpadające do Twojej skrzynki; limit
+  ustawia administrator per konto (domyślnie 5, można znieść).
 - **Skróty klawiszowe**: `c` pisze, `/` szuka, `j`/`k` przewijają, `e` archiwizuje,
   `s` gwiazdka, `#` kosz, `u` nieprzeczytane, `g i`/`g s` foldery, `?` ściąga.
 - **Paleta poleceń** `Ctrl+K`: foldery, akcje i ustawienia w jednym miejscu.
