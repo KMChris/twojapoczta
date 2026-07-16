@@ -842,8 +842,8 @@ a.boczny-link {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 2px;
-  padding: 0.3rem 0.8rem;
+  gap: 1px;
+  padding: 0.3rem 0.7rem;
   border-bottom: 1px solid var(--linia);
   background: var(--papier-2);
 }
@@ -889,7 +889,7 @@ a.boczny-link {
 .narz-przerwa {
   width: 1px;
   height: 18px;
-  margin-inline: 0.3rem;
+  margin-inline: 0.2rem;
   background: var(--linia-2);
 }
 
@@ -909,11 +909,16 @@ a.boczny-link {
   background: var(--papier-3);
 }
 
+.narz-rozmiar {
+  max-width: 58px;
+}
+
 .kompozycja-edytor {
   flex: 1;
   min-height: 200px;
   padding: 0.9rem 1.1rem;
-  font-size: 0.94rem;
+  /* Punkty, nie rem: to rozmiar treści listu, który pokazuje pasek formatowania. */
+  font-size: 10pt;
   line-height: 1.65;
   color: var(--atrament);
   overflow-y: auto;

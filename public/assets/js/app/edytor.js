@@ -174,10 +174,48 @@ export function initEdytor() {
     }
   });
 
+  // --- Krój i rozmiar pisma --------------------------------------------------------
+
   const wyborCzcionki = pasek.querySelector('[data-czcionka]');
-  wyborCzcionki.addEventListener('change', () => {
-    if (wyborCzcionki.value) wykonaj('fontName', wyborCzcionki.value);
-    wyborCzcionki.value = '';
+  const wyborRozmiaru = pasek.querySelector('[data-rozmiar]');
+
+  wyborCzcionki.addEventListener('change', () => wykonaj('fontName', wyborCzcionki.value));
+
+  // `execCommand('fontSize')` zna tylko skalę 1–7, a chcemy punkty. Wołamy je więc
+  // z wartością-znacznikiem i od razu przepisujemy powstałe <font size="7">
+  // na <span style="font-size: Npt">. Przy zwiniętym zaznaczeniu przeglądarka
+  // niczego jeszcze nie opakowuje; znacznik pojawi się dopiero, gdy użytkownik
+  // zacznie pisać, więc podmiana czeka na najbliższy `input`.
+  const ZNACZNIK_ROZMIARU = '7';
+  let oczekujacyRozmiar = null;
+
+  function przepiszZnaczniki(pt) {
+    const znalezione = edytor.querySelectorAll(`font[size="${ZNACZNIK_ROZMIARU}"]`);
+    for (const font of znalezione) {
+      // Przeglądarka dokłada `size` do istniejącego <font>, więc mógł już nieść
+      // krój albo kolor. Zdejmujemy sam znacznik i zostawiamy resztę w środku.
+      font.removeAttribute('size');
+      const span = el('span', { style: `font-size: ${pt}pt` });
+      font.replaceWith(span);
+      if (font.attributes.length) span.append(font);
+      else span.append(...font.childNodes);
+    }
+    return znalezione.length > 0;
+  }
+
+  function ustawRozmiar(pt) {
+    edytor.focus();
+    document.execCommand('fontSize', false, ZNACZNIK_ROZMIARU);
+    oczekujacyRozmiar = przepiszZnaczniki(pt) ? null : pt;
+    odswiezStanPaska();
+  }
+
+  wyborRozmiaru.addEventListener('change', () => ustawRozmiar(Number(wyborRozmiaru.value)));
+
+  // Leci przed autozapisem (ten słucha na formularzu wyżej), więc do zapisu
+  // trafia już przepisany styl, nigdy surowy znacznik.
+  edytor.addEventListener('input', () => {
+    if (oczekujacyRozmiar != null && przepiszZnaczniki(oczekujacyRozmiar)) oczekujacyRozmiar = null;
   });
 
   // --- Dymki: kolor i link -------------------------------------------------------
@@ -281,9 +319,39 @@ export function initEdytor() {
     czytnik.readAsDataURL(plik);
   });
 
-  // --- Stan przycisków (pogrubienie aktywne itd.) ---------------------------------
+  // --- Stan paska (pogrubienie aktywne, krój i rozmiar spod kursora) ----------------
 
   const STANOWE = ['bold', 'italic', 'underline', 'strikeThrough', 'insertUnorderedList', 'insertOrderedList'];
+
+  // Bazowy krój edytora jest bezszeryfowy, więc wszystko, czego nie rozpoznamy
+  // jako szeryfowe albo maszynowe, pokazujemy jako „Bezszeryfowy".
+  function krojZRodziny(rodzina) {
+    const f = rodzina.toLowerCase();
+    if (/courier|consolas|mono/.test(f)) return 'Courier New';
+    // Nazwy krojów szeryfowych zwykle nie zawierają słowa „serif" (Georgia, Times),
+    // a „sans-serif" w stosie oznacza dokładnie odwrotność, stąd wykluczenie.
+    if (/georgia|times|garamond|cambria|serif/.test(f) && !/sans-serif/.test(f)) return 'Georgia';
+    return 'Arial';
+  }
+
+  const ROZMIARY = [...wyborRozmiaru.options].map((o) => Number(o.value));
+
+  function rozmiarZPikseli(px) {
+    const pt = px * 0.75; // 1pt = 1/72 cala, 1px CSS = 1/96 cala
+    return ROZMIARY.reduce((a, b) => (Math.abs(b - pt) < Math.abs(a - pt) ? b : a));
+  }
+
+  function elementPrzyKursorze() {
+    const sel = getSelection();
+    const wezel = sel?.anchorNode;
+    if (!wezel) return null;
+    if (wezel.nodeType === Node.TEXT_NODE) return wezel.parentElement;
+    // Zaznaczenie zaczepione o kontener („zaznacz wszystko", świeżo po execCommand):
+    // krój i rozmiar niesie dziecko spod offsetu, nie sam kontener.
+    const dziecko = wezel.childNodes[sel.anchorOffset] ?? wezel.lastChild;
+    if (!dziecko) return wezel; // pusty edytor: styl bazowy
+    return dziecko.nodeType === Node.TEXT_NODE ? dziecko.parentElement : dziecko;
+  }
 
   function odswiezStanPaska() {
     if (!edytor.contains(getSelection()?.anchorNode)) return;
@@ -297,6 +365,13 @@ export function initEdytor() {
       }
       przycisk?.classList.toggle('aktywna', stan);
     }
+
+    const elem = elementPrzyKursorze();
+    if (!elem) return;
+    const styl = getComputedStyle(elem);
+    wyborCzcionki.value = krojZRodziny(styl.fontFamily);
+    // Znacznik rozmiaru bywa jeszcze nieprzepisany; wtedy pokazujemy wybór użytkownika.
+    wyborRozmiaru.value = String(oczekujacyRozmiar ?? rozmiarZPikseli(parseFloat(styl.fontSize)));
   }
 
   document.addEventListener('selectionchange', () => {
@@ -309,7 +384,13 @@ export function initEdytor() {
     ustaw({ html = '', tekst = '' } = {}) {
       edytor.innerHTML = html ? sanitizeHtml(html) : tekstNaHtml(tekst);
       zapamietanyZakres = null;
+      oczekujacyRozmiar = null;
       zamknijDymek();
+      // Domyślne wartości bierzemy z samego edytora, więc select pokazuje to,
+      // czym naprawdę pisze użytkownik, nawet gdy zmieni się CSS.
+      const styl = getComputedStyle(edytor);
+      wyborCzcionki.value = krojZRodziny(styl.fontFamily);
+      wyborRozmiaru.value = String(rozmiarZPikseli(parseFloat(styl.fontSize)));
     },
     pobierzHtml() {
       if (this.pusty()) return '';
