@@ -143,11 +143,24 @@ export function initFoldery(app) {
 
   // Zwraca id wybranego folderu albo null. pomijId wycina folder, w którym
   // wiadomość już leży — przenoszenie do samego siebie nie ma sensu.
+  //
+  // Wynik rozstrzygamy w kliknięciu pozycji, nie w zdarzeniu 'close' okna.
+  // Powód jest praktyczny: część środowisk (panel Browser na Electronie) nie
+  // odpala 'close' przy programowym .close(), mimo że okno się zamyka i
+  // returnValue się ustawia. Obietnica nigdy by nie wróciła i przenoszenie po
+  // cichu nic by nie robiło. 'close' zostaje wyłącznie jako droga wyjścia dla
+  // Esc i kliknięcia w tło; strażnik pilnuje, żeby nie rozstrzygnąć dwa razy.
   function wybierzFolder(pomijId = null) {
     return new Promise((rozwiaz) => {
-      // Okno zamyka się też Esc i kliknięciem w tło, więc wynik zbieramy
-      // w zdarzeniu 'close', a nie w onclick pozycji.
-      let wybrany = null;
+      let rozstrzygniete = false;
+      const zakoncz = (wynik) => {
+        if (rozstrzygniete) return;
+        rozstrzygniete = true;
+        przeniesOkno.removeEventListener('close', anuluj);
+        rozwiaz(wynik);
+      };
+      const anuluj = () => zakoncz(null);
+
       const dostepne = stan.foldery.filter((f) => f.id !== pomijId);
       przeniesLista.replaceChildren();
 
@@ -161,6 +174,7 @@ export function initFoldery(app) {
               class: 'btn-zapisz',
               onclick: () => {
                 przeniesOkno.close();
+                zakoncz(null);
                 otworzNowy();
               },
             },
@@ -177,8 +191,8 @@ export function initFoldery(app) {
               type: 'button',
               class: 'przenies-pozycja',
               onclick: () => {
-                wybrany = f.id;
                 przeniesOkno.close();
+                zakoncz(f.id);
               },
             },
             ikona('folder'),
@@ -187,7 +201,7 @@ export function initFoldery(app) {
         );
       }
 
-      przeniesOkno.addEventListener('close', () => rozwiaz(wybrany), { once: true });
+      przeniesOkno.addEventListener('close', anuluj);
       przeniesOkno.showModal();
     });
   }
