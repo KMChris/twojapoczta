@@ -118,7 +118,18 @@ export function toast(tekst, { blad = false, ikonaNazwa = 'mail', cofnij = null 
     );
   }
 
-  strefaToastow().append(wpis);
+  // Modalne <dialog> żyją w warstwie wierzchniej, ponad każdym z-index, a ich
+  // ::backdrop rozmywa wszystko pod spodem, więc strefa musi tam dołączyć.
+  // Promujemy przy każdym toaście, bo wyżej w warstwie jest to, co promowano
+  // później, a okno zwykle otwarto wcześniej. Samo przestawienie nie mruga
+  // starszymi toastami: strefa zostaje wyrenderowana tak czy siak (app.css).
+  // Nad otwartym modalem toast jest widoczny, ale nieklikalny, bo showModal()
+  // czyni inertnym wszystko poza oknem. Toast z „Cofnij" tam nie zadziała.
+  const strefa = strefaToastow();
+  if (strefa.matches(':popover-open')) strefa.hidePopover();
+  strefa.showPopover();
+
+  strefa.append(wpis);
   zegar = setTimeout(schowaj, cofnij ? CZAS_TOASTU_Z_AKCJA : CZAS_TOASTU);
   return { schowaj };
 }

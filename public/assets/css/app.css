@@ -1946,11 +1946,24 @@ a.boczny-link {
 
 /* --- Toasty ------------------------------------------------------------------------------------ */
 
+/* Strefa jest popoverem tylko po to, żeby wejść do warstwy wierzchniej, nad
+   modalne <dialog> (patrz ui.js). Zostaje wyrenderowana także zamknięta, bo
+   pusta i tak jest niewidoczna, a `aria-live` w display:none nic nie ogłasza.
+   Stąd nadpisanie `display:none` i reszty stylów, które UA daje [popover]. */
 .toast-strefa {
   position: fixed;
+  inset: auto;
   bottom: 1.4rem;
   left: 50%;
   z-index: 60;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  color: inherit;
+  background: none;
+  border: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
