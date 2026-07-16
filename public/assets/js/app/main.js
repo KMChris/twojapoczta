@@ -7,6 +7,7 @@ import {
 import { initKompozycja, zbudujOdpowiedz, zbudujPrzekazanie } from './kompozycja.js';
 import { sanitizeHtml } from './edytor.js';
 import { initSkroty } from './skroty.js';
+import { initFoldery } from './foldery.js';
 
 const NAZWY = {
   inbox: 'Odebrane', starred: 'Z gwiazdką', sent: 'Wysłane', scheduled: 'Zaplanowane',
@@ -30,11 +31,13 @@ const PUSTE_TEKSTY = {
   archive: 'Archiwum świeci pustkami.',
   spam: 'Zero spamu. Tak trzymać.',
   trash: 'Kosz jest pusty.',
+  custom: 'Ten folder jest pusty.\nPrzeciągnij tu pocztę akcją „Przenieś do".',
 };
 
 const stan = {
   user: null,
   folder: 'inbox',
+  folderId: null,
   q: '',
   wiadomosci: [],
   liczniki: {},
@@ -86,18 +89,36 @@ async function ustawMotyw(motyw, { zapisz = false } = {}) {
 
 // --- Foldery i lista --------------------------------------------------------------
 
-function przejdzDoFolderu(folder, { zHash = false } = {}) {
+// Tytuł listy: wbudowane mają nazwy w NAZWY, własne trzymają je w foldery.js.
+function odswiezTytul() {
+  tytulFolderu.textContent =
+    stan.folder === 'custom' ? foldery.nazwa(stan.folderId) : NAZWY[stan.folder];
+  renderujLiczniki();
+}
+
+function przejdzDoFolderu(folder, { folderId = null, zHash = false } = {}) {
   stan.folder = folder;
+  stan.folderId = folder === 'custom' ? folderId : null;
   stan.q = '';
   szukajInput.value = '';
   szukajWyczysc.hidden = true;
   stan.wybranaId = null;
   stan.otwarta = null;
-  if (!zHash) history.replaceState(null, '', `#${SLUG_FOLDERU[folder]}`);
-  document.querySelectorAll('.folder').forEach((f) => {
-    f.classList.toggle('aktywny', f.dataset.folder === folder);
+  if (!zHash) {
+    // Folder własny adresujemy po id, nie po nazwie: zmiana nazwy nie psuje zakładki.
+    history.replaceState(null, '', `#${folder === 'custom' ? `f-${folderId}` : SLUG_FOLDERU[folder]}`);
+  }
+  // Selektor musi być [data-folder]: „Nowy folder" nosi klasę .folder dla wyglądu,
+  // ale folderem nie jest.
+  document.querySelectorAll('.folder[data-folder]').forEach((f) => {
+    const wlasny = f.dataset.folder === 'custom';
+    f.classList.toggle(
+      'aktywny',
+      wlasny ? stan.folder === 'custom' && Number(f.dataset.folderId) === stan.folderId
+             : f.dataset.folder === folder
+    );
   });
-  tytulFolderu.textContent = NAZWY[folder];
+  odswiezTytul();
   pokazPustyCzytnik();
   zamknijBoczny();
   odswiezListe();
@@ -105,7 +126,7 @@ function przejdzDoFolderu(folder, { zHash = false } = {}) {
 
 async function odswiezListe({ cicho = false } = {}) {
   try {
-    const { messages, counts } = await api.lista(stan.folder, stan.q);
+    const { messages, counts } = await api.lista(stan.folder, stan.q, stan.folderId);
     stan.wiadomosci = messages;
     stan.liczniki = counts;
     renderujListe();
@@ -137,8 +158,10 @@ function renderujLiczniki() {
     znacznik.hidden = !wartosc;
     znacznik.textContent = wartosc || '';
   }
+  foldery.renderuj();
   const nieprzeczytane = stan.liczniki.inbox;
-  document.title = `${NAZWY[stan.folder]}${nieprzeczytane ? ` (${nieprzeczytane})` : ''} · TwojaPoczta`;
+  const nazwaFolderu = stan.folder === 'custom' ? foldery.nazwa(stan.folderId) : NAZWY[stan.folder];
+  document.title = `${nazwaFolderu}${nieprzeczytane ? ` (${nieprzeczytane})` : ''} · TwojaPoczta`;
 }
 
 function renderujListe() {
@@ -769,6 +792,7 @@ const app = {
   przejdzDoFolderu,
   odswiezListe,
   odswiezLiczniki,
+  odswiezTytul,
   zamknijCzytnik,
   napisz,
   fokusSzukaj,
@@ -786,9 +810,12 @@ const app = {
 };
 
 const kompozycja = initKompozycja(app);
+const foldery = initFoldery(app);
 initSkroty(app, kompozycja);
 
-for (const przycisk of document.querySelectorAll('.folder')) {
+// „Nowy folder" i przyszłe przyciski stylowane na .folder nie są folderami:
+// bez [data-folder] wpięłyby się tu i wołały przejdzDoFolderu(undefined).
+for (const przycisk of document.querySelectorAll('.folder[data-folder]')) {
   przycisk.addEventListener('click', () => przejdzDoFolderu(przycisk.dataset.folder));
 }
 
@@ -823,9 +850,21 @@ document.querySelector('[data-alias-input]').addEventListener('keydown', (e) => 
   }
 });
 
+// Folder własny w adresie to #f-12 (po id, nie po nazwie).
+function zHasha(hash) {
+  const slug = hash.slice(1);
+  const wlasny = /^f-(\d+)$/.exec(slug);
+  if (wlasny) return { folder: 'custom', folderId: Number(wlasny[1]) };
+  const folder = SLUGI[slug];
+  return folder ? { folder, folderId: null } : null;
+}
+
 window.addEventListener('hashchange', () => {
-  const folder = SLUGI[location.hash.slice(1)];
-  if (folder && folder !== stan.folder) przejdzDoFolderu(folder, { zHash: true });
+  const cel = zHasha(location.hash);
+  if (!cel) return;
+  if (cel.folder !== stan.folder || cel.folderId !== stan.folderId) {
+    przejdzDoFolderu(cel.folder, { folderId: cel.folderId, zHash: true });
+  }
 });
 
 async function start() {
@@ -837,8 +876,9 @@ async function start() {
   }
   zastosujMotyw();
   odswiezAwatar();
-  const zHasha = SLUGI[location.hash.slice(1)];
-  przejdzDoFolderu(zHasha ?? 'inbox');
+  await foldery.odswiez();
+  const cel = zHasha(location.hash);
+  przejdzDoFolderu(cel?.folder ?? 'inbox', { folderId: cel?.folderId ?? null });
 
   // Cichy puls: świeże liczniki, a w Odebranych także lista.
   setInterval(() => {
