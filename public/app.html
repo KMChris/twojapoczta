@@ -45,6 +45,8 @@
     <symbol id="i-link" viewBox="0 0 24 24"><path d="M10.2 13.8a4 4 0 0 1 0-5.6l2.3-2.3a4 4 0 0 1 5.6 5.6l-1.2 1.2M13.8 10.2a4 4 0 0 1 0 5.6l-2.3 2.3a4 4 0 0 1-5.6-5.6l1.2-1.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
     <symbol id="i-image" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 15.5l4.6-4.6 3.9 3.9 2.5-2.5 5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="9.4" cy="9.4" r="1.4" fill="currentColor"/></symbol>
     <symbol id="i-clear" viewBox="0 0 24 24"><path d="M5 5h10M10 5l-3.2 14M6 19h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15.5 13.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6.5h6l2 2.5h10v9.5H3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="i-wiecej" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></symbol>
   </defs>
 </svg>
 
@@ -97,6 +99,11 @@
       <button class="folder" data-folder="spam"><svg><use href="#i-spam"/></svg> Spam <em data-licznik="spam" hidden></em></button>
       <button class="folder" data-folder="trash"><svg><use href="#i-trash"/></svg> Kosz</button>
     </nav>
+
+    <nav class="foldery foldery-wlasne" aria-label="Moje foldery" data-foldery-wlasne></nav>
+    <button class="folder folder-nowy" data-akcja="nowy-folder">
+      <svg aria-hidden="true"><use href="#i-folder"/></svg> Nowy folder
+    </button>
 
     <div class="boczny-stopka">
       <p class="boczny-adres" data-adres></p>
@@ -347,6 +354,25 @@
     <footer class="modal-stopka">
       <button type="submit" class="btn-zapisz">Zapisz zmiany</button>
     </footer>
+  </form>
+</dialog>
+
+<!-- Folder: tworzenie i edycja -->
+<dialog class="modal modal-waski" data-folder-okno>
+  <header class="modal-naglowek">
+    <h2 data-folder-tytul>Nowy folder</h2>
+    <button class="ikona-btn" data-akcja="zamknij-modal" aria-label="Zamknij"><svg><use href="#i-close"/></svg></button>
+  </header>
+  <form class="ustawienia-formularz" data-formularz-folderu>
+    <label class="pole">
+      <span>Nazwa folderu</span>
+      <input name="nazwa" type="text" maxlength="40" autocomplete="off" required>
+    </label>
+    <p class="pole-opis" data-folder-opis hidden></p>
+    <div class="modal-stopka">
+      <button type="button" class="alias-usun folder-usun" data-akcja="usun-folder" hidden>Usuń folder</button>
+      <button type="submit" class="btn-zapisz" data-folder-zapisz>Utwórz</button>
+    </div>
   </form>
 </dialog>
 

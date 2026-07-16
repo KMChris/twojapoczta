@@ -267,6 +267,64 @@ body.app {
   color: var(--polecony);
 }
 
+.foldery-wlasne {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--linia);
+}
+
+.folder-nazwa {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.folder-edytuj {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.folder:hover .folder-edytuj,
+.folder-edytuj:focus-visible {
+  opacity: 0.7;
+}
+
+.folder-edytuj:hover {
+  opacity: 1;
+  background: var(--papier-3);
+}
+
+.folder-edytuj svg {
+  width: 16px;
+  height: 16px;
+}
+
+.folder-nowy {
+  opacity: 0.75;
+}
+
+.modal-waski {
+  max-width: 420px;
+}
+
+/* .alias-usun jest kwadratem na samą ikonę (26x26, bez paddingu); ten przycisk
+   niesie tekst, więc podbijamy specyficzność selektora, żeby geometria .alias-usun
+   nie wygrała kolejnością w kaskadzie. */
+.alias-usun.folder-usun {
+  width: auto;
+  height: auto;
+  margin-right: auto;
+  padding: 0.5em 0.7em;
+  white-space: nowrap;
+}
+
 .boczny-stopka {
   display: flex;
   flex-direction: column;

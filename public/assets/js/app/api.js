@@ -23,13 +23,21 @@ export const api = {
   ja: () => zadanie('GET', '/api/me'),
   zapiszProfil: (dane) => zadanie('PATCH', '/api/me', dane),
   wyloguj: () => zadanie('POST', '/api/logout'),
-  lista: (folder, q) =>
-    zadanie('GET', `/api/messages?folder=${encodeURIComponent(folder)}&q=${encodeURIComponent(q ?? '')}`),
+  lista: (folder, q, folderId = null) =>
+    zadanie(
+      'GET',
+      `/api/messages?folder=${encodeURIComponent(folder)}&q=${encodeURIComponent(q ?? '')}` +
+        (folderId ? `&folderId=${folderId}` : '')
+    ),
   wiadomosc: (id) => zadanie('GET', `/api/messages/${id}`),
   wyslij: (dane) => zadanie('POST', '/api/messages', dane),
   zmien: (id, dane) => zadanie('PATCH', `/api/messages/${id}`, dane),
   usun: (id) => zadanie('DELETE', `/api/messages/${id}`),
   liczniki: () => zadanie('GET', '/api/counts'),
+  foldery: () => zadanie('GET', '/api/folders'),
+  dodajFolder: (name) => zadanie('POST', '/api/folders', { name }),
+  zmienNazweFolderu: (id, name) => zadanie('PATCH', `/api/folders/${id}`, { name }),
+  usunFolder: (id) => zadanie('DELETE', `/api/folders/${id}`),
   aliasy: () => zadanie('GET', '/api/aliases'),
   dodajAlias: (alias) => zadanie('POST', '/api/aliases', { alias }),
   usunAlias: (id) => zadanie('DELETE', `/api/aliases/${id}`),
