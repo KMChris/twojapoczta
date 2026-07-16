@@ -291,9 +291,30 @@
     <fieldset class="pole">
       <legend>Motyw</legend>
       <div class="motywy">
-        <label><input type="radio" name="motyw" value="light"> Jasny</label>
-        <label><input type="radio" name="motyw" value="dark"> Nocna sortownia</label>
-        <label><input type="radio" name="motyw" value="system"> Jak system</label>
+        <label>
+          <input type="radio" name="motyw" value="light">
+          <span class="motyw-karta">
+            <span class="motyw-podglad" aria-hidden="true"><span class="motyw-scena jasny"></span></span>
+            <span class="motyw-nazwa">Jasny</span>
+          </span>
+        </label>
+        <label>
+          <input type="radio" name="motyw" value="dark">
+          <span class="motyw-karta">
+            <span class="motyw-podglad" aria-hidden="true"><span class="motyw-scena ciemny"></span></span>
+            <span class="motyw-nazwa">Nocna sortownia</span>
+          </span>
+        </label>
+        <label>
+          <input type="radio" name="motyw" value="system">
+          <span class="motyw-karta">
+            <span class="motyw-podglad system" aria-hidden="true">
+              <span class="motyw-scena jasny"></span>
+              <span class="motyw-scena ciemny"></span>
+            </span>
+            <span class="motyw-nazwa">Jak system</span>
+          </span>
+        </label>
       </div>
     </fieldset>
     <fieldset class="pole">

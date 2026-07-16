@@ -783,19 +783,20 @@ a.boczny-link {
   align-items: center;
   justify-content: space-between;
   padding: 0.55rem 0.6rem 0.55rem 1.1rem;
-  color: var(--papier);
-  background: var(--atrament);
+  color: var(--pasek-tekst);
+  background: var(--pasek-tlo);
+  border-bottom: 1px solid var(--pasek-kreska);
   font-size: 0.9rem;
   font-weight: 640;
 }
 
 .kompozycja-pasek .ikona-btn {
-  color: color-mix(in srgb, var(--papier) 75%, transparent);
+  color: color-mix(in srgb, var(--pasek-tekst) 75%, transparent);
 }
 
 .kompozycja-pasek .ikona-btn:hover {
-  color: var(--papier);
-  background: rgb(255 255 255 / 0.12);
+  color: var(--pasek-tekst);
+  background: color-mix(in srgb, var(--pasek-tekst) 12%, transparent);
 }
 
 .kompozycja-formularz {
@@ -1597,13 +1598,14 @@ a.boczny-link {
   border: none;
 }
 
-.motywy {
+/* Rząd zwykłych radiów (ustawienia admina). */
+.radio-rzad {
   display: flex;
   flex-wrap: wrap;
   gap: 1.1rem;
 }
 
-.motywy label {
+.radio-rzad label {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
@@ -1611,8 +1613,121 @@ a.boczny-link {
   cursor: pointer;
 }
 
-.motywy input {
+.radio-rzad input {
   accent-color: var(--polecony);
+}
+
+/* Wybór motywu: karty z miniaturą skrzynki zamiast gołych kropek. */
+.motywy {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+}
+
+.motywy input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.motyw-karta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0.5rem 0.55rem;
+  background: var(--papier);
+  border: 1px solid var(--linia-2);
+  border-radius: var(--r-m);
+  cursor: pointer;
+  transition: border-color var(--przejscie), box-shadow var(--przejscie);
+}
+
+.motyw-karta:hover {
+  border-color: var(--stempel);
+}
+
+.motywy input:checked + .motyw-karta {
+  border-color: var(--polecony);
+  box-shadow: inset 0 0 0 1px var(--polecony);
+}
+
+.motywy input:focus-visible + .motyw-karta {
+  outline: 2px solid var(--priorytet);
+  outline-offset: 2px;
+}
+
+.motyw-podglad {
+  position: relative;
+  height: 54px;
+  overflow: hidden;
+  border: 1px solid var(--linia-2);
+  border-radius: var(--r-s);
+}
+
+/* Miniatura maluje się sama z --pg-*, więc kafelek pokazuje swój motyw
+   niezależnie od tego, który jest teraz włączony. */
+.motyw-scena {
+  position: absolute;
+  inset: 0;
+  background: var(--pg-papier);
+}
+
+.motyw-scena::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 13px;
+  background: var(--pg-pasek);
+}
+
+.motyw-scena::after {
+  content: '';
+  position: absolute;
+  top: 23px;
+  left: 8px;
+  right: 8px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--pg-linia);
+  box-shadow: 0 9px 0 var(--pg-linia), 0 18px 0 var(--pg-linia);
+}
+
+.motyw-scena.jasny {
+  --pg-papier: #fbfaf7;
+  --pg-pasek: #191c24;
+  --pg-linia: #d2cebe;
+}
+
+.motyw-scena.ciemny {
+  --pg-papier: #14161d;
+  --pg-pasek: #232733;
+  --pg-linia: #3a3f4e;
+}
+
+.motyw-podglad.system .motyw-scena.ciemny {
+  clip-path: polygon(100% 0, 100% 100%, 38% 100%);
+}
+
+.motyw-nazwa {
+  font-size: 0.86rem;
+  font-weight: 560;
+  text-align: center;
+}
+
+.motywy input:checked + .motyw-karta .motyw-nazwa {
+  color: var(--polecony);
+}
+
+@media (max-width: 480px) {
+  .motywy {
+    grid-template-columns: 1fr;
+  }
+
+  .motyw-podglad {
+    height: 44px;
+  }
 }
 
 .aliasy {

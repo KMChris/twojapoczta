@@ -30,7 +30,7 @@ export function initUstawienia() {
     const formularz = el('form', { class: 'ustawienia-formularz formularz-admina', style: 'padding: 1.1rem 1.2rem' },
       el('fieldset', { class: 'pole' },
         el('legend', {}, 'Rejestracja nowych kont'),
-        el('div', { class: 'motywy' },
+        el('div', { class: 'radio-rzad' },
           el('label', {}, el('input', { type: 'radio', name: 'rejestracja', value: '1' }), ' Otwarta'),
           el('label', {}, el('input', { type: 'radio', name: 'rejestracja', value: '0' }), ' Zamknięta (konta zakłada administrator)')
         )
