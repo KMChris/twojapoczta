@@ -219,6 +219,20 @@ export function initKompozycja(app) {
     panel.hidden = true;
   }
 
+  // Cofnięcie odrzucenia: list wraca z Kosza do wersji roboczych i (o ile nie piszemy
+  // już czegoś innego) z powrotem do okna, żeby dało się dokończyć zdanie.
+  async function przywrocRobocza(id) {
+    try {
+      const { message } = await api.zmien(id, { folder: 'drafts' });
+      if (app.stan.folder === 'drafts') app.odswiezListe({ cicho: true });
+      app.odswiezLiczniki();
+      if (otwarte()) toast('Wersja robocza wróciła do folderu', { ikonaNazwa: 'draft' });
+      else otworz({ draft: message });
+    } catch (blad) {
+      toast(blad.message, { blad: true });
+    }
+  }
+
   // Odrzucenie: porzuca pisany tekst, a zapisaną wersję roboczą przenosi do Kosza.
   async function odrzuc() {
     clearTimeout(zapisNaHoryzoncie);
@@ -241,6 +255,8 @@ export function initKompozycja(app) {
       }
       if (app.stan.folder === 'drafts') app.odswiezListe({ cicho: true });
       app.odswiezLiczniki();
+      // Cofnięcie tylko dla zapisanej wersji: nigdy niezapisanego tekstu nie ma skąd wziąć.
+      return toast('Odrzucono wersję roboczą', { ikonaNazwa: 'trash', cofnij: () => przywrocRobocza(id) });
     }
     toast('Odrzucono wersję roboczą', { ikonaNazwa: 'trash' });
   }

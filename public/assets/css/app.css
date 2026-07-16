@@ -1783,6 +1783,28 @@ a.boczny-link {
   color: #fff;
 }
 
+.toast-cofnij {
+  margin-left: 0.3rem;
+  padding: 0.25em 0.7em;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 680;
+  /* Toast odwraca kolory razem z motywem, więc tło i ramka muszą wychodzić
+     od koloru tekstu, a nie od bieli; inaczej giną na jasnym wariancie. */
+  color: var(--koperta);
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 38%, transparent);
+  border-radius: var(--r-s);
+  cursor: pointer;
+  transition: background var(--przejscie), color var(--przejscie);
+}
+
+.toast-cofnij:hover {
+  color: var(--atrament);
+  background: var(--koperta);
+  border-color: var(--koperta);
+}
+
 @keyframes toast-wjazd {
   from {
     transform: translateY(12px);

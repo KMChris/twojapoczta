@@ -427,12 +427,26 @@ async function przelaczGwiazdke(id) {
   }
 }
 
+// Cofnięcie przeniesienia: list wraca tam, skąd wyszedł.
+async function przywrocDoFolderu(id, folder) {
+  try {
+    await api.zmien(id, { folder });
+    toast('Przywrócono', { ikonaNazwa: 'inbox' });
+    // Wrócił do folderu, który właśnie oglądamy, więc musi się znów pojawić na liście.
+    if (stan.folder === folder || stan.folder === 'starred') odswiezListe({ cicho: true });
+    odswiezLiczniki();
+  } catch (blad) {
+    toast(blad.message, { blad: true });
+  }
+}
+
 async function przeniesOtwarta(folder, komunikat) {
   const w = stan.otwarta;
   if (!w) return;
+  const skad = w.folder;
   try {
     await api.zmien(w.id, { folder });
-    toast(komunikat, { ikonaNazwa: 'archive' });
+    toast(komunikat, { ikonaNazwa: 'archive', cofnij: () => przywrocDoFolderu(w.id, skad) });
     usunZListy(w.id);
     odswiezLiczniki();
   } catch (blad) {
@@ -467,9 +481,14 @@ function gwiazdkaOtwarta() {
 async function doKoszaOtwarta() {
   const w = stan.otwarta;
   if (!w) return;
+  const skad = w.folder;
   try {
     const wynik = await api.usun(w.id);
-    toast(wynik.purged ? 'Usunięto trwale' : 'Przeniesiono do kosza', { ikonaNazwa: 'trash' });
+    toast(wynik.purged ? 'Usunięto trwale' : 'Przeniesiono do kosza', {
+      ikonaNazwa: 'trash',
+      // Z kosza wiadomość znika bezpowrotnie, więc nie obiecujemy cofnięcia, którego nie ma.
+      cofnij: wynik.purged ? null : () => przywrocDoFolderu(w.id, skad),
+    });
     usunZListy(w.id);
     odswiezLiczniki();
   } catch (blad) {

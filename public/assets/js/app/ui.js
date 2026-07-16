@@ -82,13 +82,45 @@ export function wstawTrescZLinkami(cel, tekst) {
 
 const strefaToastow = () => document.querySelector('[data-toasty]');
 
-export function toast(tekst, { blad = false, ikonaNazwa = 'mail' } = {}) {
-  const wpis = el('div', { class: `toast${blad ? ' blad' : ''}` }, ikona(blad ? 'spam' : ikonaNazwa), tekst);
-  strefaToastow().append(wpis);
-  setTimeout(() => {
+const CZAS_TOASTU = 3400;
+// Z przyciskiem dajemy więcej czasu: trzeba go przeczytać, sięgnąć i kliknąć.
+const CZAS_TOASTU_Z_AKCJA = 7000;
+
+export function toast(tekst, { blad = false, ikonaNazwa = 'mail', cofnij = null } = {}) {
+  const wpis = el(
+    'div',
+    { class: `toast${blad ? ' blad' : ''}` },
+    ikona(blad ? 'spam' : ikonaNazwa),
+    el('span', { class: 'toast-tresc' }, tekst)
+  );
+
+  let zegar = null;
+  const schowaj = () => {
+    clearTimeout(zegar);
     wpis.classList.add('znika');
     setTimeout(() => wpis.remove(), 350);
-  }, 3400);
+  };
+
+  if (cofnij) {
+    wpis.append(
+      el(
+        'button',
+        {
+          type: 'button',
+          class: 'toast-cofnij',
+          onclick: () => {
+            schowaj();
+            cofnij();
+          },
+        },
+        'Cofnij'
+      )
+    );
+  }
+
+  strefaToastow().append(wpis);
+  zegar = setTimeout(schowaj, cofnij ? CZAS_TOASTU_Z_AKCJA : CZAS_TOASTU);
+  return { schowaj };
 }
 
 export function formatujRozmiar(bajty) {
