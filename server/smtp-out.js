@@ -59,31 +59,70 @@ function rfc822Date(data = new Date()) {
 
 // --- Budowanie surowej wiadomości -----------------------------------------------
 
-export function buildRawMessage({ domain, from, to, subject, body, attachments = [] }) {
-  const naglowki = [
-    `Date: ${rfc822Date()}`,
-    `From: ${from.name ? `${encodeHeaderWord(from.name)} ` : ''}<${from.addr}>`,
-    `To: ${to.join(', ')}`,
-    `Subject: ${encodeHeaderWord(subject || '(bez tematu)')}`,
-    `Message-ID: <${crypto.randomUUID()}@${domain}>`,
-    'MIME-Version: 1.0',
-  ];
-
-  if (!attachments.length) {
-    naglowki.push('Content-Type: text/plain; charset=utf-8', 'Content-Transfer-Encoding: quoted-printable');
-    return naglowki.join('\r\n') + '\r\n\r\n' + encodeQuotedPrintable(body ?? '');
-  }
-
-  const boundary = `----=_tp_${crypto.randomBytes(12).toString('hex')}`;
-  naglowki.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
-
-  const czesci = [
-    `--${boundary}`,
+function czescTekstowa(body) {
+  return [
     'Content-Type: text/plain; charset=utf-8',
     'Content-Transfer-Encoding: quoted-printable',
     '',
     encodeQuotedPrintable(body ?? ''),
   ];
+}
+
+function czescHtml(html) {
+  return [
+    'Content-Type: text/html; charset=utf-8',
+    'Content-Transfer-Encoding: quoted-printable',
+    '',
+    encodeQuotedPrintable(html),
+  ];
+}
+
+// Tekst + HTML jako multipart/alternative (klient odbiorcy wybiera bogatszą wersję).
+function czescAlternatywna(body, html) {
+  const boundary = `----=_tp_alt_${crypto.randomBytes(12).toString('hex')}`;
+  const linie = [
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    ...czescTekstowa(body),
+    `--${boundary}`,
+    ...czescHtml(html),
+    `--${boundary}--`,
+  ];
+  return linie;
+}
+
+export function buildRawMessage({ domain, from, to, cc = [], subject, body, html, attachments = [] }) {
+  const naglowki = [
+    `Date: ${rfc822Date()}`,
+    `From: ${from.name ? `${encodeHeaderWord(from.name)} ` : ''}<${from.addr}>`,
+    `To: ${to.join(', ')}`,
+  ];
+  if (cc.length) naglowki.push(`Cc: ${cc.join(', ')}`);
+  naglowki.push(
+    `Subject: ${encodeHeaderWord(subject || '(bez tematu)')}`,
+    `Message-ID: <${crypto.randomUUID()}@${domain}>`,
+    'MIME-Version: 1.0'
+  );
+
+  // Sama treść: zwykły tekst albo alternative, gdy jest wersja HTML.
+  const trescLinie = html ? czescAlternatywna(body, html) : czescTekstowa(body);
+
+  if (!attachments.length) {
+    // trescLinie[0] to Content-Type, więc nagłówki treści lądują wśród nagłówków wiadomości.
+    const [typ, ...reszta] = trescLinie;
+    naglowki.push(typ);
+    if (html) {
+      return naglowki.join('\r\n') + '\r\n' + reszta.join('\r\n');
+    }
+    naglowki.push(reszta[0]); // Content-Transfer-Encoding
+    return naglowki.join('\r\n') + '\r\n\r\n' + reszta.slice(2).join('\r\n');
+  }
+
+  const boundary = `----=_tp_${crypto.randomBytes(12).toString('hex')}`;
+  naglowki.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+
+  const czesci = [`--${boundary}`, ...trescLinie];
   for (const zalacznik of attachments) {
     const asciiNazwa = zalacznik.filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
     czesci.push(

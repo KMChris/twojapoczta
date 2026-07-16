@@ -17,8 +17,10 @@ import { now } from './db.js';
 import { registrationOpen, passwordMinLength } from './settings.js';
 import { logEvent } from './audit.js';
 
-const LOGIN_RE = /^[a-z0-9][a-z0-9.-]{2,29}$/;
+export const LOGIN_RE = /^[a-z0-9][a-z0-9.-]{2,29}$/;
 const BODY_LIMIT = 512 * 1024;
+// Wiadomości z HTML mieszczą obrazki wklejone jako data:URL, stąd wyższy limit.
+const MESSAGE_LIMIT = 8 * 1024 * 1024;
 
 export function json(res, status, data) {
   const payload = JSON.stringify(data);
@@ -59,8 +61,8 @@ function readRaw(req, limit, limitMessage) {
   });
 }
 
-async function readBody(req) {
-  const raw = await readRaw(req, BODY_LIMIT, 'Wiadomość jest zbyt duża (limit 512 KB).');
+export async function readBody(req, limit = BODY_LIMIT, limitMessage = 'Wiadomość jest zbyt duża (limit 512 KB).') {
+  const raw = await readRaw(req, limit, limitMessage);
   if (!raw.length) return {};
   try {
     return JSON.parse(raw.toString('utf8'));
@@ -80,7 +82,7 @@ function publicUser(user) {
   };
 }
 
-function clientIp(req) {
+export function clientIp(req) {
   return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || '?';
 }
 
@@ -118,8 +120,8 @@ export function registerApiRoutes(router, db) {
       return json(res, 400, { error: `Hasło musi mieć co najmniej ${minHasla} znaków.` });
     }
 
-    const taken = db.prepare('SELECT id FROM users WHERE login = ?').get(login);
-    if (taken) return json(res, 409, { error: `Adres ${addressOf(login)} jest już zajęty.` });
+    // findMailbox łapie też kolizję z cudzym aliasem, nie tylko z loginem.
+    if (findMailbox(db, login)) return json(res, 409, { error: `Adres ${addressOf(login)} jest już zajęty.` });
 
     const hash = await hashPassword(password);
     const result = db
@@ -257,7 +259,12 @@ export function registerApiRoutes(router, db) {
   });
 
   route('POST', '/api/messages', async (req, res, { user }) => {
-    const body = await readBody(req);
+    const body = await readBody(req, MESSAGE_LIMIT, 'Wiadomość jest zbyt duża (limit 8 MB).');
+    for (const pole of ['to', 'cc', 'bcc', 'from', 'subject', 'body', 'bodyHtml', 'scheduledAt']) {
+      if (body[pole] != null && typeof body[pole] !== 'string') {
+        return json(res, 400, { error: 'Nieprawidłowy format danych.' });
+      }
+    }
     if ((body.subject ?? '').length > 200) return json(res, 400, { error: 'Temat może mieć najwyżej 200 znaków.' });
 
     if (body.draft) {
@@ -268,7 +275,7 @@ export function registerApiRoutes(router, db) {
 
     const result = sendMessage(db, user, body);
     if (result.error) return json(res, 400, { error: result.error });
-    json(res, 201, { message: result.message });
+    json(res, 201, { message: result.message, scheduled: !!result.scheduled });
   });
 
   route('PATCH', '/api/messages/:id', async (req, res, { user, params }) => {

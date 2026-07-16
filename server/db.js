@@ -128,6 +128,10 @@ function migrate(db) {
   ensureColumn(db, 'users', 'is_blocked', 'is_blocked INTEGER NOT NULL DEFAULT 0');
   ensureColumn(db, 'users', 'quota_mb', 'quota_mb INTEGER');
   ensureColumn(db, 'users', 'last_login_at', 'last_login_at TEXT');
+  ensureColumn(db, 'messages', 'body_html', "body_html TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, 'messages', 'cc_addr', "cc_addr TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, 'messages', 'bcc_addr', "bcc_addr TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, 'messages', 'scheduled_at', 'scheduled_at TEXT');
 }
 
 export function now() {

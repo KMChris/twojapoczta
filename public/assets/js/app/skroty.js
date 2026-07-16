@@ -14,6 +14,7 @@ export function initSkroty(app, kompozycja) {
     { tytul: 'Odebrane', ikona: 'inbox', skrot: 'g i', wykonaj: () => app.przejdzDoFolderu('inbox') },
     { tytul: 'Z gwiazdką', ikona: 'star', wykonaj: () => app.przejdzDoFolderu('starred') },
     { tytul: 'Wysłane', ikona: 'send', skrot: 'g s', wykonaj: () => app.przejdzDoFolderu('sent') },
+    { tytul: 'Zaplanowane', ikona: 'clock', wykonaj: () => app.przejdzDoFolderu('scheduled') },
     { tytul: 'Wersje robocze', ikona: 'draft', wykonaj: () => app.przejdzDoFolderu('drafts') },
     { tytul: 'Archiwum', ikona: 'archive', wykonaj: () => app.przejdzDoFolderu('archive') },
     { tytul: 'Spam', ikona: 'spam', wykonaj: () => app.przejdzDoFolderu('spam') },
@@ -124,6 +125,7 @@ export function initSkroty(app, kompozycja) {
 
     if (e.key === 'Escape') {
       if (document.querySelector('dialog[open]')) return; // dialog zamyka się sam
+      if (kompozycja.zamknijNakladki()) return; // najpierw dymki i okienko planowania
       if (wPolu && !cel.closest('[data-kompozycja]')) {
         cel.blur();
         return;
@@ -136,8 +138,10 @@ export function initSkroty(app, kompozycja) {
       return;
     }
 
-    if (wPolu || document.querySelector('dialog[open]') || kompozycja.otwarte()) return;
+    if (wPolu || document.querySelector('dialog[open]')) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // Otwarta kompozycja blokuje skróty zmieniające stan; szukanie i pomoc mają działać.
+    if (kompozycja.otwarte() && e.key !== '/' && e.key !== '?') return;
 
     // Sekwencja g + litera.
     if (oczekujeG) {

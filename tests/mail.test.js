@@ -9,6 +9,7 @@ import {
   DOMAIN, addressOf, findMailbox, makeSnippet, parseRecipients,
   listMessages, getMessage, updateMessage, deleteMessage, unreadCounts,
   saveDraft, sendMessage, deliverInbound, deliverSystemMessage, REAL_FOLDERS,
+  fireScheduled, resolveSenderAddress,
 } from '../server/mail.js';
 
 function fresh() {
@@ -338,7 +339,7 @@ test('deliverSystemMessage: wiadomość od Zespołu, priorytet i nieprzeczytana'
 });
 
 test('REAL_FOLDERS zawiera oczekiwane katalogi', () => {
-  assert.deepEqual(REAL_FOLDERS, ['inbox', 'sent', 'drafts', 'archive', 'spam', 'trash']);
+  assert.deepEqual(REAL_FOLDERS, ['inbox', 'sent', 'drafts', 'scheduled', 'archive', 'spam', 'trash']);
 });
 
 // --- Wycofanie transakcji (ROLLBACK) na błędzie ------------------------------
@@ -391,4 +392,192 @@ test('sendMessage: wysyłka na zewnątrz z załącznikiem zostawia kopię i wrac
     delete process.env.TP_EXTERNAL;
     delete process.env.TP_SMTP_ROUTE;
   }
+});
+
+// --- DW, UDW, alias nadawcy ----------------------------------------------------
+
+test('sendMessage: DW dociera i jest widoczne, UDW dociera bez śladu w kopiach', () => {
+  const { db, user, users } = fresh();
+  const demo = user('demo');
+  const wynik = sendMessage(db, demo, {
+    to: addressOf('ania'),
+    cc: addressOf('michal'),
+    subject: 'Narada',
+    body: 'x',
+  });
+  assert.ok(!wynik.error);
+
+  const [uAni] = listMessages(db, users.ania, { folder: 'inbox' });
+  const [uMichala] = listMessages(db, users.michal, { folder: 'inbox' });
+  assert.equal(uAni.cc_addr, addressOf('michal'));
+  assert.ok(uMichala, 'adresat DW dostaje kopię');
+
+  // UDW: michal dostaje, ale ani adresat, ani on sam nie widzi listy UDW
+  const udw = sendMessage(db, demo, {
+    to: addressOf('ania'),
+    bcc: addressOf('michal'),
+    subject: 'Poufne',
+    body: 'y',
+  });
+  assert.ok(!udw.error);
+  const kopiaAni = getMessage(db, users.ania, listMessages(db, users.ania, { folder: 'inbox' })[0].id);
+  const kopiaMichala = getMessage(db, users.michal, listMessages(db, users.michal, { folder: 'inbox' })[0].id);
+  assert.equal(kopiaAni.bcc_addr, '');
+  assert.equal(kopiaMichala.bcc_addr, '');
+  assert.ok(!kopiaAni.to_addr.includes('michal'));
+  // nadawca w swojej kopii „Wysłane" widzi pełną listę UDW
+  const [wyslana] = listMessages(db, users.demo, { folder: 'sent' });
+  assert.equal(getMessage(db, users.demo, wyslana.id).bcc_addr, addressOf('michal'));
+  db.close();
+});
+
+test('sendMessage: sam UDW wystarcza za adresata', () => {
+  const { db, user, users } = fresh();
+  const wynik = sendMessage(db, user('demo'), { to: '', bcc: addressOf('ania'), subject: 'U', body: 'x' });
+  assert.ok(!wynik.error);
+  assert.equal(listMessages(db, users.ania, { folder: 'inbox' }).length, 1);
+  db.close();
+});
+
+test('resolveSenderAddress i sendMessage: własny alias tak, cudzy adres nie', () => {
+  const { db, user, users } = fresh();
+  const demo = user('demo');
+  db.prepare('INSERT INTO aliases (user_id, alias, created_at) VALUES (?, ?, ?)').run(users.demo, 'biuro-jana', now());
+
+  assert.equal(resolveSenderAddress(db, demo, ''), addressOf('demo'));
+  assert.equal(resolveSenderAddress(db, demo, addressOf('biuro-jana')), addressOf('biuro-jana'));
+  assert.equal(resolveSenderAddress(db, demo, addressOf('ania')), null);
+  assert.equal(resolveSenderAddress(db, demo, 'ktos@obca.pl'), null);
+
+  const zAliasu = sendMessage(db, demo, { to: addressOf('ania'), from: addressOf('biuro-jana'), subject: 'A', body: 'x' });
+  assert.ok(!zAliasu.error);
+  const [uAni] = listMessages(db, users.ania, { folder: 'inbox' });
+  assert.equal(uAni.from_addr, addressOf('biuro-jana'));
+
+  const zCudzego = sendMessage(db, demo, { to: addressOf('ania'), from: addressOf('michal'), subject: 'B', body: 'x' });
+  assert.match(zCudzego.error, /własnych aliasów/);
+  db.close();
+});
+
+test('saveDraft: przechowuje DW, UDW, nadawcę-alias i HTML', () => {
+  const { db, user, users } = fresh();
+  const demo = user('demo');
+  db.prepare('INSERT INTO aliases (user_id, alias, created_at) VALUES (?, ?, ?)').run(users.demo, 'praca', now());
+  const d = saveDraft(db, demo, {
+    to: addressOf('ania'),
+    cc: addressOf('michal'),
+    bcc: addressOf('demo'),
+    from: addressOf('praca'),
+    subject: 'Robocza',
+    body: 'tekst',
+    bodyHtml: '<p>tekst <strong>bogaty</strong></p>',
+  });
+  assert.equal(d.cc_addr, addressOf('michal'));
+  assert.equal(d.bcc_addr, addressOf('demo'));
+  assert.equal(d.from_addr, addressOf('praca'));
+  assert.equal(d.body_html, '<p>tekst <strong>bogaty</strong></p>');
+  // cudzy nadawca w wersji roboczej po cichu wraca na adres główny
+  const d2 = saveDraft(db, demo, { id: d.id, to: '', from: addressOf('ania'), subject: '', body: '' });
+  assert.equal(d2.from_addr, addressOf('demo'));
+  db.close();
+});
+
+// --- Zaplanowana wysyłka --------------------------------------------------------
+
+test('sendMessage: termin w przyszłości odkłada list do Zaplanowanych', () => {
+  const { db, user, users } = fresh();
+  const demo = user('demo');
+  const draft = saveDraft(db, demo, { to: addressOf('ania'), subject: 'Później', body: 'x' });
+  const za2h = new Date(Date.now() + 2 * 3600_000).toISOString();
+  const wynik = sendMessage(db, demo, {
+    to: addressOf('ania'), subject: 'Później', body: 'x', scheduledAt: za2h, draftId: draft.id,
+  });
+  assert.ok(wynik.scheduled);
+  assert.equal(wynik.message.folder, 'scheduled');
+  assert.equal(wynik.message.scheduled_at, za2h);
+  assert.equal(unreadCounts(db, users.demo).scheduled, 1);
+  assert.equal(unreadCounts(db, users.demo).drafts, 0, 'wersja robocza znika po zaplanowaniu');
+  assert.equal(listMessages(db, users.ania, { folder: 'inbox' }).length, 0, 'nic jeszcze nie doręczono');
+  db.close();
+});
+
+test('sendMessage: termin z przeszłości albo bełkot → błąd', () => {
+  const { db, user } = fresh();
+  const demo = user('demo');
+  const wczoraj = new Date(Date.now() - 24 * 3600_000).toISOString();
+  assert.match(sendMessage(db, demo, { to: addressOf('ania'), body: 'x', scheduledAt: wczoraj }).error, /przyszłości/);
+  assert.match(sendMessage(db, demo, { to: addressOf('ania'), body: 'x', scheduledAt: 'za tydzien' }).error, /Nieprawidłowa data/);
+  const za2lata = new Date(Date.now() + 2 * 366 * 24 * 3600_000).toISOString();
+  assert.match(sendMessage(db, demo, { to: addressOf('ania'), body: 'x', scheduledAt: za2lata }).error, /rok naprzód/);
+  db.close();
+});
+
+test('fireScheduled: nadaje dojrzałe listy z załącznikami i sprząta Zaplanowane', () => {
+  const { db, user, users } = fresh();
+  const demo = user('demo');
+  const { upload } = saveUpload(db, users.demo, { filename: 'plan.txt', mime: 'text/plain', buffer: Buffer.from('agenda') });
+  const za1h = new Date(Date.now() + 3600_000).toISOString();
+  const wynik = sendMessage(db, demo, {
+    to: addressOf('ania'), cc: addressOf('michal'), subject: 'Dojrzeje', body: 'tresc',
+    bodyHtml: '<p>tresc</p>', scheduledAt: za1h, uploads: [upload.token],
+  });
+  assert.ok(wynik.scheduled);
+  assert.equal(wynik.message.attachments_count, 1);
+
+  // jeszcze nie czas
+  assert.equal(fireScheduled(db), 0);
+
+  // przesuwamy termin w przeszłość i budzimy strażnika
+  const minelo = new Date(Date.now() - 1000).toISOString();
+  db.prepare('UPDATE messages SET scheduled_at = ? WHERE id = ?').run(minelo, wynik.message.id);
+  assert.equal(fireScheduled(db), 1);
+
+  assert.equal(unreadCounts(db, users.demo).scheduled, 0);
+  const [uAni] = listMessages(db, users.ania, { folder: 'inbox' });
+  assert.equal(uAni.subject, 'Dojrzeje');
+  assert.equal(uAni.attachments_count, 1);
+  assert.equal(getMessage(db, users.ania, uAni.id).body_html, '<p>tresc</p>');
+  const [uMichala] = listMessages(db, users.michal, { folder: 'inbox' });
+  assert.equal(uMichala.attachments_count, 1);
+  const [wyslana] = listMessages(db, users.demo, { folder: 'sent' });
+  assert.equal(wyslana.attachments_count, 1);
+  // wspólne bloby: jedna treść, wiele kopii
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM blobs').get().n, 1);
+  db.close();
+});
+
+test('fireScheduled: znikła skrzynka adresata → zwrot do nadawcy, reszta doręczona', () => {
+  const { db, user, users } = fresh();
+  const demo = user('demo');
+  const za1h = new Date(Date.now() + 3600_000).toISOString();
+  const wynik = sendMessage(db, demo, {
+    to: `${addressOf('ania')}, ${addressOf('michal')}`, subject: 'Do dwojga', body: 'x', scheduledAt: za1h,
+  });
+  db.prepare('DELETE FROM users WHERE id = ?').run(users.michal);
+  db.prepare('UPDATE messages SET scheduled_at = ? WHERE id = ?').run(new Date(Date.now() - 1000).toISOString(), wynik.message.id);
+  fireScheduled(db);
+
+  assert.equal(listMessages(db, users.ania, { folder: 'inbox' }).length, 1);
+  const zwrot = listMessages(db, users.demo, { folder: 'inbox' }).find((m) => m.subject.startsWith('Zwrot do nadawcy'));
+  assert.ok(zwrot, 'nadawca dostaje zwrot o nieistniejącej skrzynce');
+  db.close();
+});
+
+test('updateMessage: do scheduled nie wolno, wyjście z scheduled czyści termin', () => {
+  const { db, user, users } = fresh();
+  const demo = user('demo');
+  const za1h = new Date(Date.now() + 3600_000).toISOString();
+  const wynik = sendMessage(db, demo, { to: addressOf('ania'), subject: 'S', body: 'x', scheduledAt: za1h });
+
+  // anulowanie wysyłki: powrót do wersji roboczych zeruje scheduled_at
+  const cofnieta = updateMessage(db, users.demo, wynik.message.id, { folder: 'drafts' });
+  assert.equal(cofnieta.folder, 'drafts');
+  assert.equal(cofnieta.scheduled_at, null);
+  assert.equal(fireScheduled(db), 0);
+
+  // zwykłej wiadomości nie można ręcznie wepchnąć do Zaplanowanych
+  deliverSystemMessage(db, users.demo, { subject: 'N', body: 'x' });
+  const [zwykla] = listMessages(db, users.demo, { folder: 'inbox' });
+  assert.equal(updateMessage(db, users.demo, zwykla.id, { folder: 'scheduled' }), null);
+  db.close();
 });

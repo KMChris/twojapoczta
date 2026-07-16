@@ -104,6 +104,42 @@ test('buildRawMessage: bez załączników → text/plain + quoted-printable', ()
   assert.match(m.body, /żółć/);
 });
 
+test('buildRawMessage: z HTML → multipart/alternative z tekstem i HTML-em', () => {
+  const raw = buildRawMessage({
+    domain: 'twojapoczta.com',
+    from: { name: 'Jan', addr: 'jan@twojapoczta.com' },
+    to: ['a@b.pl'],
+    cc: ['c@d.pl', 'e@f.pl'],
+    subject: 'Bogata',
+    body: 'wersja tekstowa',
+    html: '<p>wersja <strong>bogata</strong></p>',
+  });
+  assert.match(raw, /^Cc: c@d\.pl, e@f\.pl$/m);
+  assert.match(raw, /Content-Type: multipart\/alternative; boundary="/);
+  assert.match(raw, /Content-Type: text\/plain; charset=utf-8/);
+  assert.match(raw, /Content-Type: text\/html; charset=utf-8/);
+  const m = parseMessage(Buffer.from(raw, 'utf8'));
+  assert.match(m.body, /wersja tekstowa/);
+});
+
+test('buildRawMessage: HTML + załącznik → mixed z alternative w środku', () => {
+  const raw = buildRawMessage({
+    domain: 'twojapoczta.com',
+    from: { name: 'Jan', addr: 'jan@twojapoczta.com' },
+    to: ['a@b.pl'],
+    subject: 'Pełny zestaw',
+    body: 'tekst',
+    html: '<p>html</p>',
+    attachments: [{ filename: 'notatka.txt', mime: 'text/plain', data: Buffer.from('plik') }],
+  });
+  assert.match(raw, /Content-Type: multipart\/mixed; boundary="/);
+  assert.match(raw, /Content-Type: multipart\/alternative; boundary="/);
+  assert.match(raw, /Content-Disposition: attachment/);
+  const m = parseMessage(Buffer.from(raw, 'latin1'));
+  assert.equal(m.attachments.length, 1);
+  assert.match(m.body, /tekst/);
+});
+
 test('buildRawMessage: pusta nazwa nadawcy i pusty temat', () => {
   const raw = buildRawMessage({ domain: 'd.pl', from: { name: '', addr: 'x@y.pl' }, to: ['z@w.pl'], subject: '', body: '' });
   assert.match(raw, /^From: <x@y\.pl>$/m);

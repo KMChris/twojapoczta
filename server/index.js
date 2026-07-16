@@ -10,7 +10,7 @@ import { registerApiRoutes, requireUser, json } from './api.js';
 import { seedIfEmpty } from './seed.js';
 import { startSmtpServer } from './smtp.js';
 import { initDkim, dnsRecord, dkimConfigured } from './dkim.js';
-import { DOMAIN } from './mail.js';
+import { DOMAIN, fireScheduled } from './mail.js';
 import { grantAdmin } from './admin.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -46,6 +46,21 @@ export async function createApp({ dataDir, db } = {}) {
   const api = registerApiRoutes(router, database);
   const serveStatic = createStaticHandler(path.join(ROOT, 'public'));
 
+  // Zaplanowane wiadomości: nadaj zaległe od razu (np. po restarcie), potem co pół minuty.
+  try {
+    fireScheduled(database);
+  } catch (err) {
+    console.error('[scheduler]', err);
+  }
+  const zegarNadawania = setInterval(() => {
+    try {
+      fireScheduled(database);
+    } catch (err) {
+      console.error('[scheduler]', err);
+    }
+  }, 30_000);
+  zegarNadawania.unref?.();
+
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
     setSecurityHeaders(res);
@@ -74,6 +89,8 @@ export async function createApp({ dataDir, db } = {}) {
       }
     }
   });
+
+  server.on('close', () => clearInterval(zegarNadawania));
 
   return { server, db: database };
 }

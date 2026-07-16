@@ -5,14 +5,15 @@ import {
   el, ikona, krotkiCzas, pelnaData, inicjaly, kolorAwatara, wstawTrescZLinkami, toast, formatujRozmiar,
 } from './ui.js';
 import { initKompozycja, zbudujOdpowiedz, zbudujPrzekazanie } from './kompozycja.js';
+import { sanitizeHtml } from './edytor.js';
 import { initSkroty } from './skroty.js';
 
 const NAZWY = {
-  inbox: 'Odebrane', starred: 'Z gwiazdką', sent: 'Wysłane', drafts: 'Wersje robocze',
-  archive: 'Archiwum', spam: 'Spam', trash: 'Kosz',
+  inbox: 'Odebrane', starred: 'Z gwiazdką', sent: 'Wysłane', scheduled: 'Zaplanowane',
+  drafts: 'Wersje robocze', archive: 'Archiwum', spam: 'Spam', trash: 'Kosz',
 };
 const SLUGI = {
-  odebrane: 'inbox', gwiazdka: 'starred', wyslane: 'sent',
+  odebrane: 'inbox', gwiazdka: 'starred', wyslane: 'sent', zaplanowane: 'scheduled',
   szkice: 'drafts', // dawna nazwa, stare zakładki mają dalej działać
   'wersje-robocze': 'drafts',
   archiwum: 'archive', spam: 'spam', kosz: 'trash',
@@ -24,6 +25,7 @@ const PUSTE_TEKSTY = {
   inbox: 'Pusta skrzynka. Cisza jak w niedzielę na poczcie.',
   starred: 'Nic tu jeszcze nie błyszczy.\nOtwórz wiadomość i naciśnij „s”.',
   sent: 'Jeszcze nic stąd nie wysłano.\nNaciśnij „c” i nadaj pierwszy list.',
+  scheduled: 'Nic nie czeka na nadanie.\nPisząc wiadomość, wybierz zegar obok „Wyślij”.',
   drafts: 'Brak wersji roboczych. Wszystko, co zaczniesz pisać,\nzapisze się tu samo.',
   archive: 'Archiwum świeci pustkami.',
   spam: 'Zero spamu. Tak trzymać.',
@@ -125,6 +127,7 @@ async function odswiezLiczniki() {
 function renderujLiczniki() {
   for (const [klucz, wartosc] of [
     ['inbox', stan.liczniki.inbox],
+    ['scheduled', stan.liczniki.scheduled],
     ['drafts', stan.liczniki.drafts],
     ['spam', stan.liczniki.spam],
   ]) {
@@ -154,9 +157,10 @@ function renderujListe() {
 }
 
 function zbudujWiersz(w) {
-  const wysylkowy = stan.folder === 'sent' || stan.folder === 'drafts';
-  const kto = wysylkowy ? `Do: ${w.to_addr || '(bez adresata)'}` : w.from_name || w.from_addr;
+  const wysylkowy = ['sent', 'drafts', 'scheduled'].includes(stan.folder);
+  const kto = wysylkowy ? `Do: ${w.to_addr || w.cc_addr || '(bez adresata)'}` : w.from_name || w.from_addr;
   const kolorAdres = wysylkowy ? w.to_addr : w.from_addr;
+  const czas = stan.folder === 'scheduled' && w.scheduled_at ? w.scheduled_at : w.sent_at;
 
   const gwiazdka = el(
     'span',
@@ -190,7 +194,7 @@ function zbudujWiersz(w) {
       el('span', { class: 'w-od' }, kto),
       w.is_priority ? el('span', { class: 'w-chip' }, 'PRIORYTET') : null
     ),
-    el('span', { class: 'w-czas' }, krotkiCzas(w.sent_at)),
+    el('span', { class: 'w-czas' }, krotkiCzas(czas)),
     el(
       'span',
       { class: 'w-dol' },
@@ -290,50 +294,75 @@ function renderujCzytnik() {
     w.is_priority ? el('span', { class: 'cz-chip' }, 'PRIORYTET') : null
   );
 
+  const kto = el(
+    'div',
+    { class: 'cz-kto' },
+    el('div', { class: 'cz-od' }, w.from_name || w.from_addr, el('small', {}, `<${w.from_addr}>`)),
+    el('div', { class: 'cz-do' }, `Do: ${w.to_addr || stan.user.address}`)
+  );
+  if (w.cc_addr) kto.append(el('div', { class: 'cz-do' }, `DW: ${w.cc_addr}`));
+  if (w.bcc_addr) kto.append(el('div', { class: 'cz-do' }, `UDW: ${w.bcc_addr}`));
+
   const meta = el(
     'div',
     { class: 'cz-meta' },
     el('span', { class: 'aw', style: `background:${kolorAwatara(w.from_addr)}` }, inicjaly(w.from_name, w.from_addr)),
-    el(
-      'div',
-      { class: 'cz-kto' },
-      el('div', { class: 'cz-od' }, w.from_name || w.from_addr, el('small', {}, `<${w.from_addr}>`)),
-      el('div', { class: 'cz-do' }, `Do: ${w.to_addr || stan.user.address}`)
-    ),
+    kto,
     el('div', { class: 'cz-data' }, pelnaData(w.sent_at))
   );
 
+  const zaplanowana = w.folder === 'scheduled';
   const akcje = el('div', { class: 'cz-akcje' });
-  akcje.append(
-    przyciskAkcji('Odpowiedz', 'reply', () => odpowiedz(), { glowny: true }),
-    przyciskAkcji('Przekaż', 'forward', () => przekaz())
-  );
-  if (w.folder === 'trash') {
+  if (zaplanowana) {
     akcje.append(
-      przyciskAkcji('Przywróć', 'inbox', () => przeniesOtwarta('inbox', 'Przywrócono do Odebranych')),
-      przyciskAkcji('Usuń trwale', 'trash', () => doKoszaOtwarta())
-    );
-  } else {
-    if (w.folder === 'spam') {
-      akcje.append(przyciskAkcji('To nie spam', 'inbox', () => przeniesOtwarta('inbox', 'Przeniesiono do Odebranych')));
-    }
-    akcje.append(
-      ikonaAkcji('Archiwizuj (e)', 'archive', () => archiwizujOtwarta()),
-      ikonaAkcji(w.is_starred ? 'Zdejmij gwiazdkę (s)' : 'Gwiazdka (s)', 'star', () => gwiazdkaOtwarta(), {
-        aktywna: !!w.is_starred,
-      }),
-      ikonaAkcji('Oznacz jako nieprzeczytane (u)', 'unread', () => nieprzeczytanaOtwarta()),
+      przyciskAkcji('Anuluj wysyłkę', 'draft', () => anulujZaplanowana(), { glowny: true }),
       ikonaAkcji('Do kosza (#)', 'trash', () => doKoszaOtwarta())
     );
-    if (w.folder !== 'spam' && w.folder !== 'sent') {
-      akcje.append(ikonaAkcji('Zgłoś spam', 'spam', () => przeniesOtwarta('spam', 'Oznaczono jako spam')));
+  } else {
+    akcje.append(
+      przyciskAkcji('Odpowiedz', 'reply', () => odpowiedz(), { glowny: true }),
+      przyciskAkcji('Przekaż', 'forward', () => przekaz())
+    );
+    if (w.folder === 'trash') {
+      akcje.append(
+        przyciskAkcji('Przywróć', 'inbox', () => przeniesOtwarta('inbox', 'Przywrócono do Odebranych')),
+        przyciskAkcji('Usuń trwale', 'trash', () => doKoszaOtwarta())
+      );
+    } else {
+      if (w.folder === 'spam') {
+        akcje.append(przyciskAkcji('To nie spam', 'inbox', () => przeniesOtwarta('inbox', 'Przeniesiono do Odebranych')));
+      }
+      akcje.append(
+        ikonaAkcji('Archiwizuj (e)', 'archive', () => archiwizujOtwarta()),
+        ikonaAkcji(w.is_starred ? 'Zdejmij gwiazdkę (s)' : 'Gwiazdka (s)', 'star', () => gwiazdkaOtwarta(), {
+          aktywna: !!w.is_starred,
+        }),
+        ikonaAkcji('Oznacz jako nieprzeczytane (u)', 'unread', () => nieprzeczytanaOtwarta()),
+        ikonaAkcji('Do kosza (#)', 'trash', () => doKoszaOtwarta())
+      );
+      if (w.folder !== 'spam' && w.folder !== 'sent') {
+        akcje.append(ikonaAkcji('Zgłoś spam', 'spam', () => przeniesOtwarta('spam', 'Oznaczono jako spam')));
+      }
     }
   }
+  akcje.append(ikonaAkcji('Drukuj', 'print', () => window.print()));
 
   const body = el('div', { class: 'cz-body' });
-  wstawTrescZLinkami(body, w.body);
+  if (w.body_html) body.innerHTML = sanitizeHtml(w.body_html);
+  else wstawTrescZLinkami(body, w.body);
 
-  czytnikEl.append(powrot, naglowek, meta, akcje, body);
+  czytnikEl.append(powrot, naglowek, meta);
+  if (zaplanowana && w.scheduled_at) {
+    czytnikEl.append(
+      el(
+        'div',
+        { class: 'cz-zaplanowana' },
+        ikona('clock'),
+        `Zaplanowano nadanie: ${pelnaData(w.scheduled_at)}`
+      )
+    );
+  }
+  czytnikEl.append(akcje, body);
 
   if (stan.zalacznikiOtwartej.length) {
     const lista = el('div', { class: 'cz-zalaczniki-lista' });
@@ -413,6 +442,21 @@ async function przeniesOtwarta(folder, komunikat) {
 function archiwizujOtwarta() {
   if (!stan.otwarta || stan.otwarta.folder === 'archive') return;
   przeniesOtwarta('archive', 'Zarchiwizowano');
+}
+
+// Anulowana wysyłka wraca do wersji roboczych i od razu otwiera się do edycji.
+async function anulujZaplanowana() {
+  const w = stan.otwarta;
+  if (!w) return;
+  try {
+    const { message } = await api.zmien(w.id, { folder: 'drafts' });
+    toast('Wysyłka anulowana. List wrócił do wersji roboczych', { ikonaNazwa: 'draft' });
+    usunZListy(w.id, { zaznaczNastepna: false });
+    odswiezLiczniki();
+    kompozycja.otworz({ draft: message });
+  } catch (blad) {
+    toast(blad.message, { blad: true });
+  }
 }
 
 function gwiazdkaOtwarta() {

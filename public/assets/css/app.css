@@ -756,8 +756,8 @@ body.app {
   z-index: 40;
   display: flex;
   flex-direction: column;
-  width: min(540px, calc(100vw - 48px));
-  max-height: min(640px, 82dvh);
+  width: min(640px, calc(100vw - 48px));
+  max-height: min(700px, 86dvh);
   background: var(--papier);
   border: 1px solid var(--linia-2);
   border-bottom: none;
@@ -832,18 +832,177 @@ body.app {
   outline: none;
 }
 
-.kompozycja-formularz textarea {
-  flex: 1;
-  min-height: 220px;
-  padding: 0.9rem 1.1rem;
+/* --- Pasek formatowania i edytor treści ------------------------------------ */
+
+.kompozycja-narzedzia {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 0.3rem 0.8rem;
+  border-bottom: 1px solid var(--linia);
+  background: var(--papier-2);
+}
+
+.narz-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   font: inherit;
+  font-size: 0.82rem;
+  color: var(--atrament-2);
+  background: none;
+  border: none;
+  border-radius: var(--r-s);
+  cursor: pointer;
+  transition: background var(--przejscie), color var(--przejscie);
+}
+
+.narz-btn:hover {
+  background: var(--papier-3);
+  color: var(--atrament);
+}
+
+.narz-btn.aktywna {
+  background: var(--koperta-tlo);
+  color: var(--polecony);
+}
+
+.narz-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.narz-kolor {
+  font-weight: 700;
+  border-bottom: 3px solid var(--polecony);
+  line-height: 1.1;
+}
+
+.narz-przerwa {
+  width: 1px;
+  height: 18px;
+  margin-inline: 0.3rem;
+  background: var(--linia-2);
+}
+
+.narz-select {
+  max-width: 120px;
+  padding: 0.2em 0.3em;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--atrament-2);
+  background: none;
+  border: none;
+  border-radius: var(--r-s);
+  cursor: pointer;
+}
+
+.narz-select:hover {
+  background: var(--papier-3);
+}
+
+.kompozycja-edytor {
+  flex: 1;
+  min-height: 200px;
+  padding: 0.9rem 1.1rem;
   font-size: 0.94rem;
   line-height: 1.65;
   color: var(--atrament);
-  background: none;
-  border: none;
+  overflow-y: auto;
   outline: none;
-  resize: none;
+  word-wrap: break-word;
+}
+
+.kompozycja-edytor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--stempel);
+  pointer-events: none;
+}
+
+.kompozycja-edytor img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--r-s);
+}
+
+.kompozycja-edytor blockquote,
+.cz-body blockquote {
+  margin: 0.5em 0;
+  padding: 0.1em 0 0.1em 0.9em;
+  border-left: 3px solid var(--linia-2);
+  color: var(--atrament-2);
+}
+
+.kompozycja-edytor ul, .kompozycja-edytor ol,
+.cz-body ul, .cz-body ol {
+  margin: 0.4em 0;
+  padding-left: 1.6em;
+}
+
+.cz-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--r-s);
+}
+
+/* Dymki paska: paleta kolorów i pole na adres odnośnika. */
+.edytor-dymek {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 2.1rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--papier);
+  border: 1px solid var(--linia-2);
+  border-radius: var(--r-m);
+  box-shadow: var(--cien-2);
+}
+
+.edytor-probka {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--papier);
+  outline: 1px solid var(--linia-2);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.edytor-probka:hover {
+  transform: scale(1.12);
+}
+
+.edytor-dymek-input {
+  width: 220px;
+  padding: 0.35em 0.55em;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--atrament);
+  background: var(--papier-2);
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-s);
+  outline: none;
+}
+
+.edytor-dymek-input:focus {
+  border-color: var(--priorytet);
+}
+
+.edytor-dymek-btn {
+  padding: 0.35em 0.8em;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 640;
+  color: #fff;
+  background: var(--polecony);
+  border: none;
+  border-radius: var(--r-s);
+  cursor: pointer;
 }
 
 .kompozycja-zalaczniki {
@@ -960,6 +1119,183 @@ body.app {
 
 .kompozycja-odrzuc {
   margin-left: auto;
+}
+
+/* --- Od / DW / UDW ----------------------------------------------------------- */
+
+.kompozycja-pole select {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45em 0;
+  font: inherit;
+  font-size: 0.92rem;
+  color: var(--atrament);
+  background: none;
+  border: none;
+  outline: none;
+  cursor: pointer;
+}
+
+.kompozycja-przelaczniki {
+  display: flex;
+  gap: 0.2rem;
+  width: auto;
+  flex-shrink: 0;
+}
+
+.kompozycja-przelaczniki button {
+  padding: 0.2em 0.5em;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--stempel);
+  background: none;
+  border: none;
+  border-radius: var(--r-s);
+  cursor: pointer;
+}
+
+.kompozycja-przelaczniki button:hover {
+  background: var(--papier-2);
+  color: var(--atrament);
+}
+
+/* --- „Nadaj później" ---------------------------------------------------------- */
+
+.btn-pozniej {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 38px;
+  padding: 0;
+  color: var(--polecony);
+  background: none;
+  border: 1.5px solid var(--polecony);
+  border-radius: var(--r-m);
+  cursor: pointer;
+  transition: background var(--przejscie), color var(--przejscie);
+}
+
+.btn-pozniej:hover {
+  background: var(--koperta-tlo);
+}
+
+.btn-pozniej svg {
+  width: 18px;
+  height: 18px;
+}
+
+.nadaj-pozniej {
+  position: absolute;
+  left: 1rem;
+  bottom: 4.2rem;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: min(320px, calc(100% - 2rem));
+  padding: 0.9rem 1rem 1rem;
+  background: var(--papier);
+  border: 1px solid var(--linia-2);
+  border-radius: var(--r-m);
+  box-shadow: var(--cien-3);
+}
+
+.nadaj-presety {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nadaj-preset {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.45em 0.6em;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--atrament);
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: var(--r-s);
+  cursor: pointer;
+}
+
+.nadaj-preset:hover {
+  background: var(--koperta-tlo);
+}
+
+.nadaj-preset small {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--stempel);
+  white-space: nowrap;
+}
+
+.nadaj-wlasny {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--linia);
+}
+
+.nadaj-wlasny input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4em 0.55em;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--atrament);
+  background: var(--papier-2);
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-s);
+  outline: none;
+}
+
+.nadaj-wlasny input:focus {
+  border-color: var(--priorytet);
+}
+
+.nadaj-zatwierdz {
+  padding: 0.4em 0.9em;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 640;
+  color: #fff;
+  background: var(--polecony);
+  border: none;
+  border-radius: var(--r-s);
+  cursor: pointer;
+}
+
+.nadaj-zatwierdz:hover {
+  background: var(--polecony-ciemny);
+}
+
+/* --- Baner zaplanowanej wiadomości w czytniku ---------------------------------- */
+
+.cz-zaplanowana {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.9rem 0 0;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.88rem;
+  color: var(--atrament);
+  background: var(--koperta-tlo);
+  border: 1px dashed var(--polecony);
+  border-radius: var(--r-m);
+}
+
+.cz-zaplanowana svg {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  color: var(--polecony);
 }
 
 .kompozycja-stempel {
@@ -1501,5 +1837,45 @@ body.app {
     flex-basis: 100%;
     padding-left: calc(40px + 0.8rem);
     text-align: left;
+  }
+}
+
+/* --- Druk: na papier idzie sama otwarta wiadomość ------------------------- */
+
+@media print {
+  body.app {
+    display: block;
+    height: auto;
+    overflow: visible;
+    background: #fff;
+  }
+
+  .pasek, .boczny, .zaslona, .lista, .kompozycja, .toast-strefa, dialog,
+  .cz-powrot, .cz-akcje, .czytnik-puste, .cz-meta .aw {
+    display: none !important;
+  }
+
+  .uklad {
+    display: block;
+  }
+
+  .czytnik {
+    overflow: visible;
+    background: #fff;
+  }
+
+  .czytnik-tresc {
+    max-width: none;
+    padding: 0;
+  }
+
+  /* Nocna sortownia nie może wyjechać na papier jasnym atramentem. */
+  .czytnik-tresc, .czytnik-tresc * {
+    color: #000 !important;
+    background: none !important;
+  }
+
+  .cz-body a {
+    text-decoration: underline;
   }
 }
