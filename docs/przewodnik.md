@@ -35,6 +35,19 @@ widok, a foldery chowają się pod ikoną menu.
 | Spam           | Zgłoszone albo złapane jako niechciane. |
 | Kosz           | Usunięte. Kolejne skasowanie usuwa trwale. |
 
+**Własne foldery.** Pod wbudowanymi w panelu bocznym jest „Nowy folder".
+Foldery są płaskie: bez podfolderów, bo przy kilkunastu teczkach drzewo
+bardziej przeszkadza, niż pomaga. Kolejność wyznacza czas utworzenia.
+
+Wiadomość przenosisz ikoną teczki w otwartym liście. Leży dokładnie w jednym
+miejscu, więc znika z Odebranych. Toast pozwala cofnąć przeniesienie.
+
+Nazwa nie może udawać folderu wbudowanego i nie rozróżnia wielkości liter:
+„Faktury" i „faktury" to ten sam folder.
+
+**Usunięcie folderu nie kasuje poczty.** Wiadomości trafiają do Archiwum,
+a okno potwierdzenia mówi, ile ich jest.
+
 ### Pisanie wiadomości
 
 Kliknij **Napisz** (albo naciśnij `c`). Okno kompozycji pojawia się w prawym

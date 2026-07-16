@@ -38,6 +38,7 @@ budowania. `node server/index.js` to całe wdrożenie.
 | `db.js`         | Schemat SQLite i połączenie (WAL, `foreign_keys=ON`). Lekkie migracje przez `ensureColumn`. `openDb` (plik) i `openMemoryDb` (testy). |
 | `auth.js`       | scrypt + sól, `timingSafeEqual`, sesje w cookie `httpOnly`/`SameSite=Lax`, limit prób logowania (5 / 15 min na parę IP+login). |
 | `mail.js`       | Logika domenowa: foldery, doręczanie wewnętrzne, wyszukiwanie, wersje robocze, zaplanowana wysyłka (`fireScheduled`), przesyłanie dalej (`forwardDelivered`), cykl życia wiadomości, doręczanie przychodzące (`deliverInbound`) i zlecanie wysyłki na zewnątrz. |
+| `folders.js`    | Logika folderów własnych: CRUD, walidacja nazw, usuwanie z przeniesieniem do Archiwum. |
 | `api.js`        | Handlery HTTP: walidacja wejścia, strażnik sesji, warstwa JSON, odczyt ciała z limitami. |
 | `seed.js`       | Konta i wiadomości demonstracyjne (pomijane przy `TP_SEED=0`), treść listu powitalnego. |
 | `attachments.js`| Załączniki: bloby adresowane sha256 (deduplikacja treści), tokeny uploadu (jednorazowe, 24 h), odśmiecanie osieroconych blobów. |
@@ -65,9 +66,11 @@ users(id, login·UNIQUE, name, password_hash, signature, theme, created_at,
       is_admin, is_blocked, quota_mb·NULL, last_login_at, alias_limit,
       forward_to, forward_keep)
 sessions(id, user_id→users, expires_at, created_at)
-messages(id, owner_id→users, folder, from_name, from_addr, to_addr, cc_addr,
-         bcc_addr, subject, body, body_html, snippet, is_read, is_starred,
-         is_priority, attachments_count, sent_at, scheduled_at)
+messages(id, owner_id→users, folder, folder_id→folders·NULL, from_name,
+         from_addr, to_addr, cc_addr, bcc_addr, subject, body, body_html,
+         snippet, is_read, is_starred, is_priority, attachments_count,
+         sent_at, scheduled_at)
+folders(id, user_id→users, name, position, created_at)
 aliases(id, user_id→users, alias·UNIQUE, created_at)
 blobs(hash·PK, data·BLOB, size)
 attachments(id, message_id→messages, filename, mime, size, blob_hash→blobs)
@@ -75,6 +78,13 @@ uploads(token·PK, user_id→users, filename, mime, size, blob_hash, created_at)
 settings(key·PK, value)
 audit_log(id, actor_login, action, target, details, ip, created_at)
 ```
+
+Folder własny wpina się do wiadomości przez `folder_id`, a `'custom'` w
+kolumnie `folder` to wartownik: znaczy „to jest folder własny", nie
+wbudowany. Niezmiennik trzyma się dla każdego wiersza:
+**`folder_id IS NOT NULL` ⟺ `folder='custom'`**. Nazwa folderu jest unikalna
+w obrębie konta (`UNIQUE(user_id, name)`), a wielkość liter składa kod
+aplikacji, bo NOCASE w SQLite zna tylko ASCII.
 
 `body` trzyma zawsze wersję tekstową (z niej powstaje `snippet` i po niej
 szuka wyszukiwarka), `body_html` opcjonalną bogatą. `bcc_addr` wypełnia się
@@ -134,6 +144,7 @@ Bez frameworka i bez budowania. Cztery strony (strona główna `index.html`,
   - `kompozycja.js`: okno pisania, DW/UDW, nadawca z aliasu, autozapis i odrzucanie wersji roboczych, upload załączników, planowanie wysyłki, stempel,
   - `edytor.js`: pasek formatowania nad `contenteditable` i czyszczenie HTML po liście dozwolonych znaczników (przy zapisie i przy renderze),
   - `skroty.js`: skróty klawiszowe i paleta poleceń,
+  - `foldery.js`: panel boczny, okna folderu i przenoszenia,
   - `main.js`: rdzeń, czyli stan, foldery, lista, czytnik, ustawienia i spinanie całości.
 - `assets/js/admin/`: panel administratora (osobna strona, hash-routing jak
   w apce, reuse `ui.js` i tokenów): `main.js` (strażnik roli, nawigacja),
@@ -154,12 +165,14 @@ każdy endpoint wymaga sesji.
 | `GET /api/config`                        | domena i czy rejestracja otwarta (publiczne) |
 | `POST /api/register` · `login` · `logout`| konto i sesja |
 | `GET` / `PATCH /api/me`                  | profil (imię, podpis, motyw) |
-| `GET /api/messages?folder=&q=`           | lista + liczniki |
+| `GET /api/messages?folder=&folderId=&q=` | lista + liczniki |
 | `GET /api/messages/:id`                  | treść (oznacza przeczytane) + załączniki |
 | `POST /api/messages`                     | wyślij (od razu albo z `scheduledAt`) lub zapisz wersję roboczą |
-| `PATCH /api/messages/:id`                | `is_read` / `is_starred` / `folder` |
+| `PATCH /api/messages/:id`                | `is_read` / `is_starred` / `folder` / `folder_id` |
 | `DELETE /api/messages/:id`               | do kosza, a z kosza trwale |
 | `GET /api/counts`                        | nieprzeczytane per folder |
+| `GET` / `POST /api/folders`              | lista folderów własnych · utwórz folder |
+| `PATCH` / `DELETE /api/folders/:id`      | zmień nazwę · usuń (poczta trafia do Archiwum) |
 | `GET` / `POST /api/aliases` · `DELETE …/:id` | aliasy |
 | `GET` / `PUT /api/forwarding`            | przesyłanie dalej (`to`, `keepCopy`) |
 | `POST /api/uploads`                      | wgraj załącznik (surowe ciało + nagłówki) |
@@ -201,7 +214,7 @@ Trasy panelu administratora (`/api/admin/*`) wymagają dodatkowo roli
 
 ## Testy
 
-`npm test` uruchamia 265 testów na `node:test` (baza w pamięci, zero
+`npm test` uruchamia 328 testów na `node:test` (baza w pamięci, zero
 instalacji); `npm run test:coverage` dolicza raport pokrycia linii i gałęzi.
 
 - Scenariusze przekrojowe: `tests/api.test.js` (pełen obieg REST: konta,
@@ -210,7 +223,7 @@ instalacji); `npm run test:coverage` dolicza raport pokrycia linii i gałęzi.
   odbicia, ochrona przed relayem) i `tests/admin.test.js` (panel: strażnik
   roli, konta, blokady, ustawienia, broadcast, DKIM, weryfikacja DNS
   na fałszywym resolverze).
-- Testy jednostkowe per moduł: `auth`, `mail`, `mime`, `attachments`,
+- Testy jednostkowe per moduł: `auth`, `mail`, `folders`, `mime`, `attachments`,
   `router`, `static`, `db`, `smtp-in`, `smtp-out`, `dkim-init`, `api.extra`,
   `index`, `settings`, `audit`, `quota`, `dns-check`. Każdy test dostaje
   świeżą bazę w pamięci, więc nic nie współdzieli z pozostałymi.
