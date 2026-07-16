@@ -100,9 +100,20 @@ export async function createApp({ dataDir, db, dnsResolver } = {}) {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
+function katalogDanychCli(przyklad) {
+  const katalog = process.env.TP_DATA_DIR ?? path.join(ROOT, 'data');
+  if (!existsSync(path.join(katalog, 'twojapoczta.db'))) {
+    console.error(`Nie ma bazy w katalogu ${katalog}.`);
+    console.error('Wskaż katalog danych zmienną TP_DATA_DIR, na przykład:');
+    console.error(`  sudo -u poczta env TP_DATA_DIR=/var/lib/twojapoczta node server/index.js ${przyklad}`);
+    process.exit(1);
+  }
+  return katalog;
+}
+
 // `npm run dkim`: przygotuj klucz i wydrukuj rekord TXT do DNS.
 if (isMain && process.argv.includes('--dkim')) {
-  const { wygenerowano, plik } = initDkim(process.env.TP_DATA_DIR ?? path.join(ROOT, 'data'), { domain: DOMAIN });
+  const { wygenerowano, plik } = initDkim(katalogDanychCli('--dkim'), { domain: DOMAIN });
   const rekord = dnsRecord();
   console.log('');
   console.log(wygenerowano ? '  Wygenerowano nowy klucz DKIM:' : '  Klucz DKIM już istnieje:');
@@ -122,17 +133,7 @@ if (isMain && process.argv.includes('--admin')) {
     console.error('Użycie: node server/index.js --admin <login>');
     process.exit(1);
   }
-  const katalogDanych = process.env.TP_DATA_DIR ?? path.join(ROOT, 'data');
-  // openDb zakłada katalog i schemat, więc bez tej kontroli polecenie uruchomione
-  // bez TP_DATA_DIR (a na wdrożeniu zmienna siedzi tylko w unicie systemd) tworzy
-  // obok kodu pustą bazę i melduje „nie znaleziono konta" o koncie, które ma się
-  // dobrze w tej właściwej. Lepiej powiedzieć wprost, w co celujemy.
-  if (!existsSync(path.join(katalogDanych, 'twojapoczta.db'))) {
-    console.error(`Nie ma bazy w katalogu ${katalogDanych}.`);
-    console.error('Wskaż katalog danych zmienną TP_DATA_DIR, na przykład:');
-    console.error(`  sudo -u poczta env TP_DATA_DIR=/var/lib/twojapoczta node server/index.js --admin ${login}`);
-    process.exit(1);
-  }
+  const katalogDanych = katalogDanychCli(`--admin ${login}`);
   const db = openDb(katalogDanych);
   const nadano = grantAdmin(db, login);
   db.close();

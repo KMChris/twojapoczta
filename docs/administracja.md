@@ -65,6 +65,10 @@ Tabela wszystkich kont z filtrem. Kliknięcie wiersza otwiera kartę konta:
 
 - **DKIM**: generowanie klucza jednym przyciskiem (odpowiednik
   `npm run dkim`), rekord TXT do skopiowania, rotacja przez nowy selektor.
+  Przycisk zawsze trafia w katalog danych działającego serwera. Z konsoli
+  trzeba wskazać ten katalog wprost przez `TP_DATA_DIR`, tak samo jak przy
+  `--admin`; samo `npm run dkim` celuje obok kodu i polecenie to odmówi,
+  zamiast wypisać rekord dla klucza, którym nikt nie podpisuje.
 - **Weryfikacja DNS**: żywe sprawdzenie rekordów MX, A, SPF, DKIM i DMARC.
   Panel porównuje stan w DNS z oczekiwanym i pokazuje różnice
   („Zgodny" / „Brak rekordu" / „Niezgodny" z zastaną wartością).

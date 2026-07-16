@@ -78,11 +78,33 @@ test('createApp z TP_EXTERNAL=1 i katalogiem danych inicjuje DKIM', async () => 
 test('CLI `--dkim` generuje klucz i wypisuje rekord DNS', async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'tp-cli-dkim-'));
   try {
+    openDb(dir).close(); // baza = katalog należy do prawdziwego serwera
     const { stdout } = await execFileP(process.execPath, [indexPath, '--dkim'], {
       env: { ...process.env, TP_DATA_DIR: dir },
     });
     assert.match(stdout, /v=DKIM1; k=rsa; p=/);
     assert.match(stdout, /_domainkey\.twojapoczta\.com/);
+    assert.ok(existsSync(path.join(dir, 'dkim', 'tp1.pem')), 'klucz powstaje przy pierwszym użyciu');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('CLI `--dkim` odmawia i nie generuje klucza, gdy katalog danych jest pusty', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'tp-cli-dkim-pusty-'));
+  try {
+    const blad = await execFileP(process.execPath, [indexPath, '--dkim'], {
+      env: { ...process.env, TP_DATA_DIR: dir },
+    }).then(
+      () => null,
+      (e) => e
+    );
+
+    assert.ok(blad, 'polecenie kończy się błędem, a nie sukcesem');
+    assert.equal(blad.code, 1);
+    assert.match(blad.stderr, /TP_DATA_DIR/, 'podpowiada, czym wskazać katalog danych');
+    assert.ok(!existsSync(path.join(dir, 'dkim')), 'nie generuje klucza w źle wskazanym katalogu');
+    assert.doesNotMatch(blad.stdout, /v=DKIM1/, 'nie drukuje rekordu do opublikowania');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
