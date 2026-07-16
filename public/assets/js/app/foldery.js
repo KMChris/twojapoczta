@@ -11,6 +11,8 @@ const tytulOkna = document.querySelector('[data-folder-tytul]');
 const opisOkna = document.querySelector('[data-folder-opis]');
 const przyciskZapisz = document.querySelector('[data-folder-zapisz]');
 const przyciskUsun = document.querySelector('[data-akcja="usun-folder"]');
+const przeniesOkno = document.querySelector('[data-przenies-okno]');
+const przeniesLista = document.querySelector('[data-przenies-lista]');
 
 export function initFoldery(app) {
   // edytowany === null znaczy „okno tworzy nowy folder".
@@ -139,7 +141,58 @@ export function initFoldery(app) {
 
   document.querySelector('[data-akcja="nowy-folder"]').addEventListener('click', otworzNowy);
 
-  return { odswiez, renderuj, nazwa, foldery: () => stan.foldery, otworzNowy };
+  // Zwraca id wybranego folderu albo null. pomijId wycina folder, w którym
+  // wiadomość już leży — przenoszenie do samego siebie nie ma sensu.
+  function wybierzFolder(pomijId = null) {
+    return new Promise((rozwiaz) => {
+      // Okno zamyka się też Esc i kliknięciem w tło, więc wynik zbieramy
+      // w zdarzeniu 'close', a nie w onclick pozycji.
+      let wybrany = null;
+      const dostepne = stan.foldery.filter((f) => f.id !== pomijId);
+      przeniesLista.replaceChildren();
+
+      if (!dostepne.length) {
+        przeniesLista.append(
+          el('p', { class: 'aliasy-brak' }, 'Nie masz jeszcze żadnego folderu.'),
+          el(
+            'button',
+            {
+              type: 'button',
+              class: 'btn-zapisz',
+              onclick: () => {
+                przeniesOkno.close();
+                otworzNowy();
+              },
+            },
+            'Utwórz folder'
+          )
+        );
+      }
+
+      for (const f of dostepne) {
+        przeniesLista.append(
+          el(
+            'button',
+            {
+              type: 'button',
+              class: 'przenies-pozycja',
+              onclick: () => {
+                wybrany = f.id;
+                przeniesOkno.close();
+              },
+            },
+            ikona('folder'),
+            el('span', {}, f.name)
+          )
+        );
+      }
+
+      przeniesOkno.addEventListener('close', () => rozwiaz(wybrany), { once: true });
+      przeniesOkno.showModal();
+    });
+  }
+
+  return { odswiez, renderuj, nazwa, foldery: () => stan.foldery, otworzNowy, wybierzFolder };
 }
 
 // Polska odmiana: 1 wiadomość, 2–4 wiadomości, 5+ wiadomości. Dopełniacz i tak

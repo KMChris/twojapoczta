@@ -358,6 +358,7 @@ function renderujCzytnik() {
       }
       akcje.append(
         ikonaAkcji('Archiwizuj (e)', 'archive', () => archiwizujOtwarta()),
+        ikonaAkcji('Przenieś do folderu', 'folder', () => przeniesDoFolderu()),
         ikonaAkcji(w.is_starred ? 'Zdejmij gwiazdkę (s)' : 'Gwiazdka (s)', 'star', () => gwiazdkaOtwarta(), {
           aktywna: !!w.is_starred,
         }),
@@ -450,13 +451,14 @@ async function przelaczGwiazdke(id) {
   }
 }
 
-// Cofnięcie przeniesienia: list wraca tam, skąd wyszedł.
-async function przywrocDoFolderu(id, folder) {
+// Cofnięcie przeniesienia: list wraca tam, skąd wyszedł — także do folderu własnego.
+async function przywrocDoFolderu(id, folder, folderId = null) {
   try {
-    await api.zmien(id, { folder });
+    await api.zmien(id, folderId ? { folder_id: folderId } : { folder });
     toast('Przywrócono', { ikonaNazwa: 'inbox' });
-    // Wrócił do folderu, który właśnie oglądamy, więc musi się znów pojawić na liście.
-    if (stan.folder === folder || stan.folder === 'starred') odswiezListe({ cicho: true });
+    const wrocilDoOgladanego =
+      folderId ? stan.folder === 'custom' && stan.folderId === folderId : stan.folder === folder;
+    if (wrocilDoOgladanego || stan.folder === 'starred') odswiezListe({ cicho: true });
     odswiezLiczniki();
   } catch (blad) {
     toast(blad.message, { blad: true });
@@ -467,9 +469,10 @@ async function przeniesOtwarta(folder, komunikat) {
   const w = stan.otwarta;
   if (!w) return;
   const skad = w.folder;
+  const skadId = w.folder_id ?? null;
   try {
     await api.zmien(w.id, { folder });
-    toast(komunikat, { ikonaNazwa: 'archive', cofnij: () => przywrocDoFolderu(w.id, skad) });
+    toast(komunikat, { ikonaNazwa: 'archive', cofnij: () => przywrocDoFolderu(w.id, skad, skadId) });
     usunZListy(w.id);
     odswiezLiczniki();
   } catch (blad) {
@@ -480,6 +483,26 @@ async function przeniesOtwarta(folder, komunikat) {
 function archiwizujOtwarta() {
   if (!stan.otwarta || stan.otwarta.folder === 'archive') return;
   przeniesOtwarta('archive', 'Zarchiwizowano');
+}
+
+async function przeniesDoFolderu() {
+  const w = stan.otwarta;
+  if (!w) return;
+  const cel = await foldery.wybierzFolder(w.folder_id ?? null);
+  if (!cel) return;
+  const skad = w.folder;
+  const skadId = w.folder_id ?? null;
+  try {
+    await api.zmien(w.id, { folder_id: cel });
+    toast(`Przeniesiono do „${foldery.nazwa(cel)}"`, {
+      ikonaNazwa: 'folder',
+      cofnij: () => przywrocDoFolderu(w.id, skad, skadId),
+    });
+    usunZListy(w.id);
+    odswiezLiczniki();
+  } catch (blad) {
+    toast(blad.message, { blad: true });
+  }
 }
 
 // Anulowana wysyłka wraca do wersji roboczych i od razu otwiera się do edycji.
@@ -505,12 +528,13 @@ async function doKoszaOtwarta() {
   const w = stan.otwarta;
   if (!w) return;
   const skad = w.folder;
+  const skadId = w.folder_id ?? null;
   try {
     const wynik = await api.usun(w.id);
     toast(wynik.purged ? 'Usunięto trwale' : 'Przeniesiono do kosza', {
       ikonaNazwa: 'trash',
       // Z kosza wiadomość znika bezpowrotnie, więc nie obiecujemy cofnięcia, którego nie ma.
-      cofnij: wynik.purged ? null : () => przywrocDoFolderu(w.id, skad),
+      cofnij: wynik.purged ? null : () => przywrocDoFolderu(w.id, skad, skadId),
     });
     usunZListy(w.id);
     odswiezLiczniki();
