@@ -15,6 +15,8 @@ Czas: ~30 minut. Poziom: podstawowa znajomość terminala i SSH.
 - **VPS**. Wystarczy najmniejszy: 1 vCPU, 512 MB RAM, parę GB dysku.
   Jeśli chcesz odbierać pocztę ze świata, upewnij się u dostawcy, że
   **port 25 nie jest blokowany** (część tanich VPS-ów blokuje go domyślnie).
+  Zaraz po wykupieniu sprawdź adres IP na czarnych listach, zanim cokolwiek
+  wdrożysz: [Dostarczalność i reputacja IP](#dostarczalność-i-reputacja-ip).
 - **Domena** z dostępem do edycji rekordów DNS.
 - Dostęp SSH z uprawnieniami `sudo`.
 
@@ -22,12 +24,19 @@ Czas: ~30 minut. Poziom: podstawowa znajomość terminala i SSH.
 
 Ustaw w panelu swojej domeny (TTL dowolny, np. 3600):
 
-| Typ | Nazwa               | Wartość                  | Po co                    |
-| --- | ------------------- | ------------------------ | ------------------------ |
-| A   | `twojadomena.pl`    | `203.0.113.10`           | strona i aplikacja       |
-| A   | `mx.twojadomena.pl` | `203.0.113.10`           | serwer pocztowy          |
-| MX  | `twojadomena.pl`    | `10 mx.twojadomena.pl`   | dokąd słać Twoją pocztę  |
-| TXT | `twojadomena.pl`    | `v=spf1 a mx -all`       | SPF: kto może nadawać    |
+| Typ | Nazwa                   | Wartość                  | Po co                     |
+| --- | ----------------------- | ------------------------ | ------------------------- |
+| A   | `twojadomena.pl`        | `203.0.113.10`           | strona i aplikacja        |
+| A   | `mx.twojadomena.pl`     | `203.0.113.10`           | serwer pocztowy           |
+| MX  | `twojadomena.pl`        | `10 mx.twojadomena.pl`   | dokąd słać Twoją pocztę   |
+| TXT | `twojadomena.pl`        | `v=spf1 a mx -all`       | SPF: kto może nadawać     |
+| TXT | `_dmarc.twojadomena.pl` | `v=DMARC1; p=quarantine` | DMARC: co z podszywaniem  |
+
+DMARC mówi odbiorcom, co zrobić z listem, który podaje się za Twoją domenę,
+a nie przechodzi kontroli: `p=quarantine` kieruje takiego do spamu. Rekord jest
+bezpieczny od pierwszego dnia, bo Twoje własne listy przechodzą już sam SPF (serwer
+nadaje z adresu z rekordów A i MX). Chcesz zbiorcze raporty, dopisz na końcu
+`; rua=mailto:postmaster@twojadomena.pl`.
 
 Rekord TXT dla DKIM dodasz w kroku 8 (najpierw serwer musi wygenerować klucz).
 
@@ -238,13 +247,30 @@ działać z kłódką.
 
 > Jeśli Twój dostawca blokuje wychodzący port 25, wysyłaj przez przekaźnik
 > SMTP (smarthost): `Environment=TP_SMTP_ROUTE=smtp.twoj-hosting.pl:25`.
+> Listy wychodzą wtedy z adresu przekaźnika, więc dopisz go do SPF (np.
+> `v=spf1 a mx include:twoj-hosting.pl -all`). Bez tego SPF przestaje się
+> zgadzać i całe DMARC wisi na samym DKIM.
 
-## Krok 9: konta
+## Krok 9: konta i administrator
 
 1. Wejdź na `https://twojadomena.pl/rejestracja` i załóż swoje konto.
    List powitalny już czeka w Odebranych.
-2. Załóż konta domownikom / zespołowi.
-3. Gdy komplet jest gotowy, **zamknij rejestrację**: dodaj do unitu
+2. Nadaj mu rolę administratora. To jedyny raz, kiedy trzeba sięgnąć do
+   konsoli: kolejnych adminów mianuje się już w panelu.
+
+   ```sh
+   cd /opt/twojapoczta
+   sudo -u poczta env TP_DATA_DIR=/var/lib/twojapoczta \
+     node server/index.js --admin twoj-login
+   ```
+
+   Katalog danych podajemy wprost, bo `TP_DATA_DIR` z unitu systemd nie jest
+   widoczny w Twojej powłoce. Od tej chwili `https://twojadomena.pl/admin`
+   daje konta, limity, weryfikację DNS i dziennik zdarzeń; opis w
+   [panelu administratora](administracja.md).
+3. Załóż konta domownikom lub zespołowi. Możesz już z panelu, działa to
+   także przy zamkniętej rejestracji.
+4. Gdy komplet jest gotowy, **zamknij rejestrację**: dodaj do unitu
    `Environment=TP_REGISTER=0` i zrestartuj usługę. Od tej pory nowych
    kont nie założy nikt z internetu.
 
@@ -291,11 +317,52 @@ sudo systemctl start twojapoczta
 ```sh
 cd /opt/twojapoczta
 sudo -u poczta git pull
-sudo -u poczta npm test        # 212 testów, zero zależności do instalowania
+sudo -u poczta npm test        # 331 testów, zero zależności do instalowania
 sudo systemctl restart twojapoczta
 ```
 
 Migracje schematu bazy wykonują się same przy starcie.
+
+## Dostarczalność i reputacja IP
+
+Poprawna technicznie poczta to dopiero połowa sprawy. O tym, czy list wyląduje
+w Odebranych, czy w spamie, decyduje też reputacja adresu IP, z którego
+nadajesz. Świeży serwer żadnej reputacji nie ma.
+
+**Licz się z tym, że na początku część listów trafi do spamu**, nawet przy
+komplecie SPF, DKIM, DMARC i PTR. To normalne i przejściowe, ale nie dzieje się
+samo: reputację buduje się ruchem, powoli.
+
+- Zaczynaj od małych ilości. Nagły wystrzał setek listów ze świeżego adresu
+  to dokładnie profil spamera i tak zostanie odczytany.
+- Odpowiedź odbiorcy to najsilniejszy sygnał dla filtrów. Pisz do ludzi,
+  którzy odpiszą, i poproś bliskich, żeby wyjęli pierwsze listy ze spamu
+  i oznaczyli nadawcę jako znanego.
+- Trzymaj PTR, SPF, DKIM i DMARC w zgodzie. Panel administratora ma żywą
+  weryfikację tych rekordów, więc nie musisz zgadywać.
+- Nie wysyłaj stąd niczego masowego. Reputację traci się w jeden wieczór,
+  a odbudowuje miesiącami.
+
+### Sprawdź adres IP, zanim się przywiążesz
+
+Adresy na tanich VPS-ach krążą po kolejnych najemcach i naprawdę zdarza się
+dostać taki po spamerze, z gotowym wpisem na czarnych listach. Sprawdź świeżo
+wykupiony adres od razu, odwracając jego oktety:
+
+```sh
+dig +short 10.113.0.203.zen.spamhaus.org
+# pusto = czysto · odpowiedź 127.0.0.x = adres jest na liście
+```
+
+> Pytaj z resolvera dostawcy albo własnego. Spamhaus nie odpowiada na zapytania
+> z publicznych resolverów (8.8.8.8, 1.1.1.1) i zwróci wtedy mylącą pustkę.
+> Prościej i pewniej: dowolny webowy „blacklist check".
+
+Jeśli adres jest na liście, **poproś dostawcę o inny, póki nic jeszcze nie
+wdrożyłeś**. To zajmuje minutę. Wyciąganie cudzego adresu z czarnej listy
+potrafi zająć tygodnie, część list wymaga przy tym historii czystego ruchu,
+której na nowym serwerze nie masz skąd wziąć, a bywa, że po prostu się nie
+udaje. Zmiana adresu na starcie jest nieporównanie tańsza.
 
 ## Rozwiązywanie problemów
 
@@ -305,7 +372,7 @@ Migracje schematu bazy wykonują się same przy starcie.
 | `EADDRINUSE` w logach | port 3000 zajęty | zmień `PORT` w unicie albo znajdź proces: `ss -ltnp \| grep 3000` |
 | `EACCES` przy porcie 25 | brak zdolności bind | sprawdź `AmbientCapabilities=CAP_NET_BIND_SERVICE` w unicie |
 | Maile ze świata nie dochodzą | MX/zapora/port 25 | `dig MX`, `ufw status`, `telnet mx.twojadomena.pl 25` z innej maszyny |
-| Wysłane maile lądują w spamie | brak PTR albo DKIM | ustaw PTR u dostawcy VPS; `dig TXT tp1._domainkey...`; ostatecznie smarthost |
+| Wysłane maile lądują w spamie | brak PTR albo DKIM, albo świeży adres bez reputacji | ustaw PTR u dostawcy VPS; `dig TXT tp1._domainkey...`; [Dostarczalność](#dostarczalność-i-reputacja-ip); ostatecznie smarthost |
 | „Zwrot do nadawcy" w Odebranych | odbiorca odrzucił / port 25 out zablokowany | powód jest w treści odbicia; rozważ `TP_SMTP_ROUTE` |
 | Po wejściu na stronę brak stylów | proxy tnie ścieżki `/assets` | proxy ma przekazywać cały ruch `/` bez wyjątków |
 | Rejestracja zwraca 403 | `TP_REGISTER=0` | tak ma być; konta zakłada się przy otwartej rejestracji |
@@ -316,9 +383,11 @@ Migracje schematu bazy wykonują się same przy starcie.
 - [ ] `https://twojadomena.pl` działa z ważnym certyfikatem
 - [ ] `TP_SEED=0` ustawione (brak konta demo)
 - [ ] własne konto założone, list powitalny odebrany
+- [ ] własne konto ma rolę administratora, `/admin` się otwiera
 - [ ] `TP_REGISTER=0` po założeniu wszystkich kont
-- [ ] `dig MX` i `dig TXT` (SPF + DKIM) zwracają poprawne rekordy
+- [ ] `dig MX` i `dig TXT` (SPF + DKIM + DMARC) zwracają poprawne rekordy
 - [ ] PTR ustawiony u dostawcy VPS
+- [ ] adres IP sprawdzony na czarnych listach
 - [ ] test z Gmailem: odbiór działa, `SPF: PASS`, `DKIM: PASS`
 - [ ] cron z kopią zapasową + kopia katalogu `dkim/`
 

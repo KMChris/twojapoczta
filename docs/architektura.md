@@ -22,7 +22,7 @@ budowania. `node server/index.js` to całe wdrożenie.
                                       ▼
                           node:sqlite (db.js)  ── data/twojapoczta.db
                                       ▲
-   wysyłka na       ┌────────────────┴──────────────┐
+   wysyłka na       ┌─────────────────┴─────────────┐
    zewnątrz    ◄──  │ smtp-out.js (MX, STARTTLS)    │
                     │   └─ dkim.js (podpis)         │
                     └───────────────────────────────┘
@@ -214,7 +214,7 @@ Trasy panelu administratora (`/api/admin/*`) wymagają dodatkowo roli
 
 ## Testy
 
-`npm test` uruchamia 328 testów na `node:test` (baza w pamięci, zero
+`npm test` uruchamia 331 testów na `node:test` (baza w pamięci, zero
 instalacji); `npm run test:coverage` dolicza raport pokrycia linii i gałęzi.
 
 - Scenariusze przekrojowe: `tests/api.test.js` (pełen obieg REST: konta,

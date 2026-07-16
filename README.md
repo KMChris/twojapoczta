@@ -142,7 +142,7 @@ sqlite3 /var/lib/twojapoczta/twojapoczta.db ".backup kopia-$(date +%F).db"
 
 ```sh
 npm run dev             # restart przy zmianach (node --watch)
-npm test                # 212 testów (node:test, baza w pamięci, zero instalacji)
+npm test                # 331 testów (node:test, baza w pamięci, zero instalacji)
 npm run test:coverage   # to samo + raport pokrycia linii i gałęzi
 ```
 
