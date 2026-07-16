@@ -240,3 +240,76 @@ test('pobranie nieistniejącego załącznika → 404', async () => {
   const res = await api.rawBody('GET', '/api/messages/1/attachments/999999');
   assert.equal(res.status, 404);
 });
+
+// --- Foldery ------------------------------------------------------------------
+
+test('foldery: pełny obieg tras', async () => {
+  const ala = client();
+  await ala('POST', '/api/register', { login: 'folderowa', name: 'Ala Folderowa', password: 'haslo1234' });
+
+  assert.deepEqual((await ala('GET', '/api/folders')).data.folders, []);
+
+  const utworzony = await ala('POST', '/api/folders', { name: 'Faktury' });
+  assert.equal(utworzony.status, 201);
+  const id = utworzony.data.folder.id;
+  // Kształt, na którym opiera się panel boczny i okno usuwania.
+  assert.deepEqual(Object.keys(utworzony.data.folders[0]).sort(), ['count', 'id', 'name', 'position']);
+
+  const kolizja = await ala('POST', '/api/folders', { name: 'faktury' });
+  assert.equal(kolizja.status, 400);
+  assert.match(kolizja.data.error, /Masz już folder/);
+
+  assert.equal((await ala('POST', '/api/folders', { name: '  ' })).status, 400);
+  assert.equal((await ala('POST', '/api/folders', { name: 123 })).status, 400);
+
+  const zmiana = await ala('PATCH', `/api/folders/${id}`, { name: 'Rachunki' });
+  assert.equal(zmiana.status, 200);
+  assert.equal(zmiana.data.folder.name, 'Rachunki');
+
+  assert.equal((await ala('PATCH', '/api/folders/9999', { name: 'X' })).status, 404);
+  assert.equal((await ala('DELETE', '/api/folders/9999')).status, 404);
+
+  const usuniety = await ala('DELETE', `/api/folders/${id}`);
+  assert.equal(usuniety.status, 200);
+  assert.equal(usuniety.data.moved, 0);
+  assert.deepEqual(usuniety.data.folders, []);
+});
+
+test('foldery: cudzy folder jest niewidoczny i nietykalny', async () => {
+  const ala = client();
+  await ala('POST', '/api/register', { login: 'wlascicielka', name: 'Ala', password: 'haslo1234' });
+  const id = (await ala('POST', '/api/folders', { name: 'Prywatne' })).data.folder.id;
+
+  const bob = client();
+  await bob('POST', '/api/register', { login: 'obcy', name: 'Bob', password: 'haslo1234' });
+  assert.deepEqual((await bob('GET', '/api/folders')).data.folders, []);
+  assert.equal((await bob('PATCH', `/api/folders/${id}`, { name: 'Moje' })).status, 404);
+  assert.equal((await bob('DELETE', `/api/folders/${id}`)).status, 404);
+
+  assert.equal((await ala('GET', '/api/folders')).data.folders[0].name, 'Prywatne');
+});
+
+test('foldery: przeniesienie wiadomości, filtrowanie po folderId i licznik', async () => {
+  const ala = client();
+  await ala('POST', '/api/register', { login: 'przenoszaca', name: 'Ala', password: 'haslo1234' });
+  const id = (await ala('POST', '/api/folders', { name: 'Faktury' })).data.folder.id;
+
+  // Rejestracja zostawia w Odebranych wiadomość powitalną — na niej pracujemy.
+  const odebrane = (await ala('GET', '/api/messages?folder=inbox')).data.messages;
+  assert.ok(odebrane.length >= 1);
+  const wiadomosc = odebrane[0].id;
+
+  const po = await ala('PATCH', `/api/messages/${wiadomosc}`, { folder_id: id });
+  assert.equal(po.status, 200);
+  assert.equal(po.data.message.folder, 'custom');
+  assert.equal(po.data.message.folder_id, id);
+
+  const wFolderze = await ala('GET', `/api/messages?folderId=${id}`);
+  assert.equal(wFolderze.data.messages.length, 1);
+  assert.equal(wFolderze.data.counts.custom[id], 1);
+  assert.equal((await ala('GET', '/api/messages?folder=inbox')).data.messages.length, 0);
+
+  // Usunięcie folderu przenosi pocztę do Archiwum, a nie kasuje.
+  assert.equal((await ala('DELETE', `/api/folders/${id}`)).data.moved, 1);
+  assert.equal((await ala('GET', '/api/messages?folder=archive')).data.messages.length, 1);
+});

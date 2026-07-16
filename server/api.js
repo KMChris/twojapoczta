@@ -9,6 +9,7 @@ import {
   DOMAIN, addressOf, findMailbox, listMessages, getMessage, updateMessage, deleteMessage,
   unreadCounts, sendMessage, saveDraft, deliverSystemMessage, setForwarding, getForwarding,
 } from './mail.js';
+import { listFolders, createFolder, renameFolder, deleteFolder } from './folders.js';
 import { WELCOME_SUBJECT, WELCOME_BODY } from './seed.js';
 import {
   saveUpload, listAttachments, getAttachment, MAX_FILE_BYTES,
@@ -208,9 +209,11 @@ export function registerApiRoutes(router, db) {
 
   route('GET', '/api/messages', async (req, res, { user, url }) => {
     const folder = url.searchParams.get('folder') ?? 'inbox';
+    // Number('') to 0, a Number('abc') to NaN — oba padają na || null.
+    const folderId = Number(url.searchParams.get('folderId')) || null;
     const q = (url.searchParams.get('q') ?? '').trim().slice(0, 200);
     json(res, 200, {
-      messages: listMessages(db, user.id, { folder, q }),
+      messages: listMessages(db, user.id, { folder, folderId, q }),
       counts: unreadCounts(db, user.id),
     });
   });
@@ -294,6 +297,38 @@ export function registerApiRoutes(router, db) {
 
   route('GET', '/api/counts', async (req, res, { user }) => {
     json(res, 200, { counts: unreadCounts(db, user.id) });
+  });
+
+  // --- Foldery ------------------------------------------------------------------
+
+  route('GET', '/api/folders', async (req, res, { user }) => {
+    json(res, 200, { folders: listFolders(db, user.id) });
+  });
+
+  route('POST', '/api/folders', async (req, res, { user }) => {
+    const body = await readBody(req);
+    if (body.name != null && typeof body.name !== 'string') {
+      return json(res, 400, { error: 'Nieprawidłowy format danych.' });
+    }
+    const wynik = createFolder(db, user.id, body.name);
+    if (wynik.error) return json(res, 400, { error: wynik.error });
+    json(res, 201, { folders: listFolders(db, user.id), folder: wynik.folder });
+  });
+
+  route('PATCH', '/api/folders/:id', async (req, res, { user, params }) => {
+    const body = await readBody(req);
+    if (body.name != null && typeof body.name !== 'string') {
+      return json(res, 400, { error: 'Nieprawidłowy format danych.' });
+    }
+    const wynik = renameFolder(db, user.id, Number(params.id), body.name);
+    if (wynik.error) return json(res, wynik.notFound ? 404 : 400, { error: wynik.error });
+    json(res, 200, { folders: listFolders(db, user.id), folder: wynik.folder });
+  });
+
+  route('DELETE', '/api/folders/:id', async (req, res, { user, params }) => {
+    const wynik = deleteFolder(db, user.id, Number(params.id));
+    if (wynik.error) return json(res, 404, { error: wynik.error });
+    json(res, 200, { folders: listFolders(db, user.id), moved: wynik.moved, name: wynik.name });
   });
 
   // --- Aliasy ------------------------------------------------------------------
