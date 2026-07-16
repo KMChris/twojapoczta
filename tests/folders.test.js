@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openMemoryDb, now } from '../server/db.js';
 import {
-  MAX_FOLDER_NAME, normalizeName, listFolders, createFolder, renameFolder,
+  MAX_FOLDER_NAME, normalizeName, listFolders, createFolder, renameFolder, deleteFolder,
 } from '../server/folders.js';
 
 // Konto pod testy: minimum kolumn, resztę dosypuje schemat.
@@ -121,5 +121,78 @@ test('renameFolder zmienia nazwę, pilnuje kolizji i cudzych folderów', () => {
   const obcy = renameFolder(db, b, f.id, 'Cudze');
   assert.ok(obcy.notFound);
   assert.equal(listFolders(db, a).find((x) => x.id === f.id).name, 'RACHUNKI');
+  db.close();
+});
+
+// Wiadomość w folderze własnym: wartownik + folder_id. Wstawiamy wprost,
+// bo mail.js dostaje o tym wiedzieć dopiero w Task 4.
+function wiadomoscWFolderze(db, ownerId, folderId, { folder = 'custom' } = {}) {
+  return Number(
+    db.prepare(
+      `INSERT INTO messages (owner_id, folder, folder_id, from_addr, subject, sent_at)
+       VALUES (?, ?, ?, 'kto@example.com', 'Temat', ?)`
+    ).run(ownerId, folder, folderId, now()).lastInsertRowid
+  );
+}
+
+test('deleteFolder przenosi wiadomości do Archiwum, nie do Odebranych', () => {
+  const db = openMemoryDb();
+  const id = konto(db, 'ala');
+  const f = createFolder(db, id, 'Faktury').folder;
+  wiadomoscWFolderze(db, id, f.id);
+  wiadomoscWFolderze(db, id, f.id);
+
+  const wynik = deleteFolder(db, id, f.id);
+  assert.equal(wynik.moved, 2);
+  assert.equal(wynik.name, 'Faktury');
+  assert.equal(listFolders(db, id).length, 0);
+
+  const wiersze = db.prepare('SELECT folder, folder_id FROM messages WHERE owner_id = ?').all(id);
+  assert.equal(wiersze.length, 2, 'żadna wiadomość nie może zniknąć');
+  for (const w of wiersze) {
+    assert.equal(w.folder, 'archive');
+    assert.equal(w.folder_id, null, 'folder_id musi zejść razem z folderem');
+  }
+  db.close();
+});
+
+test('deleteFolder nie rusza wiadomości z kosza, które kiedyś tam leżały', () => {
+  const db = openMemoryDb();
+  const id = konto(db, 'ala');
+  const f = createFolder(db, id, 'Faktury').folder;
+  // Wiadomość wyrzucona do kosza z tego folderu: folder='trash', folder_id już NULL.
+  const wKoszu = wiadomoscWFolderze(db, id, null, { folder: 'trash' });
+  wiadomoscWFolderze(db, id, f.id);
+
+  assert.equal(deleteFolder(db, id, f.id).moved, 1);
+  assert.equal(db.prepare('SELECT folder FROM messages WHERE id = ?').get(wKoszu).folder, 'trash');
+  db.close();
+});
+
+test('deleteFolder pustego folderu przenosi zero wiadomości', () => {
+  const db = openMemoryDb();
+  const id = konto(db, 'ala');
+  const f = createFolder(db, id, 'Pusty').folder;
+  assert.equal(deleteFolder(db, id, f.id).moved, 0);
+  db.close();
+});
+
+test('deleteFolder nie dotyka cudzego folderu', () => {
+  const db = openMemoryDb();
+  const a = konto(db, 'ala');
+  const b = konto(db, 'bob');
+  const f = createFolder(db, a, 'Faktury').folder;
+  assert.ok(deleteFolder(db, b, f.id).notFound);
+  assert.equal(listFolders(db, a).length, 1);
+  db.close();
+});
+
+test('listFolders liczy wiadomości w folderze', () => {
+  const db = openMemoryDb();
+  const id = konto(db, 'ala');
+  const f = createFolder(db, id, 'Faktury').folder;
+  assert.equal(listFolders(db, id)[0].count, 0);
+  wiadomoscWFolderze(db, id, f.id);
+  assert.equal(listFolders(db, id)[0].count, 1);
   db.close();
 });

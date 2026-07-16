@@ -79,3 +79,34 @@ export function renameFolder(db, userId, id, rawName) {
   db.prepare('UPDATE folders SET name = ? WHERE id = ? AND user_id = ?').run(name, id, userId);
   return { folder: { id, name } };
 }
+
+// Usunięcie folderu nie może zgubić ani jednej wiadomości. Idą do Archiwum,
+// nie do Odebranych: dwieście starych listów na górze skrzynki to nie jest to,
+// czego ktokolwiek chce, a Archiwum jest bezpieczne i przeszukiwalne.
+//
+// Warunek folder='custom' w UPDATE nie jest ozdobą: bez niego zabralibyśmy też
+// wiadomości, które z tego folderu poszły do kosza (mają jeszcze folder_id,
+// gdyby ktoś kiedyś złamał niezmiennik) i wskrzesili je w Archiwum.
+//
+// Reguły przenoszące do tego folderu wyłącza faza 3 — tabeli rules jeszcze nie ma.
+export function deleteFolder(db, userId, id) {
+  const folder = db.prepare('SELECT id, name FROM folders WHERE id = ? AND user_id = ?').get(id, userId);
+  if (!folder) return { error: 'Nie znaleziono folderu.', notFound: true };
+
+  let moved = 0;
+  db.exec('BEGIN');
+  try {
+    moved = db
+      .prepare(
+        `UPDATE messages SET folder = 'archive', folder_id = NULL
+         WHERE owner_id = ? AND folder_id = ? AND folder = 'custom'`
+      )
+      .run(userId, id).changes;
+    db.prepare('DELETE FROM folders WHERE id = ? AND user_id = ?').run(id, userId);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  return { deleted: true, moved, name: folder.name };
+}
