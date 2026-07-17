@@ -11,11 +11,18 @@ const UPLOAD_TTL_MS = 24 * 3600_000;
 
 const MIME_RE = /^[\w.+-]+\/[\w.+-]+$/;
 // Typy, które przeglądarka mogłaby wykonać: zawsze serwowane neutralnie.
-const NIEBEZPIECZNE_MIME = new Set(['text/html', 'application/xhtml+xml', 'image/svg+xml']);
+const NIEBEZPIECZNE_MIME = new Set(['text/html', 'application/xhtml+xml', 'image/svg+xml', 'text/xml', 'application/xml']);
+
+// Przeglądarka renderuje XML, a `<?xml-stylesheet type="text/xsl">` potrafi z tego zrobić
+// wykonanie skryptu · dlatego cała rodzina `+xml`, a nie tylko typy wypisane z nazwy.
+// Sufiks, bo tych typów jest otwarty zbiór: rss+xml, atom+xml, soap+xml i co jeszcze wymyślą.
+function wykonywalnyWPrzegladarce(mime) {
+  return NIEBEZPIECZNE_MIME.has(mime) || mime.endsWith('+xml');
+}
 
 export function sanitizeMime(mime) {
   const czysty = String(mime ?? '').split(';')[0].trim().toLowerCase();
-  if (!MIME_RE.test(czysty) || NIEBEZPIECZNE_MIME.has(czysty)) return 'application/octet-stream';
+  if (!MIME_RE.test(czysty) || wykonywalnyWPrzegladarce(czysty)) return 'application/octet-stream';
   return czysty;
 }
 
