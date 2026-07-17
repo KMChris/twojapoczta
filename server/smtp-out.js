@@ -77,6 +77,53 @@ function czescHtml(html) {
   ];
 }
 
+// Nazwa w cudzysłowie musi być czystym ASCII: znaki spoza zakresu i sam cudzysłów
+// rozjeżdżają parametr u odbiorcy.
+function nazwaAscii(filename) {
+  return filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+}
+
+// Osadzony jest tylko ten załącznik, którego `cid:` naprawdę pada w HTML-u. Załącznik
+// z Content-ID, do którego nikt się nie odwołuje, zostaje zwykły: `inline` z martwym
+// `cid:` byłby u odbiorcy niewidoczny, a jako załącznik jest widoczny.
+function htmlCytujeCid(html, contentId) {
+  if (!html || !contentId) return false;
+  const wzorzec = contentId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Lookahead pilnuje, żeby `cid:logo@fir.ma` nie złapało się na `cid:logo@fir.mail`.
+  return new RegExp(`cid:${wzorzec}(?![\\w.@%+-])`, 'i').test(html);
+}
+
+// Część osadzona: kotwica `Content-ID` w ostrych nawiasach, bo tak czyta ją odbiorca
+// (i nasz `parseContentId`), oraz `inline` — to ona wiąże `cid:` z bajtami obrazka.
+function czescOsadzona(zalacznik) {
+  const asciiNazwa = nazwaAscii(zalacznik.filename);
+  return [
+    `Content-Type: ${zalacznik.mime}; name="${asciiNazwa}"`,
+    'Content-Transfer-Encoding: base64',
+    `Content-ID: <${zalacznik.contentId}>`,
+    `Content-Disposition: inline; filename="${asciiNazwa}"`,
+    '',
+    base64Lines(Buffer.isBuffer(zalacznik.data) ? zalacznik.data : Buffer.from(zalacznik.data)),
+  ];
+}
+
+// Treść + osadzone obrazki jako multipart/related (RFC 2387). `type` wskazuje część
+// korzenia, od której klient zaczyna czytanie; reszta to zasoby pod `cid:`.
+function czescRelated(trescLinie, osadzone) {
+  const boundary = `----=_tp_rel_${crypto.randomBytes(12).toString('hex')}`;
+  const linie = [
+    `Content-Type: multipart/related; type="multipart/alternative"; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    ...trescLinie,
+  ];
+  for (const zalacznik of osadzone) {
+    linie.push(`--${boundary}`, ...czescOsadzona(zalacznik));
+  }
+  linie.push(`--${boundary}--`);
+  return linie;
+}
+
 // Tekst + HTML jako multipart/alternative (klient odbiorcy wybiera bogatszą wersję).
 function czescAlternatywna(body, html) {
   const boundary = `----=_tp_alt_${crypto.randomBytes(12).toString('hex')}`;
@@ -107,9 +154,15 @@ export function buildRawMessage({ domain, from, replyTo, to, cc = [], subject, b
   );
 
   // Sama treść: zwykły tekst albo alternative, gdy jest wersja HTML.
-  const trescLinie = html ? czescAlternatywna(body, html) : czescTekstowa(body);
+  let trescLinie = html ? czescAlternatywna(body, html) : czescTekstowa(body);
 
-  if (!attachments.length) {
+  // Osadzone muszą siedzieć w tym samym `related` co HTML, który je cytuje, inaczej
+  // odbiorca nie ma jak związać `cid:` z bajtami. Reszta zostaje w `mixed` jak dotąd.
+  const osadzone = attachments.filter((z) => htmlCytujeCid(html, z.contentId));
+  const zwykle = attachments.filter((z) => !osadzone.includes(z));
+  if (osadzone.length) trescLinie = czescRelated(trescLinie, osadzone);
+
+  if (!zwykle.length) {
     // trescLinie[0] to Content-Type, więc nagłówki treści lądują wśród nagłówków wiadomości.
     const [typ, ...reszta] = trescLinie;
     naglowki.push(typ);
@@ -124,8 +177,8 @@ export function buildRawMessage({ domain, from, replyTo, to, cc = [], subject, b
   naglowki.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
 
   const czesci = [`--${boundary}`, ...trescLinie];
-  for (const zalacznik of attachments) {
-    const asciiNazwa = zalacznik.filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  for (const zalacznik of zwykle) {
+    const asciiNazwa = nazwaAscii(zalacznik.filename);
     czesci.push(
       `--${boundary}`,
       `Content-Type: ${zalacznik.mime}; name="${asciiNazwa}"`,

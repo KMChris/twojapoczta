@@ -188,6 +188,66 @@ test('buildRawMessage: z załącznikiem → multipart/mixed, base64, filename*',
   assert.equal(m.attachments[0].filename, 'żółw.txt');
 });
 
+test('buildRawMessage: obrazek osadzony → multipart/related, kotwica przeżywa round-trip', () => {
+  const raw = buildRawMessage({
+    domain: 'twojapoczta.com',
+    from: { name: 'Jan', addr: 'jan@twojapoczta.com' },
+    to: ['ktos@example.com'],
+    subject: 'Z obrazkiem',
+    body: 'wersja tekstowa',
+    html: '<p>Logo: <img src="cid:logo@fir.ma"></p>',
+    attachments: [{ filename: 'logo.png', mime: 'image/png', data: Buffer.from('png-bajty'), contentId: 'logo@fir.ma' }],
+  });
+  assert.match(raw, /Content-Type: multipart\/related;.*type="multipart\/alternative"/);
+  const m = parseMessage(Buffer.from(raw, 'utf8'));
+  assert.equal(m.html, '<p>Logo: <img src="cid:logo@fir.ma"></p>');
+  assert.equal(m.body, 'wersja tekstowa');
+  assert.equal(m.attachments.length, 1);
+  assert.equal(m.attachments[0].contentId, 'logo@fir.ma');
+  assert.equal(m.attachments[0].data.toString(), 'png-bajty');
+});
+
+test('buildRawMessage: osadzony obok zwykłego załącznika → related w mixed', () => {
+  const raw = buildRawMessage({
+    domain: 'twojapoczta.com',
+    from: { name: '', addr: 'jan@twojapoczta.com' },
+    to: ['ktos@example.com'],
+    subject: 'Oba',
+    body: 'tekst',
+    html: '<p><img src="cid:logo@fir.ma"></p>',
+    attachments: [
+      { filename: 'logo.png', mime: 'image/png', data: Buffer.from('png'), contentId: 'logo@fir.ma' },
+      { filename: 'umowa.pdf', mime: 'application/pdf', data: Buffer.from('pdf') },
+    ],
+  });
+  assert.match(raw, /Content-Type: multipart\/mixed;/);
+  assert.match(raw, /Content-Type: multipart\/related;/);
+  const m = parseMessage(Buffer.from(raw, 'utf8'));
+  assert.equal(m.attachments.length, 2);
+  assert.equal(m.attachments.find((z) => z.filename === 'logo.png').contentId, 'logo@fir.ma');
+  assert.equal(m.attachments.find((z) => z.filename === 'umowa.pdf').contentId, null);
+});
+
+// Test charakteryzujący: przechodził już przed dołożeniem `related`, więc nie jest dowodem
+// regresji dla tej zmiany. Pilnuje go, bo `inline` z niecytowanym `cid:` jest u odbiorcy
+// niewidoczny, a dziś taki załącznik jest widoczny — to zachowanie ma przeżyć zmianę.
+test('buildRawMessage: Content-ID, którego HTML nie cytuje, nadal zostaje zwykłym załącznikiem', () => {
+  const raw = buildRawMessage({
+    domain: 'twojapoczta.com',
+    from: { name: '', addr: 'jan@twojapoczta.com' },
+    to: ['ktos@example.com'],
+    subject: 'Sierota',
+    body: 'tekst',
+    html: '<p>Bez obrazków</p>',
+    attachments: [{ filename: 'sierota.png', mime: 'image/png', data: Buffer.from('png'), contentId: 'sierota@fir.ma' }],
+  });
+  // inline z cid:, którego nikt nie cytuje, byłby u odbiorcy niewidoczny
+  assert.doesNotMatch(raw, /multipart\/related/);
+  const m = parseMessage(Buffer.from(raw, 'utf8'));
+  assert.equal(m.attachments.length, 1);
+  assert.equal(m.attachments[0].filename, 'sierota.png');
+});
+
 // --- deliverExternal ---------------------------------------------------------
 
 test('deliverExternal: doręcza przez smarthost (brak porażek)', async () => {

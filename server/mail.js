@@ -597,18 +597,7 @@ function wyslijZaplanowana(db, msg) {
     kopie = deliverCopies(db, msg.owner_id, base, resolved, { bccAddr: msg.bcc_addr });
     sentId = kopie[0].id;
     // Załączniki wędrują z zaplanowanej na wszystkie kopie (bloby zostają wspólne).
-    const zalaczniki = db
-      .prepare('SELECT filename, mime, size, blob_hash FROM attachments WHERE message_id = ?')
-      .all(msg.id);
-    if (zalaczniki.length) {
-      const insert = db.prepare(
-        'INSERT INTO attachments (message_id, filename, mime, size, blob_hash) VALUES (?, ?, ?, ?, ?)'
-      );
-      for (const kopia of kopie) {
-        for (const z of zalaczniki) insert.run(kopia.id, z.filename, z.mime, z.size, z.blob_hash);
-        db.prepare('UPDATE messages SET attachments_count = ? WHERE id = ?').run(zalaczniki.length, kopia.id);
-      }
-    }
+    for (const kopia of kopie) kopiujZalaczniki(db, msg.id, kopia.id);
     db.prepare('DELETE FROM messages WHERE id = ?').run(msg.id);
     db.exec('COMMIT');
   } catch (err) {
@@ -764,9 +753,11 @@ export function forwardDelivered(db, ownerId, messageId, { hops = 0, odwiedzeni 
 
   if (process.env.TP_EXTERNAL !== '1') return null;
 
+  // Alias na camelCase, bo `buildRawMessage` czyta `contentId`: samo `content_id` z bazy
+  // dałoby ciche `undefined`, nagłówek by nie powstał i `cid:` w HTML-u zostałby bez kotwicy.
   const zalaczniki = db
     .prepare(
-      `SELECT a.filename, a.mime, b.data FROM attachments a
+      `SELECT a.filename, a.mime, a.content_id AS contentId, b.data FROM attachments a
        JOIN blobs b ON b.hash = a.blob_hash WHERE a.message_id = ?`
     )
     .all(msg.id);

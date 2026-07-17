@@ -15,6 +15,45 @@ import {
   MAX_BODY_HTML_BYTES,
 } from '../server/mail.js';
 
+// Fałszywy serwer SMTP, który przyjmuje wszystko i oddaje surowe bajty listu.
+// Potrzebny, bo dopiero na drucie widać, czy `cid:` ma jeszcze kotwicę Content-ID.
+function startSink() {
+  const odebrane = [];
+  const server = net.createServer((sock) => {
+    let buf = '';
+    let wDanych = false;
+    let dane = '';
+    sock.write('220 sink ESMTP\r\n');
+    sock.on('data', (d) => {
+      buf += d.toString('latin1');
+      let idx;
+      while ((idx = buf.indexOf('\r\n')) !== -1) {
+        const linia = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        if (wDanych) {
+          if (linia === '.') {
+            wDanych = false;
+            odebrane.push(dane);
+            dane = '';
+            sock.write('250 2.0.0 ok\r\n');
+          } else dane += linia + '\r\n';
+          continue;
+        }
+        const cmd = linia.slice(0, 4).toUpperCase();
+        if (cmd === 'DATA') {
+          sock.write('354 dawaj\r\n');
+          wDanych = true;
+        } else if (cmd === 'QUIT') {
+          sock.write('221 pa\r\n');
+          sock.end();
+        } else sock.write('250 ok\r\n');
+      }
+    });
+    sock.on('error', () => sock.destroy());
+  });
+  return { server, odebrane };
+}
+
 function fresh() {
   const db = openMemoryDb();
   const users = {};
@@ -668,11 +707,28 @@ test('przesyłanie dalej: łańcuch A→B→C dochodzi do końca', () => {
   setForwarding(db, user('ania'), { to: addressOf('michal') });
   setForwarding(db, user('michal'), { to: addressOf('biuro') });
 
-  sendMessage(db, user('demo'), { to: addressOf('ania'), subject: 'Sztafeta', body: 'x' });
+  // List wchodzi z zewnątrz, bo tylko poczta przychodząca niesie `content_id`:
+  // `bindUploads` nie ustawia go nigdy, więc `sendMessage` nie ma czym nakarmić łańcucha.
+  deliverInbound(db, users.ania, {
+    from: { name: 'Firma', addr: 'biuro@fir.ma' },
+    subject: 'Sztafeta',
+    body: 'x',
+    html: '<p>Sztafeta</p><img src="cid:logo@fir.ma">',
+    attachments: [{ filename: 'logo.png', mime: 'image/png', data: Buffer.from('png'), contentId: 'logo@fir.ma' }],
+  }, { toAddr: addressOf('ania') });
 
   assert.equal(listMessages(db, users.ania, { folder: 'inbox' }).length, 1);
   assert.equal(listMessages(db, users.michal, { folder: 'inbox' }).length, 1);
-  assert.equal(listMessages(db, biuroId, { folder: 'inbox' }).length, 1, 'list dochodzi na koniec łańcucha');
+  const doBiura = listMessages(db, biuroId, { folder: 'inbox' });
+  assert.equal(doBiura.length, 1, 'list dochodzi na koniec łańcucha');
+
+  // Kotwica ma się domknąć także na drugim skoku: kopia kopii to osobne wywołanie
+  // kopiowania, więc pierwszy skok sam z siebie niczego o drugim nie dowodzi.
+  const htmlBiura = getMessage(db, biuroId, doBiura[0].id).body_html;
+  const odwolanie = htmlBiura.match(/src="cid:([^"]+)"/)?.[1];
+  assert.equal(odwolanie, 'logo@fir.ma', 'HTML na końcu łańcucha nadal niesie odwołanie cid:');
+  const zalacznik = db.prepare('SELECT content_id FROM attachments WHERE message_id = ?').get(doBiura[0].id);
+  assert.equal(zalacznik.content_id, odwolanie, 'załącznik po drugim skoku niesie content_id, na który wskazuje cid: w jego body_html');
   db.close();
 });
 
@@ -893,8 +949,9 @@ test('deliverInbound: zapisuje body_html i content_id załącznika', () => {
 
 // Test charakteryzujący: ten inwariant trzymał już przed zapisem HTML (insertMessage
 // domyka `body_html` przez `?? ''`), więc nie jest dowodem regresji dla tej zmiany.
-// Pilnuje go, bo klient wstawia `body_html` prosto do DOM — `null` wypisałby się
-// użytkownikowi jako słowo „null".
+// Pilnuje go, bo kolumna jest `NOT NULL` (insert by rzucił), a w `server/quota.js`
+// `SUM(LENGTH(body) + LENGTH(body_html))` z `NULL`-em daje `NULL`, który SQLite pomija
+// w `SUM` — cały wiersz zniknąłby z rozliczenia miejsca po cichu.
 test('deliverInbound: brak HTML nadal zapisuje pusty string, nie null', () => {
   const { db, user } = fresh();
   const demo = user('demo');
@@ -964,4 +1021,46 @@ test('przesyłanie dalej: kopia zachowuje kotwicę cid osadzonego obrazka', () =
   const zalacznik = db.prepare('SELECT content_id FROM attachments WHERE message_id = ?').get(kopia.id);
   assert.equal(zalacznik.content_id, odwolanie, 'załącznik kopii niesie content_id, na który wskazuje cid: w jej body_html');
   db.close();
+});
+
+test('przesyłanie dalej na zewnątrz: osadzony obrazek wychodzi na drut z kotwicą Content-ID', async () => {
+  const { server, odebrane } = startSink();
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  process.env.TP_EXTERNAL = '1';
+  process.env.TP_SMTP_ROUTE = `127.0.0.1:${server.address().port}`;
+  try {
+    const { db, user, users } = fresh();
+    setForwarding(db, user('demo'), { to: 'ja-prywatnie@gdzieindziej.pl' });
+    deliverInbound(db, users.demo, {
+      from: { name: 'Firma', addr: 'biuro@fir.ma' },
+      subject: 'Z logo',
+      body: 'tekst',
+      html: '<p>Witamy</p><img src="cid:logo@fir.ma">',
+      attachments: [{ filename: 'logo.png', mime: 'image/png', data: Buffer.from('png'), contentId: 'logo@fir.ma' }],
+    }, { toAddr: addressOf('demo') });
+
+    // Wysyłka na zewnątrz leci w setImmediate, więc czekamy na bajty u odbiorcy.
+    let raw = null;
+    for (let i = 0; i < 80 && !raw; i++) {
+      await new Promise((res) => setTimeout(res, 25));
+      raw = odebrane[0] ?? null;
+    }
+    assert.ok(raw, 'przekierowany list powinien wyjść na zewnątrz');
+
+    // Sens pary: to jedyne miejsce, w którym widać alias `a.content_id AS contentId`.
+    // Bez niego `buildRawMessage` dostaje `undefined`, nagłówek nie powstaje i odbiorca
+    // ma `cid:` bez kotwicy — a testy jednostkowe buildRawMessage tego nie zobaczą,
+    // bo wołają go z gotowym `contentId` z pominięciem SELECT-a.
+    assert.match(raw, /Content-Type: multipart\/related;/, 'osadzony obrazek jedzie w multipart/related');
+    const kotwica = raw.match(/Content-ID: <([^>]+)>/)?.[1];
+    // HTML jedzie quoted-printable, więc `src="` jest na drucie jako `src=3D"`.
+    const odwolanie = raw.match(/src=3D"cid:([^"]+)"/)?.[1];
+    assert.equal(odwolanie, 'logo@fir.ma', 'HTML na drucie nadal cytuje cid:');
+    assert.equal(kotwica, odwolanie, 'nagłówek Content-ID domyka odwołanie cid: z HTML-u');
+    db.close();
+  } finally {
+    delete process.env.TP_EXTERNAL;
+    delete process.env.TP_SMTP_ROUTE;
+    await new Promise((r) => server.close(r));
+  }
 });
