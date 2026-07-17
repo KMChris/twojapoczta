@@ -15,6 +15,7 @@ import { registrationOpen, passwordMinLength, catchallLogin, setSetting } from '
 import { aliasLimit, aliasCount, aliasesWord, MAX_ALIAS_LIMIT } from './aliases.js';
 import { logEvent, listEvents } from './audit.js';
 import { dkimConfigured, initDkim, dnsRecord } from './dkim.js';
+import { tlsStatus } from './tls-cert.js';
 import { checkDns } from './dns-check.js';
 import { now } from './db.js';
 
@@ -348,6 +349,12 @@ export function registerAdminRoutes(router, db, { dataDir = null, resolver } = {
       generated: wynik.wygenerowano,
       record: dnsRecord(),
     });
+  });
+
+  // Bez mutacji, więc bez wpisu w audycie. Certyfikat jest publiczny:
+  // pokazujemy to, co każdy zobaczy przez openssl s_client.
+  route('GET', '/api/admin/tls', async (req, res) => {
+    json(res, 200, tlsStatus());
   });
 
   route('POST', '/api/admin/dns-check', async (req, res) => {

@@ -13,6 +13,7 @@ import { grantAdmin } from '../server/admin.js';
 import { setSetting } from '../server/settings.js';
 import { listEvents } from '../server/audit.js';
 import { configureDkim } from '../server/dkim.js';
+import { initTls, configureTls } from '../server/tls-cert.js';
 
 let server;
 let base;
@@ -70,6 +71,7 @@ before(async () => {
 
 after(() => {
   configureDkim(null); // testowe klucze nie mogą przeciekać do innych testów
+  configureTls(null);
   rmSync(dataDir, { recursive: true, force: true });
   return new Promise((resolve) => server.close(resolve));
 });
@@ -540,4 +542,39 @@ test('GET /api/admin/audit zwraca dziennik z filtrem po akcji', async () => {
   const logowania = await admin('GET', '/api/admin/audit?action=login');
   assert.ok(logowania.data.events.length > 0);
   assert.ok(logowania.data.events.every((w) => w.action === 'login'));
+});
+
+// --- TLS ------------------------------------------------------------------------
+
+test('GET /api/admin/tls: bez bramki SMTP mówi wyłączone z powodem', async () => {
+  configureTls(null);
+  const api = await adminClient();
+  const r = await api('GET', '/api/admin/tls');
+  assert.equal(r.status, 200);
+  assert.equal(r.data.enabled, false);
+  assert.equal(r.data.reason, 'smtp-off');
+});
+
+test('GET /api/admin/tls: opisuje certyfikat samopodpisany', async () => {
+  try {
+    initTls(dataDir, { hostname: 'mx.twojapoczta.com' });
+    const api = await adminClient();
+    const r = await api('GET', '/api/admin/tls');
+
+    assert.equal(r.status, 200);
+    assert.equal(r.data.enabled, true);
+    assert.equal(r.data.source, 'self-signed');
+    assert.equal(r.data.subject, 'CN=mx.twojapoczta.com');
+    assert.ok(r.data.daysLeft > 1800);
+    assert.match(r.data.fingerprint, /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/);
+  } finally {
+    configureTls(null);
+  }
+});
+
+test('GET /api/admin/tls wymaga roli administratora', async () => {
+  const api = client();
+  await api('POST', '/api/register', { login: 'bez-roli-tls', name: 'Bez Roli', password: 'haslo1234' });
+  const r = await api('GET', '/api/admin/tls');
+  assert.equal(r.status, 403);
 });
