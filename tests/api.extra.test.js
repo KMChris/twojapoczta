@@ -5,7 +5,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../server/index.js';
 import { openMemoryDb, now } from '../server/db.js';
-import { storeAttachment } from '../server/attachments.js';
+import { storeAttachment, MAX_CONTENT_ID_CHARS } from '../server/attachments.js';
 
 let server;
 let base;
@@ -452,6 +452,24 @@ test('cid: załącznik z Content-ID, którego treść nie cytuje, nadal zostaje 
   assert.deepEqual(data.cid, {});
   assert.equal(data.attachments.length, 1);
   assert.equal(data.attachments[0].filename, 'sierota.png');
+});
+
+// Broni całej rodziny „załącznik zniknął z aplikacji" na wejściu z przydługim Content-ID.
+// Gdybyśmy klucz obcinali, dopasowałby się do prefiksu pełnego, 201-znakowego odwołania w
+// treści (201. znak `~` przepuszcza lookahead `[\w.@%+-]`, a to legalny atext RFC 5322):
+// załącznik wpadłby do mapy `cid` pod obciętym kluczem i zniknął z listy, a klient pytałby
+// mapę o odwołanie pełne · nie byłoby go ani w treści, ani pod listem.
+test('cid: Content-ID dłuższy niż limit zostaje widocznym załącznikiem, zamiast zniknąć', async () => {
+  const api = client();
+  await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const zaDlugi = 'a'.repeat(MAX_CONTENT_ID_CHARS) + '~dalej@fir.ma';
+  const id = wstawZObrazkiem(idUzytkownika('demo'), zaDlugi, 'BAJTY-DLUGIEGO');
+  const { data } = await api('GET', `/api/messages/${id}`);
+  assert.deepEqual(data.cid, {}, 'mapa nie może połknąć załącznika pod obciętym kluczem');
+  assert.equal(data.attachments.length, 1, 'załącznik ma zostać widoczny na liście');
+  assert.equal(data.attachments[0].filename, 'logo.png');
+  const res = await api.rawBody('GET', `/api/messages/${id}/attachments/${data.attachments[0].id}`);
+  assert.equal(Buffer.from(await res.arrayBuffer()).toString(), 'BAJTY-DLUGIEGO');
 });
 
 // Test charakteryzujący: przechodził już przed tą zmianą, bo `GET /api/messages/:id` nie

@@ -7,6 +7,7 @@ import { hasRoom } from './quota.js';
 
 export const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB na plik
 export const MAX_FILES_PER_MESSAGE = 10;
+export const MAX_CONTENT_ID_CHARS = 200; // nasze ograniczenie danych od nadawcy, kolumna jest zwykłym TEXT
 const UPLOAD_TTL_MS = 24 * 3600_000;
 
 const MIME_RE = /^[\w.+-]+\/[\w.+-]+$/;
@@ -132,6 +133,12 @@ export function getAttachmentByCid(db, ownerId, messageId, contentId) {
   return { ...meta, data: blob.data };
 }
 
+function normalizeContentId(contentId) {
+  if (!contentId) return null;
+  const czysty = String(contentId);
+  return czysty.length > MAX_CONTENT_ID_CHARS ? null : czysty;
+}
+
 function pruneUploads(db) {
   const granica = new Date(Date.now() - UPLOAD_TTL_MS).toISOString();
   const wynik = db.prepare('DELETE FROM uploads WHERE created_at < ?').run(granica);
@@ -139,6 +146,10 @@ function pruneUploads(db) {
 }
 
 // Zapis załącznika prosto z parsera (poczta przychodząca), bez tokenów uploadu.
+// Zbyt długi Content-ID zapisujemy jako `null`, nie obcinamy · `body_html` idzie do bazy
+// dosłownie, więc obcięty klucz dopasowałby się do prefiksu pełnego odwołania w treści:
+// wpadłby do mapy `cid` (i zniknął z listy) pod kluczem, o który klient nigdy nie zapyta,
+// bo z treści czyta odwołanie pełne. Bez Content-ID zostaje zwykłym, widocznym załącznikiem.
 export function storeAttachment(db, messageId, { filename, mime, data, contentId = null }) {
   const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
   if (!buffer.length || buffer.length > MAX_FILE_BYTES) return false;
@@ -153,7 +164,7 @@ export function storeAttachment(db, messageId, { filename, mime, data, contentId
     sanitizeMime(mime),
     buffer.length,
     hash,
-    contentId ? String(contentId).slice(0, 200) : null
+    normalizeContentId(contentId)
   );
   return true;
 }
