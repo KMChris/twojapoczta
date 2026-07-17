@@ -286,6 +286,72 @@ test('buildRawMessage: osadzony obrazek o nazwie spoza ASCII zachowuje ją po ro
   assert.equal(m.attachments[0].filename, 'żółw-logo.png');
 });
 
+// --- filename* (RFC 2231) na bajtach -----------------------------------------
+
+// Te testy patrzą na surowy nagłówek, a nie przez `parseMessage`. Nasz parser wybacza
+// złamaną ramkę (`mime.js`, regex z zachłannym `.*`) i odtwarza nazwę mimo niej, więc
+// round-trip przez własny kod świecił na zielono także wtedy, gdy na drut szedł surowy
+// apostrof. Dowodem jest wyłącznie to, co realnie wychodzi na drut.
+
+function rawZNazwa(filename, typ) {
+  return buildRawMessage({
+    domain: 'twojapoczta.com',
+    from: { name: '', addr: 'jan@twojapoczta.com' },
+    to: ['ktos@example.com'],
+    subject: 'Nazwa pliku',
+    body: 'tekst',
+    html: typ === 'inline' ? '<p><img src="cid:logo@fir.ma"></p>' : undefined,
+    attachments: [{
+      filename,
+      mime: 'image/png',
+      data: Buffer.from('png'),
+      ...(typ === 'inline' ? { contentId: 'logo@fir.ma' } : {}),
+    }],
+  });
+}
+
+function extValue(raw, typ) {
+  const linia = raw.split('\r\n').find((l) => l.startsWith(`Content-Disposition: ${typ};`));
+  assert.ok(linia, `brak nagłówka Content-Disposition: ${typ}`);
+  const m = /; filename\*=(.*)$/.exec(linia);
+  assert.ok(m, `brak filename* w: ${linia}`);
+  return m[1];
+}
+
+// Ręczne dekodowanie ramki `charset'język'wartość` — bez naszego parsera. Rozbicie na
+// dokładnie trzy sekcje jest częścią asercji: surowy apostrof dałby ich więcej.
+function odkodujExtValue(wartosc) {
+  const czesci = wartosc.split("'");
+  assert.equal(czesci.length, 3, `ramka RFC 2231 rozbita na ${czesci.length} sekcji: ${wartosc}`);
+  assert.equal(czesci[0], 'UTF-8');
+  // Wartość to wyłącznie attribute-char albo %XX wielkimi literami (RFC 2231 §4). Sprawdzane
+  // tu, a nie w pojedynczym teście, bo `decodeURIComponent` przyjmuje oba rozmiary liter
+  // i sam round-trip przepuściłby małe — a nazwa spoza ASCII jest jedyną próbką z A-F.
+  assert.match(czesci[2], /^(?:[A-Za-z0-9!#$&+\-.^_`|{}~]|%[0-9A-F]{2})+$/);
+  return decodeURIComponent(czesci[2]);
+}
+
+for (const typ of ['attachment', 'inline']) {
+  test(`buildRawMessage (${typ}): filename* nie przemyca surowego apostrofu do ramki`, () => {
+    const wartosc = extValue(rawZNazwa("Kate's-logo.png", typ), typ);
+    // Ramce wolno mieć dokładnie dwa apostrofy. Trzeci rozbija ją na dodatkową sekcję,
+    // a klient czytający `filename*` (RFC 6266 §4.1) dostaje wtedy samo „Kate”.
+    assert.equal((wartosc.match(/'/g) ?? []).length, 2, `nadmiarowy apostrof w: ${wartosc}`);
+    assert.equal(odkodujExtValue(wartosc), "Kate's-logo.png");
+  });
+
+  test(`buildRawMessage (${typ}): nazwa z nawiasami i apostrofem koduje się w całości`, () => {
+    // Spacja, nawiasy i apostrof zostawione surowe ucinają nazwę u ścisłego klienta —
+    // kształt wartości pilnuje `odkodujExtValue`.
+    const wartosc = extValue(rawZNazwa("raport (1) Kate's.png", typ), typ);
+    assert.equal(odkodujExtValue(wartosc), "raport (1) Kate's.png");
+  });
+
+  test(`buildRawMessage (${typ}): nazwa spoza ASCII nadal przeżywa w filename*`, () => {
+    assert.equal(odkodujExtValue(extValue(rawZNazwa('żółw-logo.png', typ), typ)), 'żółw-logo.png');
+  });
+}
+
 // --- deliverExternal ---------------------------------------------------------
 
 test('deliverExternal: doręcza przez smarthost (brak porażek)', async () => {

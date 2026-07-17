@@ -83,10 +83,25 @@ function nazwaAscii(filename) {
   return filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
 }
 
+// Wartość po `charset'język'` to wyłącznie attribute-char (RFC 2231 §4): US-ASCII bez
+// spacji, CTL, `*`, `'`, `%` i bez tspecials. `encodeURIComponent` tym koderem nie jest —
+// zostawia surowe `'`, `*`, `(`, `)`, `!`, `~`. Apostrof jest tu najgorszy: rozbija ramkę
+// na dodatkową sekcję, więc odbiorca biorący `filename*` (RFC 6266 §4.1) urywa nazwę na
+// nim i traci rozszerzenie.
+function kodujRfc2231(filename) {
+  let wynik = '';
+  for (const bajt of Buffer.from(filename, 'utf8')) {
+    wynik += /[A-Za-z0-9!#$&+\-.^_`|{}~]/.test(String.fromCharCode(bajt))
+      ? String.fromCharCode(bajt)
+      : `%${bajt.toString(16).toUpperCase().padStart(2, '0')}`;
+  }
+  return wynik;
+}
+
 // Nazwa idzie dwa razy: ASCII-owy fallback w cudzysłowie dla czytających po staremu
 // i pełna w `filename*` (RFC 2231), bo inaczej znaki spoza ASCII giną po drodze.
 function naglowekDisposition(typ, filename) {
-  return `Content-Disposition: ${typ}; filename="${nazwaAscii(filename)}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+  return `Content-Disposition: ${typ}; filename="${nazwaAscii(filename)}"; filename*=UTF-8''${kodujRfc2231(filename)}`;
 }
 
 // Osadzony jest tylko ten załącznik, którego `cid:` naprawdę pada w HTML-u. Załącznik
