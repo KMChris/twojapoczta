@@ -599,3 +599,60 @@ test('przełączenie nadawcy na zespół w zapisanym szkicu przestawia też nazw
   assert.equal(poZmianie.from_name, 'Dział Sprzedaży', 'nazwa idzie za adresem, nie zostaje przy autorze');
   db.close();
 });
+
+test('odebranie prawa wysyłki zatrzymuje list zaplanowany wcześniej', () => {
+  const db = openMemoryDb();
+  const janId = konto(db, 'jan');
+  const jan = { id: janId, login: 'jan', name: 'Jan Kowalski' };
+  konto(db, 'klient');
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  setMember(db, zespol.id, janId, true);
+
+  sendMessage(db, jan, {
+    to: 'klient@twojapoczta.com',
+    from: 'sprzedaz@twojapoczta.com',
+    subject: 'Późna oferta',
+    body: 'x',
+    scheduledAt: new Date(Date.now() + 1000).toISOString(),
+  });
+  setMember(db, zespol.id, janId, false); // administrator odbiera prawo wysyłki
+  db.prepare("UPDATE messages SET scheduled_at = ? WHERE folder = 'scheduled'").run(new Date(Date.now() - 1000).toISOString());
+  fireScheduled(db);
+
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND folder = 'inbox' AND subject = 'Późna oferta'")
+      .get(db.prepare('SELECT id FROM users WHERE login = ?').get('klient').id).n,
+    0,
+    'list nie idzie'
+  );
+  const wersja = db.prepare("SELECT * FROM messages WHERE owner_id = ? AND folder = 'drafts'").get(janId);
+  assert.ok(wersja, 'praca autora ląduje w Wersjach roboczych, nie w koszu');
+  assert.equal(wersja.scheduled_at, null, 'wyzerowany termin wypisuje ją ze strażnika');
+  const zwrot = db.prepare("SELECT * FROM messages WHERE owner_id = ? AND subject LIKE 'Zwrot%'").get(janId);
+  assert.match(zwrot.body, /prawa wysyłki/);
+  db.close();
+});
+
+test('przemianowanie zespołu po zaplanowaniu: list idzie nową nazwą', () => {
+  const db = openMemoryDb();
+  const janId = konto(db, 'jan');
+  const jan = { id: janId, login: 'jan', name: 'Jan Kowalski' };
+  const klient = konto(db, 'klient');
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  setMember(db, zespol.id, janId, true);
+
+  sendMessage(db, jan, {
+    to: 'klient@twojapoczta.com',
+    from: 'sprzedaz@twojapoczta.com',
+    subject: 'Oferta',
+    body: 'x',
+    scheduledAt: new Date(Date.now() + 1000).toISOString(),
+  });
+  renameTeam(db, zespol.id, 'Sprzedaż i Obsługa');
+  db.prepare("UPDATE messages SET scheduled_at = ? WHERE folder = 'scheduled'").run(new Date(Date.now() - 1000).toISOString());
+  fireScheduled(db);
+
+  const uKlienta = db.prepare("SELECT * FROM messages WHERE owner_id = ? AND folder = 'inbox'").get(klient);
+  assert.equal(uKlienta.from_name, 'Sprzedaż i Obsługa');
+  db.close();
+});

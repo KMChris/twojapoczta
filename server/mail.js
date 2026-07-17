@@ -508,6 +508,19 @@ export function fireScheduled(db) {
 }
 
 function wyslijZaplanowana(db, msg) {
+  // Autoryzacja z chwili nadania, nie z chwili zapisu: między zaplanowaniem
+  // a terminem administrator mógł odebrać prawo wysyłki albo wypisać z zespołu.
+  const wlasciciel = db.prepare('SELECT id, login, name FROM users WHERE id = ?').get(msg.owner_id);
+  const nadawca = wlasciciel ? resolveSender(db, wlasciciel, msg.from_addr) : null;
+  if (!nadawca) {
+    // Do Wersji roboczych, bo praca autora ma się dać poprawić i wysłać ponownie;
+    // wyzerowany scheduled_at wypisuje ją ze SELECT-a strażnika, więc nie próbuje w kółko.
+    db.prepare("UPDATE messages SET folder = 'drafts', scheduled_at = NULL WHERE id = ?").run(msg.id);
+    deliverBounce(db, msg.owner_id, msg.subject, [
+      { adres: msg.from_addr, powod: 'nie masz już prawa wysyłki z tej skrzynki' },
+    ]);
+    return;
+  }
   const wszyscy = [
     ...new Set([...parseRecipients(msg.to_addr), ...parseRecipients(msg.cc_addr), ...parseRecipients(msg.bcc_addr)]),
   ];
@@ -557,7 +570,7 @@ function wyslijZaplanowana(db, msg) {
   }
 
   const base = {
-    from_name: msg.from_name,
+    from_name: nadawca.name,
     from_addr: msg.from_addr,
     to_addr: msg.to_addr,
     cc_addr: msg.cc_addr,
@@ -604,7 +617,7 @@ function wyslijZaplanowana(db, msg) {
       )
       .all(sentId);
     dispatchExternal(db, msg.owner_id, {
-      from: { name: msg.from_name, addr: msg.from_addr },
+      from: { name: nadawca.name, addr: msg.from_addr },
       recipients: zewnetrzni,
       to: parseRecipients(msg.to_addr),
       cc: parseRecipients(msg.cc_addr),
