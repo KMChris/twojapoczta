@@ -83,14 +83,23 @@ function nazwaAscii(filename) {
   return filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
 }
 
+// Nazwa idzie dwa razy: ASCII-owy fallback w cudzysłowie dla czytających po staremu
+// i pełna w `filename*` (RFC 2231), bo inaczej znaki spoza ASCII giną po drodze.
+function naglowekDisposition(typ, filename) {
+  return `Content-Disposition: ${typ}; filename="${nazwaAscii(filename)}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
 // Osadzony jest tylko ten załącznik, którego `cid:` naprawdę pada w HTML-u. Załącznik
 // z Content-ID, do którego nikt się nie odwołuje, zostaje zwykły: `inline` z martwym
 // `cid:` byłby u odbiorcy niewidoczny, a jako załącznik jest widoczny.
 function htmlCytujeCid(html, contentId) {
   if (!html || !contentId) return false;
   const wzorzec = contentId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Dopasowanie dokładne, bo lokalna część identyfikatora jest case-sensitive i odbiorca
+  // wiąże `cid:` dokładnie · chowamy do `related` tylko to, co na pewno się zwiąże, a przy
+  // niepewności zostawiamy widoczny załącznik zamiast `inline` z martwym `cid:`.
   // Lookahead pilnuje, żeby `cid:logo@fir.ma` nie złapało się na `cid:logo@fir.mail`.
-  return new RegExp(`cid:${wzorzec}(?![\\w.@%+-])`, 'i').test(html);
+  return new RegExp(`cid:${wzorzec}(?![\\w.@%+-])`).test(html);
 }
 
 // Część osadzona: kotwica `Content-ID` w ostrych nawiasach, bo tak czyta ją odbiorca
@@ -101,7 +110,7 @@ function czescOsadzona(zalacznik) {
     `Content-Type: ${zalacznik.mime}; name="${asciiNazwa}"`,
     'Content-Transfer-Encoding: base64',
     `Content-ID: <${zalacznik.contentId}>`,
-    `Content-Disposition: inline; filename="${asciiNazwa}"`,
+    naglowekDisposition('inline', zalacznik.filename),
     '',
     base64Lines(Buffer.isBuffer(zalacznik.data) ? zalacznik.data : Buffer.from(zalacznik.data)),
   ];
@@ -183,7 +192,7 @@ export function buildRawMessage({ domain, from, replyTo, to, cc = [], subject, b
       `--${boundary}`,
       `Content-Type: ${zalacznik.mime}; name="${asciiNazwa}"`,
       'Content-Transfer-Encoding: base64',
-      `Content-Disposition: attachment; filename="${asciiNazwa}"; filename*=UTF-8''${encodeURIComponent(zalacznik.filename)}`,
+      naglowekDisposition('attachment', zalacznik.filename),
       '',
       base64Lines(Buffer.isBuffer(zalacznik.data) ? zalacznik.data : Buffer.from(zalacznik.data))
     );
