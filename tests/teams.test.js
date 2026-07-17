@@ -1,0 +1,134 @@
+// Jednostkowe testy skrzynek zespołowych: skład, prawo wysyłki, CRUD.
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { openMemoryDb, now } from '../server/db.js';
+import {
+  findTeam, teamById, teamMailboxes, teamMembers, userTeams, canSendAs,
+  listTeams, createTeam, renameTeam, deleteTeam, setMember, removeMember,
+} from '../server/teams.js';
+
+function konto(db, login) {
+  return Number(
+    db.prepare('INSERT INTO users (login, name, password_hash, created_at) VALUES (?, ?, ?, ?)')
+      .run(login, login, 'x', now()).lastInsertRowid
+  );
+}
+
+test('createTeam i findTeam: zespół żyje pod swoją częścią lokalną', () => {
+  const db = openMemoryDb();
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  assert.equal(zespol.local_part, 'sprzedaz');
+  assert.equal(zespol.name, 'Dział Sprzedaży');
+  assert.equal(findTeam(db, 'sprzedaz').id, zespol.id);
+  assert.equal(findTeam(db, 'nie-ma'), null);
+  assert.equal(teamById(db, zespol.id).name, 'Dział Sprzedaży');
+  db.close();
+});
+
+test('setMember jest idempotentne i przełącza prawo wysyłki', () => {
+  const db = openMemoryDb();
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  const jan = konto(db, 'jan');
+
+  setMember(db, zespol.id, jan, false);
+  setMember(db, zespol.id, jan, false);
+  assert.equal(teamMembers(db, zespol.id).length, 1, 'dwukrotne dopisanie daje jednego członka');
+  assert.equal(teamMembers(db, zespol.id)[0].can_send, false);
+
+  setMember(db, zespol.id, jan, true);
+  assert.equal(teamMembers(db, zespol.id).length, 1);
+  assert.equal(teamMembers(db, zespol.id)[0].can_send, true, 'can_send wraca jako boolean, nie 1');
+  db.close();
+});
+
+test('teamMailboxes zwraca wszystkich członków, także zablokowanych', () => {
+  const db = openMemoryDb();
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  const jan = konto(db, 'jan');
+  const ania = konto(db, 'ania');
+  setMember(db, zespol.id, jan, true);
+  setMember(db, zespol.id, ania, false);
+  db.prepare('UPDATE users SET is_blocked = 1 WHERE id = ?').run(ania);
+
+  // Poczta na adres wprost też ignoruje blokadę (findMailbox), więc zespół nie filtruje.
+  assert.deepEqual(teamMailboxes(db, zespol.id).map((s) => s.login), ['ania', 'jan']);
+  assert.deepEqual(teamMailboxes(db, 999), []);
+  db.close();
+});
+
+test('canSendAs: tylko członek z prawem wysyłki, tylko swój zespół', () => {
+  const db = openMemoryDb();
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  const jan = konto(db, 'jan');
+  const ania = konto(db, 'ania');
+  const obcy = konto(db, 'obcy');
+  setMember(db, zespol.id, jan, true);
+  setMember(db, zespol.id, ania, false);
+
+  assert.equal(canSendAs(db, jan, 'sprzedaz').name, 'Dział Sprzedaży');
+  assert.equal(canSendAs(db, ania, 'sprzedaz'), null, 'bez prawa wysyłki nie wolno nadawać');
+  assert.equal(canSendAs(db, obcy, 'sprzedaz'), null, 'obcy zespół nie istnieje dla nadawcy');
+  assert.equal(canSendAs(db, jan, 'nie-ma'), null);
+  db.close();
+});
+
+test('userTeams pokazuje przynależność konta z prawem wysyłki', () => {
+  const db = openMemoryDb();
+  const sprzedaz = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  const wsparcie = createTeam(db, { localPart: 'wsparcie', name: 'Wsparcie' });
+  const jan = konto(db, 'jan');
+  setMember(db, sprzedaz.id, jan, true);
+  setMember(db, wsparcie.id, jan, false);
+
+  assert.deepEqual(userTeams(db, jan).map((t) => [t.local_part, t.can_send]), [
+    ['sprzedaz', true],
+    ['wsparcie', false],
+  ]);
+  assert.deepEqual(userTeams(db, konto(db, 'sam')), []);
+  db.close();
+});
+
+test('renameTeam zmienia nazwę, adres zostaje', () => {
+  const db = openMemoryDb();
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  assert.equal(renameTeam(db, zespol.id, 'Sprzedaż i Obsługa'), true);
+  assert.equal(teamById(db, zespol.id).name, 'Sprzedaż i Obsługa');
+  assert.equal(teamById(db, zespol.id).local_part, 'sprzedaz');
+  assert.equal(renameTeam(db, 999, 'Nikt'), false);
+  db.close();
+});
+
+test('kaskady: usunięcie zespołu czyści skład, usunięcie konta wypisuje z zespołów', () => {
+  const db = openMemoryDb();
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  const jan = konto(db, 'jan');
+  const ania = konto(db, 'ania');
+  setMember(db, zespol.id, jan, true);
+  setMember(db, zespol.id, ania, true);
+
+  db.prepare('DELETE FROM users WHERE id = ?').run(ania);
+  assert.deepEqual(teamMembers(db, zespol.id).map((m) => m.login), ['jan'], 'konto znika ze składu');
+
+  assert.equal(removeMember(db, zespol.id, jan), true);
+  assert.equal(removeMember(db, zespol.id, jan), false, 'drugie wypisanie nic nie zmienia');
+
+  setMember(db, zespol.id, jan, true);
+  assert.equal(deleteTeam(db, zespol.id), true);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM team_members').get().n, 0, 'skład idzie kaskadą');
+  assert.equal(deleteTeam(db, 999), false);
+  db.close();
+});
+
+test('listTeams: zespoły po adresie, każdy ze swoim składem', () => {
+  const db = openMemoryDb();
+  const wsparcie = createTeam(db, { localPart: 'wsparcie', name: 'Wsparcie' });
+  createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  setMember(db, wsparcie.id, konto(db, 'jan'), true);
+
+  const lista = listTeams(db);
+  assert.deepEqual(lista.map((t) => t.local_part), ['sprzedaz', 'wsparcie']);
+  assert.deepEqual(lista[0].members, [], 'zespół bez członków ma pusty skład, nie null');
+  assert.equal(lista[1].members[0].login, 'jan');
+  db.close();
+});

@@ -107,6 +107,22 @@ CREATE TABLE IF NOT EXISTS folders (
   UNIQUE(user_id, name)
 );
 CREATE INDEX IF NOT EXISTS idx_folders_user ON folders(user_id, position);
+
+CREATE TABLE IF NOT EXISTS teams (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  local_part TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS team_members (
+  team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  can_send INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (team_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id);
 `;
 
 // Dostawia kolumnę do istniejącej bazy (migracja bez narzędzi zewnętrznych).

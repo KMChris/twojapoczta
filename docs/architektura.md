@@ -53,6 +53,7 @@ budowania. `node server/index.js` to całe wdrożenie.
 | `audit.js`      | Dziennik zdarzeń: działania administracyjne i logowania, aktor jako tekst (wpis przeżywa usunięcie konta), retencja 90 dni czyszczona leniwie. |
 | `quota.js`      | Limity miejsca: zużycie skrzynki (treści + załączniki) i decyzja `hasRoom`. Bez zależności, importują go mail/attachments/smtp. |
 | `aliases.js`    | Limity aliasów per konto: odczyt limitu (`NULL` = bez limitu, `0` = wyłączone), liczenie i polska odmiana liczebnika. |
+| `teams.js`      | Skrzynki zespołowe: skład, prawo wysyłki per członek, CRUD. Liść bez zależności (jak `quota.js`), adresy skleja wołający. |
 | `admin.js`      | Logika panelu: przegląd kont z metadanymi, tworzenie/usuwanie kont, sesje, statystyki i ruch dzienny. Wyłącznie liczby, nigdy treści wiadomości. |
 | `api-admin.js`  | Trasy `/api/admin/*`: strażnik roli, walidacja, guardy ostatniego administratora, wpisy audytu przy każdej mutacji. |
 | `dns-check.js`  | Weryfikacja rekordów DNS (MX/A/SPF/DKIM/DMARC) na `node:dns` z wstrzykiwalnym resolverem (testy bez sieci). |
@@ -75,6 +76,8 @@ messages(id, owner_id→users, folder, folder_id→folders·NULL, from_name,
          sent_at, scheduled_at)
 folders(id, user_id→users, name, position, created_at)
 aliases(id, user_id→users, alias·UNIQUE, created_at)
+teams(id, local_part·UNIQUE, name, created_at)
+team_members(team_id→teams, user_id→users, can_send, created_at, PK(team_id,user_id))
 blobs(hash·PK, data·BLOB, size)
 attachments(id, message_id→messages, filename, mime, size, blob_hash→blobs)
 uploads(token·PK, user_id→users, filename, mime, size, blob_hash, created_at)
@@ -88,6 +91,12 @@ wbudowany. Niezmiennik trzyma się dla każdego wiersza:
 **`folder_id IS NOT NULL` ⟺ `folder='custom'`**. Nazwa folderu jest unikalna
 w obrębie konta (`UNIQUE(user_id, name)`), a wielkość liter składa kod
 aplikacji, bo NOCASE w SQLite zna tylko ASCII.
+
+Skrzynka zespołowa nie ma magazynu: `teams` trzyma wyłącznie adres i nazwę,
+a poczta rozchodzi się kopią do skrzynki każdego członka (fan-out), więc
+`owner_id` pozostaje jedynym właścicielem wiadomości. `local_part` żyje w tej
+samej przestrzeni nazw co `users.login` i `aliases.alias`; pilnuje tego
+`addressTaken` w `mail.js`.
 
 `body` trzyma zawsze wersję tekstową (z niej powstaje `snippet` i po niej
 szuka wyszukiwarka), `body_html` opcjonalną bogatą. `bcc_addr` wypełnia się
