@@ -272,8 +272,8 @@ zobaczysz telnetem z punktu 3, wpisując po powitaniu `EHLO test`.
 
 Certyfikat jest samopodpisany i **to w zupełności wystarcza**. Poczta między
 serwerami szyfruje oportunistycznie: Gmail zaakceptuje go bez mrugnięcia, bo
-tożsamość MX-a i tak weryfikuje się rekordami DNS (MTA-STS, DANE), a nie
-certyfikatem. Zysk jest realny: nikt po drodze nie przeczyta Twoich listów.
+przy takim TLS nadawca certyfikatu w ogóle nie sprawdza. Zysk jest realny:
+nikt po drodze nie przeczyta Twoich listów.
 
 Zaufany certyfikat od Let's Encrypt przyda się dopiero przy dostępie
 z programów pocztowych. Jeśli chcesz go mieć już teraz, zdobądź go certbotem.
@@ -294,9 +294,13 @@ mx.twojadomena.pl:80 {
 }
 ```
 
-W nginksie dodaj **osobny** blok `server` na nazwę MX-a. Certyfikat bierzemy
-na `mx.twojadomena.pl`, a blok z kroku 6 odpowiada tylko na `twojadomena.pl`,
-więc wyzwania by nie zobaczył:
+```sh
+sudo systemctl reload caddy
+```
+
+W nginksie dodaj do `/etc/nginx/sites-available/twojapoczta` **osobny** blok
+`server` na nazwę MX-a. Certyfikat bierzemy na `mx.twojadomena.pl`, a blok
+z kroku 6 odpowiada tylko na `twojadomena.pl`, więc wyzwania by nie zobaczył:
 
 ```nginx
 server {
@@ -307,6 +311,15 @@ server {
     location / { return 404; }
 }
 ```
+
+```sh
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Przeładuj proxy **przed** certbotem. Nieprzeładowany Caddy czy nginx nie zna
+jeszcze nowej nazwy, wyzwanie dostaje 404, a Let's Encrypt przepuszcza tylko
+pięć nieudanych walidacji na godzinę: po kilku próbach zostajesz z blokadą
+i niczego przez ten czas nie naprawisz.
 
 Hak po odnowieniu przełoży pliki tam, gdzie przeczyta je użytkownik `poczta`:
 klucze w `/etc/letsencrypt/archive` są zastrzeżone dla roota, więc wskazanie
@@ -340,6 +353,14 @@ Na koniec wskaż pliki w unicie i zrestartuj usługę **ten jeden raz**:
 Environment=TP_TLS_CERT=/var/lib/twojapoczta/tls/mx-cert.pem
 Environment=TP_TLS_KEY=/var/lib/twojapoczta/tls/mx-key.pem
 ```
+
+```sh
+sudo systemctl daemon-reload && sudo systemctl restart twojapoczta
+```
+
+Bez `daemon-reload` systemd wystartuje usługę na starym unicie: zmienne nie
+zadziałają, nic tego nie zgłosi, a karta w panelu dalej będzie pokazywać
+„Samopodpisany". To najprostszy sposób, żeby uznać, że przepis nie działa.
 
 Odnowienia co 90 dni pójdą już same, bez restartu: serwer zauważa nowy plik
 przy kolejnym połączeniu. Status certyfikatu (nazwa, ważność, odcisk) pokazuje
