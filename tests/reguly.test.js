@@ -97,6 +97,12 @@ test('podzielSelektory: przecinek w :is() nie rozcina selektora', () => {
   assert.deepEqual(podzielSelektory('  '), []);
 });
 
+test('podzielSelektory: przecinek w selektorze atrybutu nie rozcina', () => {
+  assert.deepEqual(podzielSelektory('[data-a="x,y"]'), ['[data-a="x,y"]']);
+  assert.deepEqual(podzielSelektory('[title="Hello, World"], .c'), ['[title="Hello, World"]', '.c']);
+  assert.deepEqual(podzielSelektory('[data-x="("] , .b'), ['[data-x="("]', '.b']);
+});
+
 test('zakresujSelektor: zwykły selektor dostaje przedrostek', () => {
   assert.equal(zakresujSelektor('.przycisk', 'list-1'), '#list-1 .przycisk');
   assert.equal(zakresujSelektor('.a, .b', 'list-1'), '#list-1 .a, #list-1 .b');
@@ -117,6 +123,16 @@ test('zakresujSelektor: pusty selektor celuje w kontener, nie w nic', () => {
   assert.equal(zakresujSelektor('', 'list-1'), '#list-1');
   assert.equal(zakresujSelektor('   ', 'list-1'), '#list-1');
   assert.equal(zakresujSelektor(',', 'list-1'), '#list-1');
+});
+
+// Wiodący kombinator postawiłby `#list-1` bezpośrednio przed `+`/`~`, celując w rodzeństwo
+// kontenera (element interfejsu poza listem). Zdejmujemy go, więc część staje się potomkiem
+// zamkniętym w kontenerze. Przez selectorText z CSSOM nieosiągalne (reguła top-level nie
+// zaczyna się kombinatorem), ale funkcja ma gwarantować zamknięcie dla każdego wejścia.
+test('zakresujSelektor: wiodący kombinator nie ucieka na rodzeństwo kontenera', () => {
+  assert.equal(zakresujSelektor('+ .sibling', 'list-1'), '#list-1 .sibling');
+  assert.equal(zakresujSelektor('~ .x', 'list-1'), '#list-1 .x');
+  assert.equal(zakresujSelektor('> .child', 'list-1'), '#list-1 .child');
 });
 
 test('rozstrzygnijMedia: warunek pasujący do motywu wchodzi bezwarunkowo', () => {

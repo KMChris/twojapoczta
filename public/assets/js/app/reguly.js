@@ -87,16 +87,27 @@ export function czyDeklaracjaZakazana(nazwa, wartosc) {
   return false;
 }
 
-// Dzieli listę selektorów po przecinkach najwyższego poziomu, więc przecinek
-// w :is(.a, .b) nie rozcina selektora na pół.
+// Dzieli listę selektorów po przecinkach najwyższego poziomu. Przecinek legalnie
+// siedzi w nawiasach (`:is(.a, .b)`), w nawiasach kwadratowych (`[title="a, b"]`)
+// i w łańcuchu w cudzysłowie — funkcja respektuje każde z tych zagnieżdżeń, więc
+// tnie tylko przecinek poza nawiasami, poza `[...]` i poza łańcuchem. Stan łańcucha
+// jest nadrzędny: w cudzysłowie żaden `(`/`[`/`,` nie liczy się jako struktura,
+// a zamyka go dopiero ten sam znak cudzysłowu, którym się otworzył (dopuszcza `[a="]"]`).
 export function podzielSelektory(selektor) {
   const czesci = [];
   let glebokosc = 0;
+  let cudzyslow = null;
   let biezacy = '';
   for (const znak of String(selektor ?? '')) {
-    if (znak === '(') glebokosc += 1;
-    if (znak === ')') glebokosc -= 1;
-    if (znak === ',' && glebokosc === 0) {
+    if (cudzyslow) {
+      if (znak === cudzyslow) cudzyslow = null;
+    } else if (znak === '"' || znak === "'") {
+      cudzyslow = znak;
+    } else if (znak === '(' || znak === '[') {
+      glebokosc += 1;
+    } else if (znak === ')' || znak === ']') {
+      glebokosc -= 1;
+    } else if (znak === ',' && glebokosc === 0) {
       czesci.push(biezacy);
       biezacy = '';
       continue;
@@ -118,8 +129,14 @@ export function zakresujSelektor(selektor, id) {
   if (czesci.length === 0) return `#${id}`;
   return czesci
     .map((czesc) => {
-      if (/^(html|body)$/i.test(czesc)) return `#${id}`;
-      const bezKorzenia = czesc.replace(/^(html|body)\b\s*/i, '').trim();
+      // Wiodący kombinator (`+`/`~`/`>`) zdejmujemy przed prefiksowaniem, żeby `#${id}`
+      // nie stanął bezpośrednio przed `+`/`~` i nie wskoczył na rodzeństwo kontenera
+      // (element interfejsu poza listem); `> .x` upraszczamy tak samo, a `#${id} .x` i tak
+      // zostaje w kontenerze. Przez klasyczny selectorText z CSSOM to nieosiągalne (reguła
+      // najwyższego poziomu nie zaczyna się kombinatorem) — domknięcie totalności, nie łata.
+      const bezKombinatora = czesc.replace(/^[\s+~>]+/, '');
+      if (/^(html|body)$/i.test(bezKombinatora)) return `#${id}`;
+      const bezKorzenia = bezKombinatora.replace(/^(html|body)\b\s*/i, '').trim();
       return bezKorzenia ? `#${id} ${bezKorzenia}` : `#${id}`;
     })
     .join(', ');
