@@ -384,8 +384,73 @@ test('parseMessage: część tekstowa oznaczona jako załącznik bez nazwy zosta
   ].join('\r\n'));
   const wynik = parseMessage(raw);
   assert.equal(wynik.body, 'Treść mimo dziwnej dyspozycji');
-  assert.doesNotMatch(wynik.body, /--gr/); // nigdy surowe granice MIME w oczy użytkownika
   assert.equal(wynik.attachments.length, 0);
+});
+
+test('parseMessage: część tekstowa z Content-ID zostaje treścią listu, nie załącznikiem', () => {
+  const raw = buf([
+    'From: a@b.pl',
+    'Subject: Tekst z Content-ID',
+    'Content-Type: multipart/mixed; boundary="gr"',
+    '',
+    '--gr',
+    'Content-Type: text/plain; charset=utf-8',
+    'Content-Disposition: attachment',
+    'Content-ID: <x@y>',
+    '',
+    'Treść mimo Content-ID',
+    '--gr--',
+    '',
+  ].join('\r\n'));
+  const wynik = parseMessage(raw);
+  assert.equal(wynik.body, 'Treść mimo Content-ID');
+  assert.equal(wynik.attachments.length, 0);
+});
+
+test('parseMessage: część HTML z Content-ID zostaje treścią listu, nie załącznikiem', () => {
+  const raw = buf([
+    'From: a@b.pl',
+    'Subject: HTML z Content-ID',
+    'Content-Type: multipart/mixed; boundary="gr"',
+    '',
+    '--gr',
+    'Content-Type: text/html; charset=utf-8',
+    'Content-Disposition: attachment',
+    'Content-ID: <root@host>',
+    '',
+    '<p>Tresc listu</p>',
+    '--gr--',
+    '',
+  ].join('\r\n'));
+  const wynik = parseMessage(raw);
+  assert.equal(wynik.html, '<p>Tresc listu</p>');
+  assert.equal(wynik.body, 'Tresc listu');
+  assert.equal(wynik.attachments.length, 0);
+});
+
+test('parseMessage: załączony plik .html nie podszywa się pod treść listu', () => {
+  const raw = buf([
+    'From: a@b.pl',
+    'Subject: Raport w załączniku',
+    'Content-Type: multipart/mixed; boundary="gr"',
+    '',
+    '--gr',
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    '<p>Tresc listu</p>',
+    '--gr',
+    'Content-Type: text/html; charset=utf-8; name="raport.html"',
+    'Content-Disposition: attachment; filename="raport.html"',
+    '',
+    '<h1>Zalaczony raport</h1>',
+    '--gr--',
+    '',
+  ].join('\r\n'));
+  const wynik = parseMessage(raw);
+  assert.equal(wynik.html, '<p>Tresc listu</p>');
+  assert.equal(wynik.attachments.length, 1);
+  assert.equal(wynik.attachments[0].filename, 'raport.html');
+  assert.equal(wynik.attachments[0].contentId, null);
 });
 
 test('parseMessage: zwykły załącznik nadal nie ma contentId', () => {

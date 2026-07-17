@@ -60,8 +60,10 @@ export function parseContentId(value) {
 
 // Część osadzona bywa bez nazwy pliku, a nazwa jest wymagana przez zapis
 // załącznika. Robimy ją z Content-ID, żeby dało się ją potem rozpoznać okiem.
+// Tylko dla części osadzonych: text/* z Content-ID to nadal treść listu, a nie
+// plik do pobrania, więc nazwy mu nie dorabiamy · inaczej zniknęłoby ciało listu.
 function syntetycznaNazwa(contentId, mime) {
-  if (!contentId) return null;
+  if (!contentId || mime.startsWith('text/')) return null;
   const rozszerzenie = (mime.split('/')[1] ?? 'bin').replace(/\W/g, '').slice(0, 8) || 'bin';
   const rdzen = contentId.replace(/[^\w.-]/g, '_').slice(0, 60);
   return `osadzony-${rdzen}.${rozszerzenie}`;
