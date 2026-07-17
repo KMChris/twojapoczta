@@ -11,6 +11,7 @@ import {
   resolveDelivery, addressTaken, resolveSender, saveDraft, sendMessage, fireScheduled,
   setForwarding, getForwarding, SYSTEM_SENDER,
 } from '../server/mail.js';
+import { getUserView, instanceStats } from '../server/admin.js';
 
 function konto(db, login) {
   return Number(
@@ -679,5 +680,22 @@ test('przemianowanie zespołu po zaplanowaniu: list idzie nową nazwą', () => {
 
   const uKlienta = db.prepare("SELECT * FROM messages WHERE owner_id = ? AND folder = 'inbox'").get(klient);
   assert.equal(uKlienta.from_name, 'Sprzedaż i Obsługa');
+  db.close();
+});
+
+// --- Karta konta i pulpit: widok niesie zespoły ----------------------------------
+
+test('karta konta i pulpit widzą zespoły', () => {
+  const db = openMemoryDb();
+  const jan = konto(db, 'jan');
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  setMember(db, zespol.id, jan, true);
+
+  const widok = getUserView(db, jan);
+  assert.deepEqual(widok.teams, [
+    { id: zespol.id, local_part: 'sprzedaz', name: 'Dział Sprzedaży', address: 'sprzedaz@twojapoczta.com', can_send: true },
+  ]);
+  assert.deepEqual(getUserView(db, konto(db, 'sam')).teams, []);
+  assert.equal(instanceStats(db).teams, 1);
   db.close();
 });

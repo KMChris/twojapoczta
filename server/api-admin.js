@@ -10,6 +10,9 @@ import {
   userAliases, instanceStats,
 } from './admin.js';
 import { DOMAIN, addressOf, addressTaken, resolveDelivery, deliverSystemMessage, SYSTEM_SENDER } from './mail.js';
+import {
+  teamById, teamMembers, listTeams, createTeam, renameTeam, deleteTeam, setMember, removeMember,
+} from './teams.js';
 import { WELCOME_SUBJECT, WELCOME_BODY } from './seed.js';
 import { registrationOpen, passwordMinLength, catchallLogin, setSetting } from './settings.js';
 import { aliasLimit, aliasCount, aliasesWord, MAX_ALIAS_LIMIT } from './aliases.js';
@@ -215,6 +218,98 @@ export function registerAdminRoutes(router, db, { dataDir = null, resolver } = {
     db.prepare('DELETE FROM aliases WHERE id = ? AND user_id = ?').run(Number(params.aliasId), konto.id);
     audyt(req, user, 'alias.delete', konto.login, usuniety.alias);
     json(res, 200, { aliases: userAliases(db, konto.id) });
+  });
+
+  // --- Zespoły --------------------------------------------------------------------
+
+  // Widok zespołu z adresami: teams.js jest liściem i nie zna addressOf, więc
+  // adresy doklejamy tutaj, tak samo jak przy aliasach.
+  const teamView = (id) => {
+    const team = teamById(db, id);
+    if (!team) return null;
+    return {
+      ...team,
+      address: addressOf(team.local_part),
+      members: teamMembers(db, id).map((m) => ({ ...m, address: addressOf(m.login) })),
+    };
+  };
+
+  const znajdzZespol = (params) => teamById(db, Number(params.id));
+
+  route('GET', '/api/admin/teams', async (req, res) => {
+    json(res, 200, { teams: listTeams(db).map((t) => teamView(t.id)) });
+  });
+
+  route('POST', '/api/admin/teams', async (req, res, { user }) => {
+    const body = await readBody(req);
+    const localPart = String(body.local_part ?? '').trim().toLowerCase();
+    const name = String(body.name ?? '').trim();
+    if (!LOGIN_RE.test(localPart)) {
+      return json(res, 400, {
+        error: 'Adres zespołu może mieć 3–30 znaków: małe litery, cyfry, kropki i myślniki, zaczynając od litery lub cyfry.',
+      });
+    }
+    if (!name || name.length > 60) return json(res, 400, { error: 'Nazwa zespołu: 1–60 znaków.' });
+    if (addressTaken(db, localPart)) {
+      return json(res, 409, { error: `Adres ${addressOf(localPart)} jest już zajęty.` });
+    }
+    const team = createTeam(db, { localPart, name });
+    audyt(req, user, 'team.create', localPart, name);
+    json(res, 201, { team: teamView(team.id) });
+  });
+
+  route('PATCH', '/api/admin/teams/:id', async (req, res, { user, params }) => {
+    const zespol = znajdzZespol(params);
+    if (!zespol) return json(res, 404, { error: 'Nie znaleziono zespołu.' });
+    const body = await readBody(req);
+    const name = String(body.name ?? '').trim();
+    if (!name || name.length > 60) return json(res, 400, { error: 'Nazwa zespołu: 1–60 znaków.' });
+    // Adres zespołu jest niezmienny: to tożsamość wobec wszystkich, którzy go znają.
+    renameTeam(db, zespol.id, name);
+    audyt(req, user, 'team.update', zespol.local_part, `nazwa: ${name}`);
+    json(res, 200, { team: teamView(zespol.id) });
+  });
+
+  route('DELETE', '/api/admin/teams/:id', async (req, res, { user, params }) => {
+    const zespol = znajdzZespol(params);
+    if (!zespol) return json(res, 404, { error: 'Nie znaleziono zespołu.' });
+    // Poczta już doręczona zostaje u członków: to ich kopie. Zwalnia się sam adres.
+    deleteTeam(db, zespol.id);
+    audyt(req, user, 'team.delete', zespol.local_part);
+    json(res, 200, { ok: true });
+  });
+
+  route('PUT', '/api/admin/teams/:id/members/:userId', async (req, res, { user, params }) => {
+    const zespol = znajdzZespol(params);
+    if (!zespol) return json(res, 404, { error: 'Nie znaleziono zespołu.' });
+    const konto = db.prepare('SELECT id, login FROM users WHERE id = ?').get(Number(params.userId));
+    if (!konto) return json(res, 404, { error: 'Nie znaleziono konta.' });
+    if (konto.login === SYSTEM_SENDER.login) {
+      return json(res, 400, { error: 'Konto systemowe nie może należeć do zespołu.' });
+    }
+    const body = await readBody(req);
+    const canSend = !!body.can_send;
+    const juzByl = teamMembers(db, zespol.id).some((m) => m.user_id === konto.id);
+    setMember(db, zespol.id, konto.id, canSend);
+    audyt(
+      req, user,
+      juzByl ? 'team.member.send' : 'team.member.add',
+      zespol.local_part,
+      `${konto.login}: ${canSend ? 'odbiór i wysyłka' : 'tylko odbiór'}`
+    );
+    json(res, 200, { team: teamView(zespol.id) });
+  });
+
+  route('DELETE', '/api/admin/teams/:id/members/:userId', async (req, res, { user, params }) => {
+    const zespol = znajdzZespol(params);
+    if (!zespol) return json(res, 404, { error: 'Nie znaleziono zespołu.' });
+    const konto = db.prepare('SELECT id, login FROM users WHERE id = ?').get(Number(params.userId));
+    if (!konto) return json(res, 404, { error: 'Nie znaleziono konta.' });
+    if (!removeMember(db, zespol.id, konto.id)) {
+      return json(res, 404, { error: 'To konto nie należy do zespołu.' });
+    }
+    audyt(req, user, 'team.member.remove', zespol.local_part, konto.login);
+    json(res, 200, { team: teamView(zespol.id) });
   });
 
   // --- Ustawienia instancji --------------------------------------------------------

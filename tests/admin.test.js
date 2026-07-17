@@ -606,3 +606,79 @@ test('GET /api/admin/tls wymaga roli administratora', async () => {
   const r = await api('GET', '/api/admin/tls');
   assert.equal(r.status, 403);
 });
+
+// --- Skrzynki zespołowe ---------------------------------------------------------
+
+test('zespoły: zakładanie, kolizja adresu, skład, prawo wysyłki i audyt', async () => {
+  const api = client();
+  await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const jan = Number(
+    db.prepare('INSERT INTO users (login, name, password_hash, created_at) VALUES (?, ?, ?, ?)')
+      .run('jan-zesp', 'Jan Kowalski', 'x', now()).lastInsertRowid
+  );
+
+  const zalozony = await api('POST', '/api/admin/teams', { local_part: 'sprzedaz', name: 'Dział Sprzedaży' });
+  assert.equal(zalozony.status, 201);
+  assert.equal(zalozony.data.team.address, 'sprzedaz@twojapoczta.com');
+  assert.deepEqual(zalozony.data.team.members, [], 'świeży zespół nie ma składu');
+  const id = zalozony.data.team.id;
+
+  // Odwrotny kierunek do Task 3: istniejący login blokuje zespół.
+  const kolizja = await api('POST', '/api/admin/teams', { local_part: 'jan-zesp', name: 'Podszywacz' });
+  assert.equal(kolizja.status, 409);
+
+  const dopisany = await api('PUT', `/api/admin/teams/${id}/members/${jan}`, { can_send: true });
+  assert.equal(dopisany.status, 200);
+  assert.equal(dopisany.data.team.members[0].can_send, true);
+  assert.equal(dopisany.data.team.members[0].address, 'jan-zesp@twojapoczta.com');
+
+  // PUT jest idempotentne: drugie wywołanie zmienia prawo, nie dokłada członka.
+  const przelaczony = await api('PUT', `/api/admin/teams/${id}/members/${jan}`, { can_send: false });
+  assert.equal(przelaczony.data.team.members.length, 1);
+  assert.equal(przelaczony.data.team.members[0].can_send, false);
+
+  const nazwa = await api('PATCH', `/api/admin/teams/${id}`, { name: 'Sprzedaż i Obsługa' });
+  assert.equal(nazwa.data.team.name, 'Sprzedaż i Obsługa');
+  assert.equal(nazwa.data.team.local_part, 'sprzedaz', 'adres zespołu jest niezmienny');
+
+  const wypisany = await api('DELETE', `/api/admin/teams/${id}/members/${jan}`);
+  assert.deepEqual(wypisany.data.team.members, []);
+  assert.equal((await api('DELETE', `/api/admin/teams/${id}/members/${jan}`)).status, 404);
+
+  assert.equal((await api('DELETE', `/api/admin/teams/${id}`)).status, 200);
+  assert.equal((await api('PATCH', `/api/admin/teams/${id}`, { name: 'Duch' })).status, 404);
+
+  const akcje = listEvents(db, { limit: 200 }).map((e) => e.action);
+  for (const akcja of ['team.create', 'team.member.add', 'team.member.send', 'team.member.remove', 'team.update', 'team.delete']) {
+    assert.ok(akcje.includes(akcja), `brak wpisu w dzienniku: ${akcja}`);
+  }
+});
+
+test('zespoły: konto systemowe nie wchodzi do składu', async () => {
+  const api = client();
+  await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const { data } = await api('POST', '/api/admin/teams', { local_part: 'obsluga', name: 'Obsługa' });
+  const systemowy = db.prepare('SELECT id FROM users WHERE login = ?').get('zespol');
+
+  // Skrzynki zespol@ nikt nie czyta, więc członkostwo byłoby cichą utratą poczty.
+  const proba = await api('PUT', `/api/admin/teams/${data.team.id}/members/${systemowy.id}`, { can_send: false });
+  assert.equal(proba.status, 400);
+});
+
+// Korekta z przeglądu: user.create (:63) i alias.create (:200) przeszły na
+// addressTaken, ale nic nie pinowało, że adres zespołu blokuje kolidujący login
+// czy alias. Bez tego cichy powrót do findMailbox przechodziłby na zielono.
+test('adres zespołu blokuje nowy login i nowy alias', async () => {
+  const api = await adminClient();
+  await api('POST', '/api/admin/teams', { local_part: 'marketing', name: 'Marketing' });
+
+  // Nowe konto o loginie zespołu → 409 (api-admin.js:63 przez addressTaken).
+  const nowe = await api('POST', '/api/admin/users', { login: 'marketing', name: 'Ktoś Nowy', password: 'haslo12345' });
+  assert.equal(nowe.status, 409);
+
+  // Alias o nazwie zespołu na koncie demo (limit 5, zero aliasów → 409 z kolizji,
+  // nie z limitu) → 409 (api-admin.js:200 przez addressTaken).
+  const demoId = db.prepare('SELECT id FROM users WHERE login = ?').get('demo').id;
+  const alias = await api('POST', `/api/admin/users/${demoId}/aliases`, { alias: 'marketing' });
+  assert.equal(alias.status, 409);
+});

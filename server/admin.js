@@ -5,6 +5,7 @@ import { now } from './db.js';
 import { addressOf } from './mail.js';
 import { storageUsage } from './quota.js';
 import { gcBlobs } from './attachments.js';
+import { userTeams } from './teams.js';
 
 export function grantAdmin(db, login) {
   const result = db
@@ -55,6 +56,8 @@ function decorate(db, row) {
     messages: db.prepare('SELECT COUNT(*) AS n FROM messages WHERE owner_id = ?').get(row.id).n,
     storage_bytes: storageUsage(db, row.id),
     aliases: userAliases(db, row.id),
+    // teams.js jest liściem i nie zna addressOf, więc adres doklejamy tu, jak przy aliasach.
+    teams: userTeams(db, row.id).map((t) => ({ ...t, address: addressOf(t.local_part) })),
   };
 }
 
@@ -99,6 +102,7 @@ export function instanceStats(db) {
   const zalaczniki = db.prepare('SELECT COALESCE(SUM(size), 0) AS bytes FROM attachments').get();
   const tresci = db.prepare('SELECT COALESCE(SUM(LENGTH(CAST(body AS BLOB))), 0) AS bytes FROM messages').get();
   const aliases = db.prepare('SELECT COUNT(*) AS n FROM aliases').get();
+  const teams = db.prepare('SELECT COUNT(*) AS n FROM teams').get();
   const sessions = db.prepare('SELECT COUNT(*) AS active FROM sessions WHERE expires_at > ?').get(now());
 
   return {
@@ -106,6 +110,7 @@ export function instanceStats(db) {
     messages: { total: messages.total },
     storage: { bytes: tresci.bytes + zalaczniki.bytes, attachments: zalaczniki.bytes },
     aliases: aliases.n,
+    teams: teams.n,
     sessions: { active: sessions.active },
     traffic: trafficByDay(db),
   };
