@@ -1,7 +1,7 @@
 // Konwersje sRGB ↔ OKLCH i inwersja jasności dla ciemnego motywu.
 //
 // Moduł czysty: bez DOM i bez zależności, żeby dało się go przetestować
-// w `node --test`. Wszystko, co potrzebuje drzewa, siedzi w tresc.js.
+// w `node --test`. Wszystko, co potrzebuje drzewa, będzie siedzieć w tresc.js (Task 6).
 //
 // OKLCH, a nie HSL, bo jasność ma tu odpowiadać jasności widzianej okiem.
 // W HSL #ff0 i #00f mają tę samą „jasność”, co przy odwracaniu widać od razu.
@@ -55,8 +55,9 @@ export function odwrocJasnosc(rgb, { lMin, lMax }) {
   return oklchNaRgb({ L: lMin + (1 - L) * (lMax - lMin), C, h });
 }
 
-// Wejście: `rgb(…)`/`rgba(…)` po normalizacji przeglądarki, w składni
-// przecinkowej albo ukośnikowej.
+// Wejście: `rgb(…)`/`rgba(…)`. Przeglądarka w computed serializuje ZAWSZE przecinkowo ·
+// składnię ukośnikową (`rgb(1 2 3 / .25)`) parsujRgb przyjmuje dodatkowo, obronnie, jako
+// ogólny parser. Ukośnik nie pochodzi od przeglądarki.
 export function parsujRgb(tekst) {
   const dopasowanie = String(tekst ?? '').trim().match(/^rgba?\(([^)]*)\)$/i);
   if (!dopasowanie) return null;

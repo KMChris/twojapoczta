@@ -33,20 +33,28 @@ test('oklchNaRgb: konwersja w obie strony wraca do punktu wyjścia', () => {
   }
 });
 
+// Sweep zawiera 1, 5 i 10 obok kroku 15, bo kanały 1..10 to segment LINIOWY krzywej sRGB
+// (`doLiniowego`: c <= 0.04045 ? c / 12.92 : …). Sam krok 15 trafiał w tę gałąź wyłącznie
+// zerem, a 0/cokolwiek = 0 chowa stałą 12.92 · literówka `12.29` przechodziła zielono, psując
+// po cichu 195 841 kolorów. Z próbkami 1, 5, 10 round-trip pada na tej mutacji.
+//
 // Round-trip jest DOKŁADNY co do bajta, nie „±1" · sprawdzone wyczerpująco sondą na
-// wszystkich 16 777 216 kolorach sRGB: max błąd 0. Test wyżej ma tolerancję <= 1, czyli
-// o cały krok luźniejszą niż rzeczywistość, i ten luz połyka tryb zaokrąglenia
+// wszystkich 16 777 216 kolorach sRGB: max błąd 0. Test z tolerancją <= 1 wyżej jest
+// o cały krok luźniejszy niż rzeczywistość, i ten luz połyka tryb zaokrąglenia
 // (round → floor oraz round → ceil przechodzą tamten test na zielono).
 //
 // To NIE jest przefitowanie pod nasz silnik, bo przeglądarka w ogóle tu nie występuje:
 // składamy własne dwie funkcje na wejściu całkowitym, a f⁻¹∘f = identyczność. Z Chrome
 // porównujemy się przy OKLCH → RGB i tam tolerancja <= 1 ma sens · tu nie ma czego tolerować.
-// Zapas do granicy zaokrąglenia to 0.4996 (najgorszy przypadek 0.00043 od całkowitej),
-// więc różnice ULP między wersjami V8 tego nie ruszą.
+// Zapas do granicy zaokrąglenia to 0.4996 (najgorszy przypadek 0.00043 od całkowitej, przy
+// b = 10 · w segmencie liniowym, który sweep teraz odwiedza), więc różnice ULP między
+// wersjami V8 tego nie ruszą.
 test('oklchNaRgb: round-trip wraca co do bajta, co przypina tryb zaokrąglenia', () => {
-  for (let r = 0; r < 256; r += 15) {
-    for (let g = 0; g < 256; g += 15) {
-      for (let b = 0; b < 256; b += 15) {
+  const punkty = [0, 1, 5, 10];
+  for (let x = 15; x < 256; x += 15) punkty.push(x);
+  for (const r of punkty) {
+    for (const g of punkty) {
+      for (const b of punkty) {
         const kolor = { r, g, b };
         assert.deepEqual(oklchNaRgb(rgbNaOklch(kolor)), kolor, `round-trip dla ${JSON.stringify(kolor)}`);
       }
@@ -86,6 +94,8 @@ test('parsujRgb: czyta rgb i rgba w obu składniach', () => {
   assert.deepEqual(parsujRgb('rgb(255, 128, 0)'), { r: 255, g: 128, b: 0, a: 1 });
   assert.deepEqual(parsujRgb('rgba(1, 2, 3, 0.5)'), { r: 1, g: 2, b: 3, a: 0.5 });
   assert.deepEqual(parsujRgb('rgb(1 2 3 / 0.25)'), { r: 1, g: 2, b: 3, a: 0.25 });
+  // Nie-liczbowa alfa spada na 1 · przypina guard Number.isFinite(czesci[3]) (nie czesci[2]).
+  assert.deepEqual(parsujRgb('rgba(1, 2, 3, foo)'), { r: 1, g: 2, b: 3, a: 1 });
 });
 
 test('parsujRgb: śmieci dają null', () => {
@@ -93,13 +103,24 @@ test('parsujRgb: śmieci dają null', () => {
   assert.equal(parsujRgb(''), null);
   assert.equal(parsujRgb(undefined), null);
   assert.equal(parsujRgb('rgb(1, 2)'), null);
+  // Nie-liczba w KANALE b (indeks 2) · przypina slice(0, 3); slice(0, 2) przepuściłby ten b.
+  assert.equal(parsujRgb('rgb(1, 2, nan)'), null);
 });
 
-// Chrome NIE normalizuje nowych składni CSS Color 4 do rgb() · zostają w swojej postaci,
-// więc parsujRgb ich nie tknie i Task 8 zostawi taki kolor nieodwrócony. Sprawdzone
-// w przeglądarce: oklch/oklab/lab/lch/color()/color-mix() wychodzą z getComputedStyle
-// dosłownie. To znane ograniczenie, a nie przeoczenie · dlatego ma własny test.
-test('parsujRgb: nowe składnie CSS Color 4 zwracają null, bo przeglądarka ich nie normalizuje', () => {
+// Przeglądarka serializuje computed jako rgb() OSADZONE w większym stringu: boxShadow niesie
+// geometrię, wielokrawędziowy border cztery kolory. Kotwice ^…$ każą wtedy zwrócić null
+// („nie tykaj"), bo wyłuskanie pierwszego rgb() zniszczyłoby resztę wartości.
+test('parsujRgb: rgb() osadzone w większej wartości computed daje null', () => {
+  assert.equal(parsujRgb('rgba(0, 0, 0, 0.2) 0px 2px 4px 0px'), null);
+  assert.equal(parsujRgb('rgb(1, 2, 3) rgb(4, 5, 6) rgb(7, 8, 9) rgb(10, 11, 12)'), null);
+});
+
+// parsujRgb zwraca null dla tych składni, bo jego regex łapie WYŁĄCZNIE rgb()/rgba() ·
+// oklch/oklab/lab/lch/color()/color-mix() to nie ta składnia, więc dopasowanie pada. To
+// własność samej parsujRgb, dowodliwa tu w Node bez przeglądarki. (Osobno: Chrome tych
+// składni nie normalizuje do rgb(), więc Task 8 zostawi taki kolor nieodwrócony · ale o
+// zwrocie null decyduje regex, nie przeglądarka.)
+test('parsujRgb: nowe składnie CSS Color 4 zwracają null', () => {
   assert.equal(parsujRgb('oklch(0.6 0.06 30)'), null);
   assert.equal(parsujRgb('lab(50 40 30)'), null);
   assert.equal(parsujRgb('color(display-p3 1 0.5 0)'), null);
