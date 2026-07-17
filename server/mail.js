@@ -269,9 +269,16 @@ export function saveDraft(db, user, { id, to, cc, bcc, from, subject, body, body
 // Zespół rozwija się na członków; każda skrzynka niesie viaTeam, czyli adres zespołu,
 // przez który tu trafiła (null = nadawca poprosił o nią wprost). Ta różnica decyduje
 // potem, czy pełna skrzynka wywala wysyłkę, czy tylko wypada z rozdzielnika.
+//
+// Obok tego `teamy` (adres zespołu → id jego skrzynek) trzyma skład każdego
+// zaadresowanego zespołu w całości. To osobna sprawa niż viaTeam: viaTeam mówi, kogo
+// nadawca poprosił wprost, a `teamy` — kto stoi za adresem zespołu. Rozdzielnik nie
+// odpowie na to drugie, bo deduplikacja zostawia każdą skrzynkę raz: członek dwóch
+// zespołów pamięta tylko pierwszy z koperty, a adresowany wprost traci viaTeam zupełnie.
 function resolveRecipients(db, addresses) {
   const resolved = [];
   const zewnetrzni = [];
+  const teamy = new Map();
   for (const addr of addresses) {
     const at = addr.lastIndexOf('@');
     const local = addr.slice(0, at);
@@ -285,6 +292,9 @@ function resolveRecipients(db, addresses) {
         return { error: `Skrzynka zespołu „${addr}" nie ma jeszcze członków.` };
       }
       const viaTeam = cel.kind === 'team' ? addr : null;
+      // Skład zapisujemy tutaj, przed deduplikacją: to jedyne miejsce, w którym widać
+      // go w komplecie.
+      if (viaTeam) teamy.set(viaTeam, cel.mailboxes.map((s) => s.id));
       for (const skrzynka of cel.mailboxes) {
         const juz = resolved.find((r) => r.id === skrzynka.id);
         // Adresowanie wprost wygrywa nad członkostwem, bez względu na kolejność
@@ -308,7 +318,7 @@ function resolveRecipients(db, addresses) {
     }
     if (!zewnetrzni.includes(addr)) zewnetrzni.push(addr);
   }
-  return { resolved, zewnetrzni };
+  return { resolved, zewnetrzni, teamy };
 }
 
 // Kopie u adresatów: „sent" u nadawcy, „inbox" u każdego odbiorcy (UDW bez śladu w kopiach).
@@ -381,9 +391,11 @@ export function sendMessage(db, user, { to, cc, bcc, from, subject, body, bodyHt
     pomijani.add(recipient.id);
   }
   // Zespół, w którym miejsca nie ma nikt, jest nieosiągalny i nadawca musi to wiedzieć.
-  for (const adresZespolu of new Set(adresaci.resolved.map((r) => r.viaTeam).filter(Boolean))) {
-    const czlonkowie = adresaci.resolved.filter((r) => r.viaTeam === adresZespolu);
-    if (czlonkowie.every((r) => pomijani.has(r.id))) {
+  // Liczymy po pełnym składzie (`teamy`), nie po viaTeam ocalałym z rozdzielnika: członek
+  // poproszony wprost ma viaTeam wyzerowane, a należący do dwóch zespołów pamięta tylko
+  // pierwszy — w obu razach grupa wyszłaby węższa niż zespół naprawdę jest.
+  for (const [adresZespolu, czlonkowie] of adresaci.teamy) {
+    if (czlonkowie.every((id) => pomijani.has(id))) {
       return { error: `Skrzynka zespołu „${adresZespolu}" jest pełna. Wiadomość nie została wysłana.` };
     }
   }

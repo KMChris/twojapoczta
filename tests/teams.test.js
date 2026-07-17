@@ -214,7 +214,8 @@ test('adresowanie wprost wygrywa nad członkostwem: jedna kopia, nie dwie', () =
   const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
   setMember(db, zespol.id, jan, false);
 
-  sendMessage(db, nadawca, { to: 'jan@twojapoczta.com, sprzedaz@twojapoczta.com', subject: 'Raz', body: 'x' });
+  const wynik = sendMessage(db, nadawca, { to: 'jan@twojapoczta.com, sprzedaz@twojapoczta.com', subject: 'Raz', body: 'x' });
+  assert.equal(wynik.error, undefined);
   assert.equal(
     db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND folder = 'inbox'").get(jan).n,
     1,
@@ -252,7 +253,8 @@ test('pełna skrzynka członka nie blokuje zespołu, pełny zespół owszem', ()
 
   db.prepare('UPDATE users SET quota_mb = 0 WHERE id = ?').run(jan);
   const pelny = sendMessage(db, nadawca, { to: 'sprzedaz@twojapoczta.com', subject: 'Nie idzie', body: 'x' });
-  assert.match(pelny.error, /sprzedaz@twojapoczta\.com.*pełna/s, 'błąd mówi o adresie zespołu, nie o koncie członka');
+  assert.match(pelny.error, /sprzedaz@twojapoczta\.com.*pełna/s, 'błąd mówi o adresie zespołu…');
+  assert.doesNotMatch(pelny.error, /jan@|ania@/, '…i nie zdradza nadawcy, kto siedzi w zespole');
   db.close();
 });
 
@@ -270,6 +272,73 @@ test('adresat wpisany wprost z pełną skrzynką dalej daje twardy błąd', () =
     body: 'x',
   });
   assert.match(wynik.error, /jan@twojapoczta\.com/, 'nadawca poprosił o Jana wprost, więc dowiaduje się prawdy');
+  db.close();
+});
+
+test('członek wpisany wprost trzyma swój zespół w zasięgu', () => {
+  const db = openMemoryDb();
+  const nadawca = { id: konto(db, 'klient'), login: 'klient', name: 'Klient' };
+  const jan = konto(db, 'jan');
+  const ania = konto(db, 'ania');
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  setMember(db, zespol.id, jan, false);
+  setMember(db, zespol.id, ania, false);
+  db.prepare('UPDATE users SET quota_mb = 0 WHERE id = ?').run(ania);
+
+  // Zasięg zespołu liczy się po jego prawdziwym składzie, nie po tym, co zostało
+  // z viaTeam: adres wprost zabiera je Janowi, więc licząc po nim w grupie zostaje
+  // sama pełna Ania i wysyłka pada, choć jest komu doręczyć.
+  const wprostPierwszy = sendMessage(db, nadawca, {
+    to: 'jan@twojapoczta.com, sprzedaz@twojapoczta.com',
+    subject: 'Idzie',
+    body: 'x',
+  });
+  assert.equal(wprostPierwszy.error, undefined, 'Ania pełna, ale Jan ma miejsce i jest w zespole');
+
+  const zespolPierwszy = sendMessage(db, nadawca, {
+    to: 'sprzedaz@twojapoczta.com, jan@twojapoczta.com',
+    subject: 'Też idzie',
+    body: 'x',
+  });
+  assert.equal(zespolPierwszy.error, undefined, 'kolejność adresów nie zmienia zasięgu zespołu');
+
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND folder = 'inbox'").get(jan).n,
+    2,
+    'Jan dostaje oba listy'
+  );
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND folder = 'inbox'").get(ania).n, 0);
+  db.close();
+});
+
+test('drugi zespół w kopercie odmawia, zamiast zniknąć w deduplikacji', () => {
+  const db = openMemoryDb();
+  const nadawca = { id: konto(db, 'klient'), login: 'klient', name: 'Klient' };
+  const jan = konto(db, 'jan');
+  const ania = konto(db, 'ania');
+  const sprzedaz = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  const wsparcie = createTeam(db, { localPart: 'wsparcie', name: 'Wsparcie' });
+  setMember(db, sprzedaz.id, jan, false);
+  setMember(db, sprzedaz.id, ania, false);
+  setMember(db, wsparcie.id, jan, false);
+  db.prepare('UPDATE users SET quota_mb = 0 WHERE id = ?').run(jan);
+
+  // Jan należy do obu zespołów, ale w rozdzielniku zostaje raz, z viaTeam tego
+  // pierwszego z koperty. Wsparcie ma tylko jego i nie ma dokąd doręczyć, więc
+  // nadawca musi dostać błąd zamiast cichego „wysłano".
+  const wynik = sendMessage(db, nadawca, {
+    to: 'sprzedaz@twojapoczta.com, wsparcie@twojapoczta.com',
+    subject: 'Halo',
+    body: 'x',
+  });
+  assert.ok(wynik.error, 'zespół, do którego nikt nie odbierze, nie może zostać połknięty po cichu');
+  assert.match(wynik.error, /wsparcie@twojapoczta\.com.*pełna/s, 'błąd nazywa nieosiągalny zespół');
+  assert.doesNotMatch(wynik.error, /jan@|ania@/, 'i nie zdradza składu zespołu');
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND folder = 'inbox'").get(ania).n,
+    0,
+    'odmowa jest całkowita: nikt nie dostaje kopii'
+  );
   db.close();
 });
 
