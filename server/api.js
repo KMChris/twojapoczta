@@ -17,6 +17,7 @@ import {
 import { now } from './db.js';
 import { registrationOpen, passwordMinLength } from './settings.js';
 import { aliasLimit, aliasCount, aliasesWord } from './aliases.js';
+import { userTeams } from './teams.js';
 import { logEvent } from './audit.js';
 
 export const LOGIN_RE = /^[a-z0-9][a-z0-9.-]{2,29}$/;
@@ -364,6 +365,16 @@ export function registerApiRoutes(router, db) {
     }
     db.prepare('INSERT INTO aliases (user_id, alias, created_at) VALUES (?, ?, ?)').run(user.id, alias, now());
     json(res, 201, aliasesView(user.id));
+  });
+
+  // --- Zespoły -------------------------------------------------------------------
+
+  // Tylko do odczytu. Skład zespołu prowadzi administrator, więc POST i DELETE tu
+  // nie istnieją: brak trasy jest lepszym strażnikiem niż ukryty przycisk.
+  route('GET', '/api/teams', async (req, res, { user }) => {
+    json(res, 200, {
+      teams: userTeams(db, user.id).map((t) => ({ ...t, address: addressOf(t.local_part) })),
+    });
   });
 
   // --- Przesyłanie dalej ---------------------------------------------------------

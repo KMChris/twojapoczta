@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { createApp } from '../server/index.js';
 import { openMemoryDb } from '../server/db.js';
 import { seedIfEmpty } from '../server/seed.js';
-import { createTeam } from '../server/teams.js';
+import { createTeam, setMember } from '../server/teams.js';
 
 let server;
 let base;
@@ -342,4 +342,30 @@ test('profile can be updated', async () => {
   const updated = await api('PATCH', '/api/me', { theme: 'dark', signature: 'Pozdrawiam, Kasia' });
   assert.equal(updated.data.user.theme, 'dark');
   assert.equal(updated.data.user.signature, 'Pozdrawiam, Kasia');
+});
+
+test('GET /api/teams pokazuje przynależność i nie daje jej zmienić', async () => {
+  const demoId = db.prepare('SELECT id FROM users WHERE login = ?').get('demo').id;
+  const zespol = createTeam(db, { localPart: 'wsparcie', name: 'Wsparcie' });
+  setMember(db, zespol.id, demoId, true);
+
+  const api = client();
+  await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+
+  const lista = await api('GET', '/api/teams');
+  assert.equal(lista.status, 200);
+  assert.deepEqual(lista.data.teams, [
+    {
+      id: zespol.id,
+      local_part: 'wsparcie',
+      name: 'Wsparcie',
+      address: 'wsparcie@twojapoczta.com',
+      can_send: true,
+    },
+  ]);
+
+  // Przynależność prowadzi administrator, więc trasy zapisu po prostu nie ma:
+  // brak trasy jest lepszym strażnikiem niż ukryty przycisk.
+  const proba = await api('POST', '/api/teams', { local_part: 'moj', name: 'Mój' });
+  assert.equal(proba.status, 404);
 });
