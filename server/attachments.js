@@ -147,9 +147,12 @@ function pruneUploads(db) {
 
 // Zapis załącznika prosto z parsera (poczta przychodząca), bez tokenów uploadu.
 // Zbyt długi Content-ID zapisujemy jako `null`, nie obcinamy · `body_html` idzie do bazy
-// dosłownie, więc obcięty klucz dopasowałby się do prefiksu pełnego odwołania w treści:
-// wpadłby do mapy `cid` (i zniknął z listy) pod kluczem, o który klient nigdy nie zapyta,
-// bo z treści czyta odwołanie pełne. Bez Content-ID zostaje zwykłym, widocznym załącznikiem.
+// dosłownie, więc obcięty klucz dopasowałby się do prefiksu pełnego odwołania w treści —
+// wtedy, gdy znak zaraz za obcięciem nie przedłuża identyfikatora w oczach `htmlCytujeCid`
+// (apostrof albo cokolwiek spoza atextu; na literze czy `~` obcięcie by się nie dopasowało).
+// Taki załącznik wpadłby do mapy `cid` (i zniknął z listy) pod kluczem, o który klient nigdy
+// nie zapyta, bo z treści czyta odwołanie pełne. Nie chcemy zgadywać, na który z tych
+// znaków trafimy · bez Content-ID zostaje zwykłym, widocznym załącznikiem.
 export function storeAttachment(db, messageId, { filename, mime, data, contentId = null }) {
   const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
   if (!buffer.length || buffer.length > MAX_FILE_BYTES) return false;
