@@ -77,7 +77,12 @@ function zbuduj(zrodlo) {
   } catch (err) {
     // Plik mógł zniknąć albo być w połowie zapisu. Zostajemy przy ostatnim dobrym.
     console.error('[tls] nie udało się wczytać certyfikatu:', err.message);
-    if (zrodlo.wskazany) zapamietajZly(zrodlo);
+    if (zrodlo.wskazany) {
+      zapamietajZly(zrodlo);
+      // Zostajemy tu, bez powrotu przez wybierzZrodlo, więc ostrzeżenie trzeba
+      // odświeżyć na miejscu: panel pytany raz nie może widzieć stanu sprzed awarii.
+      if (konfiguracja.context && konfiguracja.zrodlo?.wskazany) ostrzez(ostatniDobry(zrodlo.certPath, zrodlo.keyPath));
+    }
     return konfiguracja.context;
   }
 }
@@ -106,9 +111,12 @@ export function tlsStatus() {
 // --- Wybór źródła ------------------------------------------------------------
 
 // Zdanie o przyczynie plus zdanie o skutku: w panelu widać jedno i drugie.
+// Obie ścieżki po nazwisku, bo zepsuta bywa każda połowa pary, a operator ma
+// wiedzieć która, zamiast szukać po omacku w tej dobrej.
 const ZAPASOWY = 'Działa certyfikat zapasowy, samopodpisany.';
-const brakPliku = (p) => `TP_TLS_CERT albo TP_TLS_KEY wskazuje na plik, którego nie ma (${p}).`;
-const zlyPlik = (p) => `TP_TLS_CERT albo TP_TLS_KEY wskazuje na plik, którego nie da się wczytać (${p}).`;
+const brakPliku = (c, k) => `TP_TLS_CERT (${c}) albo TP_TLS_KEY (${k}) wskazuje na plik, którego nie ma.`;
+const zlyPlik = (c, k) => `TP_TLS_CERT (${c}) albo TP_TLS_KEY (${k}) wskazuje na plik, którego nie da się wczytać.`;
+const ostatniDobry = (c, k) => `${zlyPlik(c, k)} Działa ostatni poprawnie wczytany certyfikat.`;
 
 function wybierzZrodlo() {
   const certPath = process.env.TP_TLS_CERT;
@@ -116,25 +124,26 @@ function wybierzZrodlo() {
   let powod = null;
   if (certPath && keyPath) {
     const mtime = mtimeAlbo(certPath);
-    if (mtime === null || mtimeAlbo(keyPath) === null) {
+    const mtimeKlucza = mtimeAlbo(keyPath);
+    if (mtime === null || mtimeKlucza === null) {
       // Literówka nie może zatrzymać poczty ani cicho zdjąć szyfrowania:
       // schodzimy do zapasowego, ale mówimy o tym głośno w logu i w panelu.
-      powod = `${brakPliku(certPath)} ${ZAPASOWY}`;
-    } else if (!znanyJakoZly(certPath, mtime)) {
-      return { certPath, keyPath, wskazany: true, mtime };
+      powod = `${brakPliku(certPath, keyPath)} ${ZAPASOWY}`;
+    } else if (!znanyJakoZly(certPath, mtime, mtimeKlucza)) {
+      return { certPath, keyPath, wskazany: true, mtime, mtimeKlucza };
     } else if (konfiguracja.context && konfiguracja.zrodlo?.wskazany) {
       // Zepsuty bywa zapis w połowie. Mamy z tego pliku dobry kontekst, więc
       // przy nim zostajemy i nie schodzimy na dysk, aż mtime się zmieni.
-      ostrzez(`${zlyPlik(certPath)} Działa ostatni poprawnie wczytany certyfikat.`);
+      ostrzez(ostatniDobry(certPath, keyPath));
       return konfiguracja.zrodlo;
     } else {
       // Plik jest, ale jest do niczego: dla poczty to samo co literówka.
-      powod = `${zlyPlik(certPath)} ${ZAPASOWY}`;
+      powod = `${zlyPlik(certPath, keyPath)} ${ZAPASOWY}`;
     }
   }
   const zapasowy = zrodloSamopodpisane();
   ostrzez([powod, ostrzezenieNazwy()].filter(Boolean).join(' · ') || null);
-  return { ...zapasowy, mtime: mtimeAlbo(zapasowy.certPath) };
+  return zapasowy;
 }
 
 function ostrzezenieNazwy() {
@@ -142,45 +151,70 @@ function ostrzezenieNazwy() {
   return `Samopodpisany certyfikat nie obejmuje nazwy ${konfiguracja.hostname}. Szyfrowanie działa, ale klient, który sprawdza nazwę, jej nie dopasuje.`;
 }
 
-// Plik, który raz się nie wczytał, odpuszczamy aż do zmiany mtime. Inaczej
-// każde połączenie kosztuje dwa odczyty, nieudane parsowanie i linię w logu.
-function znanyJakoZly(certPath, mtime) {
-  return konfiguracja.zly?.certPath === certPath && konfiguracja.zly.mtime === mtime;
+// Parę, która raz się nie wczytała, odpuszczamy aż któryś z plików się ruszy.
+// Inaczej każde połączenie kosztuje dwa odczyty, nieudane parsowanie i linię
+// w logu. Klucz liczy się na równi z certyfikatem: wczytanie wywala się też
+// przez zły klucz, a wtedy naprawia się sam klucz i mtime certyfikatu stoi.
+function znanyJakoZly(certPath, mtime, mtimeKlucza) {
+  const zly = konfiguracja.zly;
+  return zly?.certPath === certPath && zly.mtime === mtime && zly.mtimeKlucza === mtimeKlucza;
 }
 
-function zapamietajZly({ certPath, mtime }) {
-  konfiguracja.zly = { certPath, mtime };
+function zapamietajZly({ certPath, mtime, mtimeKlucza }) {
+  konfiguracja.zly = { certPath, mtime, mtimeKlucza };
 }
 
 function zrodloSamopodpisane() {
   const { katalog, hostname } = konfiguracja;
   const certPath = path.join(katalog, 'self-signed-cert.pem');
   const keyPath = path.join(katalog, 'self-signed-key.pem');
-  const cel = { certPath, keyPath, wskazany: false };
+  // Jedno spojrzenie na dysk: to samo mtime mówi i czy plik jeszcze jest,
+  // i czy wolno wierzyć certyfikatowi z pamięci.
+  const cel = { certPath, keyPath, wskazany: false, mtime: mtimeAlbo(certPath) };
 
-  if (!trzebaWygenerowac(certPath, hostname)) return cel;
+  if (!trzebaWygenerowac(cel)) return cel;
 
   const { certPem, keyPem } = generateSelfSigned({ hostname, days: DNI_WAZNOSCI });
   mkdirSync(katalog, { recursive: true });
   zapiszAtomowo(keyPath, keyPem, 0o600);
   zapiszAtomowo(certPath, certPem, 0o644);
-  // Domknięcie bramki nazwy: skoro świeży certyfikat jej nie przechodzi,
-  // następny też nie przejdzie (SAN spoza ASCII wychodzi z x509.js zmielony).
-  // Zapamiętujemy to i zostajemy przy nim, zamiast kręcić keygenem bez końca.
-  konfiguracja.nazwaBezPokrycia = !new crypto.X509Certificate(certPem).checkHost(hostname);
-  return cel;
+  zdatny(new crypto.X509Certificate(certPem)); // klasyfikacja świeżego: panel ma ją mieć od razu
+  return { ...cel, mtime: mtimeAlbo(certPath) };
 }
 
-function trzebaWygenerowac(certPath, hostname) {
-  // Certyfikat już wczytany i wciąż nasz: sprawdzamy termin na obiekcie
-  // z pamięci, bez schodzenia na dysk przy każdym połączeniu.
-  const wPamieci = konfiguracja.zrodlo?.certPath === certPath ? konfiguracja.cert : null;
-  const cert = wPamieci ?? wczytajCert(certPath);
-  if (!cert) return true;
-  // Bramka nazwy tylko dopóki wiadomo, że da się ją przejść: bez tego
-  // generowalibyśmy w kółko certyfikat, który i tak jej nie przejdzie.
-  if (!konfiguracja.nazwaBezPokrycia && !cert.checkHost(hostname)) return true; // zmieniony TP_SMTP_HOSTNAME
+function trzebaWygenerowac({ certPath, mtime }) {
+  if (mtime === null) return true; // ktoś wyczyścił tls/: odtwarzamy, zamiast czytać w kółko
+  // Certyfikat z tego samego pliku, a plik od tamtej pory nie drgnął: termin
+  // sprawdzamy na obiekcie z pamięci, bez parsowania PEM-a na połączenie.
+  const swiezy = konfiguracja.zrodlo?.certPath === certPath && konfiguracja.mtime === mtime;
+  const cert = (swiezy ? konfiguracja.cert : null) ?? wczytajCert(certPath);
+  if (!cert) return true; // nie ma go albo jest uszkodzony
+  if (!zdatny(cert)) return true; // zmieniony TP_SMTP_HOSTNAME
   return (cert.validToDate.getTime() - Date.now()) / 86400_000 < PROG_ODNOWIENIA_DNI;
+}
+
+// Czy tym certyfikatem da się dalej służyć, i przy okazji: czy trzeba o nim
+// ostrzec. Bramka checkHost patrzy na SAN, a ten dla nazwy spoza ASCII wychodzi
+// z x509.js zmielony, więc dla takich nazw nie przejdzie nigdy. CN kodujemy
+// jako utf8, czyli wiernie: po nim poznajemy własny wyrób na tę właśnie nazwę,
+// a skoro nasz, to nowy keygen dałby dokładnie to samo. Stąd punkt stały bramki,
+// ważny i po restarcie, nie tylko do końca życia procesu.
+function zdatny(cert) {
+  const { hostname } = konfiguracja;
+  if (cert.checkHost(hostname)) {
+    konfiguracja.nazwaBezPokrycia = false;
+    return true;
+  }
+  konfiguracja.nazwaBezPokrycia = nasze(cert, hostname);
+  return konfiguracja.nazwaBezPokrycia;
+}
+
+// CN bierzemy z rozłożonego obiektu, nie z tekstu subject: renderowany subject
+// jest escapowany wedle RFC 2253, więc nazwa z przecinkiem wróciłaby jako
+// "CN=mx\,domena.pl" i nigdy nie zgadzałaby się sama ze sobą. A wtedy keygen
+// kręciłby się na każde połączenie, czyli dokładnie to, przed czym tu stoimy.
+function nasze(cert, hostname) {
+  return cert.toLegacyObject().subject?.CN === hostname;
 }
 
 function wczytajCert(certPath) {

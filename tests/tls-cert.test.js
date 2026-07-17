@@ -241,11 +241,13 @@ test('plik psuje się w locie: zostaje ostatni dobry kontekst', () => {
     const przyszlosc = new Date(Date.now() + 2000);
     utimesSync(certPath, przyszlosc, przyszlosc);
 
-    assert.equal(secureContext(), dobryKontekst, 'połowa zapisu nie zdejmuje szyfrowania');
+    // Pytamy panel jako pierwszy: to dokładnie jedno secureContext(), więc
+    // ostrzeżenie musi być świeże już po pierwszej nieudanej próbie odczytu.
     const status = tlsStatus();
     assert.equal(status.source, 'file', 'trzymamy ostatni dobry, nie schodzimy na zapasowy');
     assert.equal(status.subject, 'CN=z-certbota.example.com');
-    assert.match(status.warning, /nie da się wczytać/, 'ale panel wie o zepsutym pliku');
+    assert.match(status.warning, /nie da się wczytać/, 'i to od razu, nie dopiero przy drugim pytaniu');
+    assert.equal(secureContext(), dobryKontekst, 'połowa zapisu nie zdejmuje szyfrowania');
     assert.ok(!existsSync(path.join(dir, 'tls', 'self-signed-cert.pem')), 'zapasowy niepotrzebny, skoro mamy dobry');
   } finally {
     posprzataj(dir);
@@ -303,6 +305,89 @@ test('podmiana pliku przebudowuje kontekst, brak zmiany go nie rusza', () => {
     const b = secureContext();
     assert.notEqual(b, a, 'zmiana mtime przebudowuje kontekst');
     assert.equal(tlsStatus().subject, 'CN=drugi.example.com', 'i to bez restartu');
+  } finally {
+    posprzataj(dir);
+  }
+});
+
+// Samopodpisany ma te same dwie dziury co wskazany, tylko po drugiej stronie
+// rozgałęzienia: certyfikat z pamięci przykrywa to, co stało się z plikiem.
+test('skasowany samopodpisany odtwarza się sam, bez logu na połączenie', () => {
+  const dir = tymczasowy();
+  const pierwotnyLog = console.error;
+  const linie = [];
+  try {
+    initTls(dir, { hostname: HOST });
+    const certPath = path.join(dir, 'tls', 'self-signed-cert.pem');
+
+    // Operator czyści tls/, żeby wymusić świeży certyfikat. Albo sprzątaczka /tmp.
+    rmSync(path.join(dir, 'tls'), { recursive: true, force: true });
+
+    console.error = (...czesci) => linie.push(czesci.join(' '));
+    for (let i = 0; i < 20; i++) secureContext();
+    console.error = pierwotnyLog;
+
+    assert.ok(existsSync(certPath), 'certyfikat wraca na dysk sam, bez restartu usługi');
+    assert.deepEqual(linie, [], 'i bez linii w logu na każde połączenie');
+    assert.equal(tlsStatus().enabled, true, 'szyfrowanie ani na chwilę nie siada');
+  } finally {
+    console.error = pierwotnyLog;
+    posprzataj(dir);
+  }
+});
+
+test('uszkodzony samopodpisany odtwarza się sam, bez logu na połączenie', () => {
+  const dir = tymczasowy();
+  const pierwotnyLog = console.error;
+  const linie = [];
+  try {
+    initTls(dir, { hostname: HOST });
+    const certPath = path.join(dir, 'tls', 'self-signed-cert.pem');
+
+    writeFileSync(certPath, '-----BEGIN CERTIFICATE-----\nśmieć\n');
+    const przyszlosc = new Date(Date.now() + 2000);
+    utimesSync(certPath, przyszlosc, przyszlosc);
+
+    console.error = (...czesci) => linie.push(czesci.join(' '));
+    for (let i = 0; i < 20; i++) secureContext();
+    console.error = pierwotnyLog;
+
+    const naDysku = new crypto.X509Certificate(readFileSync(certPath)); // rzuci, jeśli dalej śmieć
+    assert.equal(naDysku.checkHost(HOST), HOST, 'na dysku znów jest prawdziwy certyfikat na naszą nazwę');
+    assert.deepEqual(linie, [], 'bez linii w logu na każde połączenie');
+    assert.equal(tlsStatus().enabled, true);
+  } finally {
+    console.error = pierwotnyLog;
+    posprzataj(dir);
+  }
+});
+
+test('naprawiony sam klucz wraca na plik, bez restartu', () => {
+  const dir = tymczasowy();
+  try {
+    const { certPem, keyPem } = generateSelfSigned({ hostname: 'z-certbota.example.com' });
+    const certPath = path.join(dir, 'fullchain.pem');
+    const keyPath = path.join(dir, 'privkey.pem');
+    writeFileSync(certPath, certPem);
+    writeFileSync(keyPath, 'to-nie-klucz'); // zepsuta jest druga połowa pary
+    process.env.TP_TLS_CERT = certPath;
+    process.env.TP_TLS_KEY = keyPath;
+
+    initTls(dir, { hostname: HOST });
+    assert.equal(tlsStatus().source, 'self-signed', 'zły klucz schodzi na zapasowy jak zły certyfikat');
+    assert.match(tlsStatus().warning, /privkey\.pem/, 'ostrzeżenie pokazuje klucz, bo to on jest zepsuty');
+
+    // Operator poprawia sam klucz: mtime certyfikatu ani drgnie.
+    const mtimeCertu = statSync(certPath).mtimeMs;
+    writeFileSync(keyPath, keyPem);
+    const przyszlosc = new Date(Date.now() + 2000);
+    utimesSync(keyPath, przyszlosc, przyszlosc);
+    assert.equal(statSync(certPath).mtimeMs, mtimeCertu, 'certyfikat nietknięty: o to w tym teście chodzi');
+
+    const status = tlsStatus();
+    assert.equal(status.source, 'file', 'naprawa klucza wystarcza, pamięć o złej parze puszcza');
+    assert.equal(status.subject, 'CN=z-certbota.example.com');
+    assert.equal(status.warning, null, 'ostrzeżenie znika razem z przyczyną');
   } finally {
     posprzataj(dir);
   }
@@ -377,6 +462,36 @@ test('nazwa spoza ASCII: generujemy raz i ostrzegamy, zamiast kręcić keygenem'
     assert.equal(status.enabled, true, 'MTA-to-MTA nie sprawdza nazwy: szyfrowanie działa mimo wszystko');
     assert.equal(status.subject, 'CN=mx.żółć.pl');
     assert.match(status.warning, /mx\.żółć\.pl/, 'panel widzi problem, zamiast cichej pętli');
+
+    // Restart: bramka nadal nie do przejścia, ale certyfikat jest nasz i na tę
+    // właśnie nazwę, więc drugi start ma go wczytać, a nie palić keygenu.
+    // Inaczej każdy restart podmienia odcisk w panelu.
+    configureTls(null);
+    initTls(dir, { hostname: 'mx.żółć.pl' });
+    assert.equal(readFileSync(certPath, 'utf8'), poStarcie, 'drugi start też nie generuje nowego');
+    assert.match(tlsStatus().warning, /mx\.żółć\.pl/, 'a ostrzeżenie wraca bez keygenu');
+  } finally {
+    posprzataj(dir);
+  }
+});
+
+// Rozpoznanie własnego wyrobu nie może opierać się na renderowanym subject:
+// RFC 2253 każe escapować przecinek i spółkę, więc dla takiej nazwy tekstowe
+// porównanie nigdy nie trafi i keygen kręciłby się w kółko mimo poprawki wyżej.
+test('nazwa spoza ASCII ze znakiem do escapowania: też ani jednego keygenu w kółko', () => {
+  const dir = tymczasowy();
+  try {
+    initTls(dir, { hostname: 'mx,żółć.pl' });
+    const certPath = path.join(dir, 'tls', 'self-signed-cert.pem');
+    const poStarcie = readFileSync(certPath, 'utf8');
+
+    for (let i = 0; i < 20; i++) secureContext();
+    assert.equal(readFileSync(certPath, 'utf8'), poStarcie, 'ani jednego keygenu po starcie');
+    assert.equal(tlsStatus().enabled, true, 'szyfrowanie działa mimo dziwnej nazwy');
+
+    configureTls(null);
+    initTls(dir, { hostname: 'mx,żółć.pl' });
+    assert.equal(readFileSync(certPath, 'utf8'), poStarcie, 'i drugi start też go nie podmienia');
   } finally {
     posprzataj(dir);
   }
