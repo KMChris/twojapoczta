@@ -6,7 +6,7 @@ import {
   SESSION_COOKIE,
 } from './auth.js';
 import {
-  DOMAIN, addressOf, findMailbox, listMessages, getMessage, updateMessage, deleteMessage,
+  DOMAIN, addressOf, addressTaken, listMessages, getMessage, updateMessage, deleteMessage,
   unreadCounts, sendMessage, saveDraft, deliverSystemMessage, setForwarding, getForwarding,
 } from './mail.js';
 import { listFolders, createFolder, renameFolder, deleteFolder } from './folders.js';
@@ -122,8 +122,8 @@ export function registerApiRoutes(router, db) {
       return json(res, 400, { error: `Hasło musi mieć co najmniej ${minHasla} znaków.` });
     }
 
-    // findMailbox łapie też kolizję z cudzym aliasem, nie tylko z loginem.
-    if (findMailbox(db, login)) return json(res, 409, { error: `Adres ${addressOf(login)} jest już zajęty.` });
+    // addressTaken łapie kolizję z cudzym loginem, aliasem, zespołem i adresem systemowym.
+    if (addressTaken(db, login)) return json(res, 409, { error: `Adres ${addressOf(login)} jest już zajęty.` });
 
     const hash = await hashPassword(password);
     const result = db
@@ -359,7 +359,7 @@ export function registerApiRoutes(router, db) {
     if (limit !== null && aliasCount(db, user.id) >= limit) {
       return json(res, 400, { error: `Możesz mieć najwyżej ${limit} ${aliasesWord(limit)}.` });
     }
-    if (findMailbox(db, alias)) {
+    if (addressTaken(db, alias)) {
       return json(res, 409, { error: `Adres ${addressOf(alias)} jest już zajęty.` });
     }
     db.prepare('INSERT INTO aliases (user_id, alias, created_at) VALUES (?, ?, ?)').run(user.id, alias, now());

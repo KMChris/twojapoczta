@@ -9,7 +9,7 @@ import {
   listUsers, getUserView, createUser, deleteUser, revokeSessions, adminCount,
   userAliases, instanceStats,
 } from './admin.js';
-import { DOMAIN, addressOf, findMailbox, deliverSystemMessage, SYSTEM_SENDER } from './mail.js';
+import { DOMAIN, addressOf, addressTaken, findMailbox, deliverSystemMessage, SYSTEM_SENDER } from './mail.js';
 import { WELCOME_SUBJECT, WELCOME_BODY } from './seed.js';
 import { registrationOpen, passwordMinLength, catchallLogin, setSetting } from './settings.js';
 import { aliasLimit, aliasCount, aliasesWord, MAX_ALIAS_LIMIT } from './aliases.js';
@@ -60,7 +60,7 @@ export function registerAdminRoutes(router, db, { dataDir = null, resolver } = {
     if (password.length < minHasla) {
       return json(res, 400, { error: `Hasło musi mieć co najmniej ${minHasla} znaków.` });
     }
-    if (findMailbox(db, login)) {
+    if (addressTaken(db, login)) {
       return json(res, 409, { error: `Adres ${addressOf(login)} jest już zajęty.` });
     }
 
@@ -197,7 +197,7 @@ export function registerAdminRoutes(router, db, { dataDir = null, resolver } = {
         error: `To konto osiągnęło limit aliasów (${limit}). Podnieś limit, żeby dodać kolejny.`,
       });
     }
-    if (findMailbox(db, alias)) {
+    if (addressTaken(db, alias)) {
       return json(res, 409, { error: `Adres ${addressOf(alias)} jest już zajęty.` });
     }
     db.prepare('INSERT INTO aliases (user_id, alias, created_at) VALUES (?, ?, ?)').run(konto.id, alias, now());

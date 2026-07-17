@@ -5,9 +5,11 @@ import assert from 'node:assert/strict';
 import { createApp } from '../server/index.js';
 import { openMemoryDb } from '../server/db.js';
 import { seedIfEmpty } from '../server/seed.js';
+import { createTeam } from '../server/teams.js';
 
 let server;
 let base;
+let db;
 
 function client() {
   let cookie = '';
@@ -36,7 +38,8 @@ function client() {
 }
 
 before(async () => {
-  const app = await createApp({ db: openMemoryDb() });
+  db = openMemoryDb();
+  const app = await createApp({ db });
   server = app.server;
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
@@ -93,6 +96,23 @@ test('registration validates login format and duplicates', async () => {
   assert.equal(bad.status, 400);
   const dup = await api('POST', '/api/register', { login: 'demo', name: 'X', password: '12345678' });
   assert.equal(dup.status, 409);
+});
+
+test('adres zespołu jest zajęty dla rejestracji i dla aliasu', async () => {
+  createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+
+  const rejestracja = await client()('POST', '/api/register', {
+    login: 'sprzedaz',
+    name: 'Podszywacz',
+    password: 'haslo1234',
+  });
+  assert.equal(rejestracja.status, 409);
+  assert.match(rejestracja.data.error, /zajęty/);
+
+  const api = client();
+  await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const alias = await api('POST', '/api/aliases', { alias: 'sprzedaz' });
+  assert.equal(alias.status, 409);
 });
 
 test('internal delivery: sent copy for sender, inbox copy for recipient', async () => {
