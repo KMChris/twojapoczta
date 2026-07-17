@@ -324,9 +324,11 @@ function odkodujExtValue(wartosc) {
   const czesci = wartosc.split("'");
   assert.equal(czesci.length, 3, `ramka RFC 2231 rozbita na ${czesci.length} sekcji: ${wartosc}`);
   assert.equal(czesci[0], 'UTF-8');
-  // Wartość to wyłącznie attribute-char albo %XX wielkimi literami (RFC 2231 §4). Sprawdzane
-  // tu, a nie w pojedynczym teście, bo `decodeURIComponent` przyjmuje oba rozmiary liter
-  // i sam round-trip przepuściłby małe — a nazwa spoza ASCII jest jedyną próbką z A-F.
+  // Wielkich liter w %XX żaden RFC nie wymaga: literały w ABNF są case-insensitive, a RFC 3986
+  // §2.1 to SHOULD. Przypinamy je, bo trzymają bajty na drucie identyczne z poprzednim wydaniem
+  // dla nazw spoza ASCII · to dlatego zmiana kodera nie ruszyła żadnego istniejącego testu.
+  // Sprawdzane tu, a nie w pojedynczym teście, bo `decodeURIComponent` przyjmuje oba rozmiary
+  // liter i sam round-trip przepuściłby małe — a nazwa spoza ASCII jest jedyną próbką z A-F.
   assert.match(czesci[2], /^(?:[A-Za-z0-9!#$&+\-.^_`|{}~]|%[0-9A-F]{2})+$/);
   return decodeURIComponent(czesci[2]);
 }
