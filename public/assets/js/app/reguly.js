@@ -69,18 +69,26 @@ export function ocenUrlObrazka(surowy) {
   return { rodzaj: 'odrzuc' };
 }
 
-// `contain: layout` w app.css i tak odbiera fixed ucieczkę do viewportu,
-// a `isolation: isolate` odbiera z-index przebicie nad interfejs. To jest pas
-// do tamtych szelek, na wypadek zmiany CSS kontenera.
+// Podstawowa i jedyna pewna obrona przed ucieczką treści z kontenera — nie „pas do
+// szelek" dla CSS kontenera, bo ten nic nie trzyma niezawodnie. Bazowy `.czytnik`
+// (app.css:606) to `position: relative; overflow-y: auto`: przycina `absolute`
+// i przepełnienie, ale `relative` NIE zawiera `fixed` (ten ucieka do viewportu —
+// trzymałby go dopiero transform/filter/contain na przodku, których ani `.czytnik`,
+// ani `.uklad`/`body.app` na desktopie nie mają) i NIE tworzy kontekstu stackingu,
+// więc nie izoluje `z-index`. Na dokładkę kontener zmienia się z breakpointem — pod
+// `@media (max-width:1080px)` `.czytnik` bywa `fixed` + `transform` (szuflada mobilna) —
+// więc nie ma się na czym oprzeć. Dlatego `fixed`/`sticky`/`z-index` blokujemy tutaj.
 export function czyDeklaracjaZakazana(nazwa, wartosc) {
   const n = String(nazwa).toLowerCase();
   if (n === 'z-index') return true;
   if (n === 'position') {
-    // Zdejmujemy końcowe `!important` przed porównaniem. Przez zamierzoną ścieżkę
-    // (getPropertyValue) to no-op: CSSOM oddaje priorytet osobno, więc wartość nigdy
-    // nie niesie tu `!important`. Ale ta funkcja to obrona w głąb i nie ma ufać, że
-    // każdy przyszły wywołujący rozdzieli wartość jak CSSOM · cssText `!important`
-    // niesie, i bez tego `position: fixed !important` przeszedłby jako niezakazane.
+    // Zdejmujemy końcowe `!important` w postaci, w jakiej serializuje je CSSOM:
+    // przylegająco, bez spacji ani komentarzy. Zamierzona ścieżka (getPropertyValue)
+    // oddaje priorytet osobno, więc to zwykle no-op · ale cssText niesie `!important`
+    // w wartości, i bez tego `position: fixed !important` przeszedłby jako niezakazane.
+    // Pełnej gramatyki priorytetu (`fixed ! important`, `fixed /* */ !important`) nie
+    // parsujemy — CSSOM jej nie emituje, więc taka forma tu nie dociera. To nie jest
+    // obrona przed dowolnym tekstem CSS, tylko dopasowanie do tego, co produkuje CSSOM.
     const w = String(wartosc).toLowerCase().replace(/\s*!important\s*$/, '').trim();
     return w === 'fixed' || w === 'sticky';
   }
