@@ -4,7 +4,7 @@
 
 import net from 'node:net';
 import tls from 'node:tls';
-import { DOMAIN, findMailbox, deliverInbound } from './mail.js';
+import { DOMAIN, resolveDelivery, deliverInbound } from './mail.js';
 import { parseMessage } from './mime.js';
 import { hasRoom } from './quota.js';
 import { catchallLogin } from './settings.js';
@@ -34,7 +34,7 @@ export function startSmtpServer(
     let linieDanych = [];
     let rozmiarDanych = 0;
     let przepelnione = false;
-    const koperta = { mailFrom: null, rcpt: [] };
+    const koperta = { mailFrom: null, rcpt: [], adresy: new Set() };
 
     const wyslij = (tekst) => {
       if (!gniazdo.destroyed) gniazdo.write(tekst + '\r\n');
@@ -87,6 +87,7 @@ export function startSmtpServer(
     function resetujTransakcje() {
       koperta.mailFrom = null;
       koperta.rcpt = [];
+      koperta.adresy = new Set();
       linieDanych = [];
       rozmiarDanych = 0;
       przepelnione = false;
@@ -168,16 +169,24 @@ export function startSmtpServer(
         const [local, domena] = adres.split('@');
         if (!domena || domena !== DOMAIN) return wyslij('554 5.7.1 Relay access denied');
         // Nieznany adres w domenie próbuje jeszcze skrzynki catch-all (o ile ustawiona).
-        let skrzynka = findMailbox(db, local);
-        if (!skrzynka) {
+        let cel = resolveDelivery(db, local);
+        if (!cel) {
           const zbiorczy = catchallLogin(db);
-          if (zbiorczy) skrzynka = findMailbox(db, zbiorczy);
+          if (zbiorczy) cel = resolveDelivery(db, zbiorczy);
         }
-        if (!skrzynka) return wyslij('550 5.1.1 No such mailbox');
-        if (!hasRoom(db, skrzynka.id)) return wyslij('552 5.2.2 Mailbox full');
-        if (koperta.rcpt.length >= MAX_RECIPIENTS) return wyslij('452 4.5.3 Too many recipients');
-        if (!koperta.rcpt.some((r) => r.id === skrzynka.id)) {
-          koperta.rcpt.push({ ...skrzynka, adres });
+        // Zespół bez członków odpowiada tak samo jak adres nieistniejący: obcemu
+        // serwerowi nie mamy nic do powiedzenia o naszym składzie osobowym.
+        if (!cel || !cel.mailboxes.length) return wyslij('550 5.1.1 No such mailbox');
+        const zMiejscem = cel.mailboxes.filter((s) => hasRoom(db, s.id));
+        if (!zMiejscem.length) return wyslij('552 5.2.2 Mailbox full');
+        // Limit liczy adresy z koperty, nie skrzynki: chroni przed nadawcą
+        // adresującym 50 rzeczy, a nie przed naszym własnym rozdzielnikiem.
+        if (koperta.adresy.size >= MAX_RECIPIENTS && !koperta.adresy.has(adres)) {
+          return wyslij('452 4.5.3 Too many recipients');
+        }
+        koperta.adresy.add(adres);
+        for (const skrzynka of zMiejscem) {
+          if (!koperta.rcpt.some((r) => r.id === skrzynka.id)) koperta.rcpt.push({ ...skrzynka, adres });
         }
         return wyslij('250 2.1.5 OK');
       }

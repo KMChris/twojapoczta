@@ -7,6 +7,8 @@ import net from 'node:net';
 import { openMemoryDb, now } from '../server/db.js';
 import { startSmtpServer, MAX_MESSAGE_BYTES } from '../server/smtp.js';
 import { listMessages } from '../server/mail.js';
+import { createTeam, setMember } from '../server/teams.js';
+import { setSetting } from '../server/settings.js';
 
 let db;
 let smtp;
@@ -166,5 +168,89 @@ test('QUIT kończy połączenie 221', async () => {
   const k = polacz();
   await k.read();
   assert.match(await k.cmd('QUIT'), /^221 /);
+  k.end();
+});
+
+// Lokalny pomocnik: konta zakładane per test, żeby nie ruszać wspólnej mapy ids.
+function konto(login) {
+  return Number(
+    db.prepare('INSERT INTO users (login, name, password_hash, created_at) VALUES (?, ?, ?, ?)')
+      .run(login, login, 'x', now()).lastInsertRowid
+  );
+}
+
+async function dostarcz(k, rcpt) {
+  assert.match(await k.read(), /^220 /);
+  await k.cmd('EHLO tester');
+  await k.cmd('MAIL FROM:<ktos@obca.pl>');
+  const odp = await k.cmd(`RCPT TO:<${rcpt}>`);
+  return odp;
+}
+
+test('RCPT na adres zespołu rozwija kopertę na wszystkich członków', async () => {
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  const jan = konto('jan-smtp');
+  const ania = konto('ania-smtp');
+  setMember(db, zespol.id, jan, false);
+  setMember(db, zespol.id, ania, false);
+
+  const k = polacz();
+  assert.match(await dostarcz(k, 'sprzedaz@twojapoczta.com'), /^250 /);
+  await k.cmd('DATA');
+  await k.cmd('Subject: Pytanie\r\n\r\nIle to kosztuje?\r\n.');
+  k.end();
+
+  for (const id of [jan, ania]) {
+    const kopia = db.prepare("SELECT * FROM messages WHERE owner_id = ? AND folder = 'inbox'").get(id);
+    assert.ok(kopia, 'każdy członek dostaje kopię z jednego RCPT');
+    assert.equal(kopia.to_addr, 'sprzedaz@twojapoczta.com', 'członek widzi adres zespołu, nie swój');
+  }
+});
+
+test('RCPT na zespół bez członków → 550, bez słowa o składzie', async () => {
+  createTeam(db, { localPart: 'pusty', name: 'Pusty' });
+  const k = polacz();
+  // Ten sam kod co adres nieistniejący: obcemu serwerowi nie mamy nic do powiedzenia
+  // o tym, czy adres istnieje, ale nikt go nie obsługuje.
+  assert.match(await dostarcz(k, 'pusty@twojapoczta.com'), /^550 /);
+  k.end();
+
+  // Skrzynka zbiorcza łapie adresy, których u nas nie ma, a ten jest: pusty zespół
+  // odmawia także przy włączonym catch-allu, zamiast zsypywać firmową pocztę
+  // do skrzynki przypadkowej osoby.
+  setSetting(db, 'catchall', 'demo');
+  try {
+    const z = polacz();
+    assert.match(await dostarcz(z, 'pusty@twojapoczta.com'), /^550 /);
+    z.end();
+  } finally {
+    setSetting(db, 'catchall', null);
+  }
+});
+
+test('zespół większy niż MAX_RECIPIENTS mieści się w jednym RCPT', async () => {
+  const zespol = createTeam(db, { localPart: 'wszyscy', name: 'Wszyscy' });
+  for (let i = 0; i < 60; i += 1) setMember(db, zespol.id, konto(`tlum${i}`), false);
+  const k = polacz();
+  // Nadawca poprosił o jeden adres, a nie o sześćdziesiąt: limit koperty go nie dotyczy.
+  assert.match(await dostarcz(k, 'wszyscy@twojapoczta.com'), /^250 /);
+  // Rozwinięty zespół nie zjada limitu następnym adresom: w kopercie stoi sześćdziesiąt
+  // skrzynek, ale adres wciąż jeden.
+  assert.match(await k.cmd('RCPT TO:<demo@twojapoczta.com>'), /^250 /);
+  k.end();
+});
+
+test('limit koperty: 50 adresów wchodzi, powtórka też, nowy ponad limit → 452', async () => {
+  for (let i = 0; i < 51; i += 1) konto(`limit${i}`);
+  const k = polacz();
+  assert.match(await k.read(), /^220 /);
+  await k.cmd('EHLO tester');
+  await k.cmd('MAIL FROM:<ktos@obca.pl>');
+  for (let i = 0; i < 50; i += 1) {
+    assert.match(await k.cmd(`RCPT TO:<limit${i}@twojapoczta.com>`), /^250 /);
+  }
+  // Adres już policzony nie dokłada się do limitu drugi raz.
+  assert.match(await k.cmd('RCPT TO:<limit0@twojapoczta.com>'), /^250 /);
+  assert.match(await k.cmd('RCPT TO:<limit50@twojapoczta.com>'), /^452 /);
   k.end();
 });
