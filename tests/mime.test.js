@@ -301,6 +301,30 @@ test('htmlCytujeCid: dłuższy cid: w treści nie jest cytowaniem krótszego Con
   assert.equal(htmlCytujeCid('<img src="cid:logo@fir.ma2">', 'logo@fir.ma'), false);
 });
 
+// Ta sama kotwica, ale na znakach, których stara klasa `[\w.@%+-]` nie znała. Wszystkie trzy
+// są legalnym atextem RFC 5322, więc `cid:logo@fir.ma~2` to odwołanie do identyfikatora
+// `logo@fir.ma~2`, a nie do `logo@fir.ma` · gdyby krótszy klucz je łapał, wpadłby do mapy
+// `cid` (i zniknął z listy) pod adresem, o który klient nigdy nie zapyta, bo z treści czyta
+// odwołanie pełne. `/` i `=` to przy tym znaki alfabetu base64, a Content-ID bywają z base64
+// generowane, więc to nie są przypadki wydumane.
+test('htmlCytujeCid: odwołanie przedłużone znakiem atextu nie jest cytowaniem krótszego Content-ID', () => {
+  assert.equal(htmlCytujeCid('<img src="cid:logo@fir.ma~2">', 'logo@fir.ma'), false);
+  assert.equal(htmlCytujeCid('<img src="cid:logo@fir.ma=x">', 'logo@fir.ma'), false);
+  assert.equal(htmlCytujeCid('<img src="cid:abc/def/ghi">', 'abc/def'), false);
+});
+
+// Drugi kierunek tej samej klasy, bo test tylko na jednym przepuści odwrotną mutację: klasa
+// poszerzana „dla zgodności z RFC" aż do apostrofu urwałaby dopasowanie w `src='cid:x'`
+// (lookahead wziąłby zamykający apostrof za dalszy ciąg identyfikatora), a osadzony obrazek
+// zamieniłby się w spinacz pod listem. Cztery sposoby, bo funkcja szuka po całym stringu i
+// tyle jest w praktyce sposobów zacytowania `cid:` w HTML-u i w CSS-ie.
+test('htmlCytujeCid: wszystkie cztery sposoby cytowania nadal dopasowują się dokładnie', () => {
+  assert.equal(htmlCytujeCid('<img src="cid:logo@fir.ma">', 'logo@fir.ma'), true);
+  assert.equal(htmlCytujeCid("<img src='cid:logo@fir.ma'>", 'logo@fir.ma'), true);
+  assert.equal(htmlCytujeCid('<img src=cid:logo@fir.ma>', 'logo@fir.ma'), true);
+  assert.equal(htmlCytujeCid('<div style="background:url(cid:logo@fir.ma)">', 'logo@fir.ma'), true);
+});
+
 test('htmlCytujeCid: bez treści albo bez Content-ID → false', () => {
   assert.equal(htmlCytujeCid('', 'logo@fir.ma'), false);
   assert.equal(htmlCytujeCid(null, 'logo@fir.ma'), false);

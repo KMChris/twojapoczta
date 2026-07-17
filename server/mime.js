@@ -58,6 +58,15 @@ export function parseContentId(value) {
   return bez || null;
 }
 
+// Czym odwołanie `cid:` może się legalnie przedłużyć poza nasz klucz: atext RFC 5322 §3.2.3
+// (ALPHA / DIGIT / ! # $ % & ' * + - / = ? ^ _ ` { | } ~) plus `.` i `@`, które rozdzielają
+// części identyfikatora. Bez apostrofu · jest naraz legalnym atextem i ogranicznikiem
+// atrybutu, więc w pełnym zbiorze `src='cid:logo@fir.ma'` przestaje się dopasowywać:
+// lookahead bierze zamykający apostrof za dalszy ciąg identyfikatora. Surowy regex po
+// stringu nie rozstrzygnie, które z dwóch znaczeń apostrofu ma przed sobą, więc wybieramy
+// stronę, która nie psuje pospolitego HTML-a.
+const PRZEDLUZENIE_CONTENT_ID = /[\w!#$%&*+\-/=?^`{|}~.@]/;
+
 // Czy ten HTML naprawdę cytuje ten `cid:`. Pytają o to obie strony: wysyłka (co schować
 // do `related`) i odbiór (co przenieść do mapy `cid`) · w obu wypadkach załącznik z
 // martwym Content-ID ma zostać zwykłym, widocznym załącznikiem.
@@ -67,8 +76,9 @@ export function htmlCytujeCid(html, contentId) {
   // Dopasowanie dokładne, bo lokalna część identyfikatora jest case-sensitive i klient
   // wiąże `cid:` dokładnie · przy niezgodzie lepiej zostawić widoczny załącznik niż
   // `inline` (albo wpis w mapie) z martwym `cid:`.
-  // Lookahead pilnuje, żeby `cid:logo@fir.ma` nie złapało się na `cid:logo@fir.mail`.
-  return new RegExp(`cid:${wzorzec}(?![\\w.@%+-])`).test(html);
+  // Lookahead pilnuje, żeby `cid:logo@fir.ma` nie złapało się na `cid:logo@fir.mail`
+  // ani na `cid:logo@fir.ma~2` · klucz krótszy niż odwołanie to martwa kotwica.
+  return new RegExp(`cid:${wzorzec}(?!${PRZEDLUZENIE_CONTENT_ID.source})`).test(html);
 }
 
 // Część osadzona bywa bez nazwy pliku, a nazwa jest wymagana przez zapis
