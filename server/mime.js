@@ -58,6 +58,19 @@ export function parseContentId(value) {
   return bez || null;
 }
 
+// Czy ten HTML naprawdę cytuje ten `cid:`. Pytają o to obie strony: wysyłka (co schować
+// do `related`) i odbiór (co przenieść do mapy `cid`) · w obu wypadkach załącznik z
+// martwym Content-ID ma zostać zwykłym, widocznym załącznikiem.
+export function htmlCytujeCid(html, contentId) {
+  if (!html || !contentId) return false;
+  const wzorzec = contentId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Dopasowanie dokładne, bo lokalna część identyfikatora jest case-sensitive i klient
+  // wiąże `cid:` dokładnie · przy niezgodzie lepiej zostawić widoczny załącznik niż
+  // `inline` (albo wpis w mapie) z martwym `cid:`.
+  // Lookahead pilnuje, żeby `cid:logo@fir.ma` nie złapało się na `cid:logo@fir.mail`.
+  return new RegExp(`cid:${wzorzec}(?![\\w.@%+-])`).test(html);
+}
+
 // Część osadzona bywa bez nazwy pliku, a nazwa jest wymagana przez zapis
 // załącznika. Robimy ją z Content-ID, żeby dało się ją potem rozpoznać okiem.
 // Tylko dla części osadzonych: text/* z Content-ID to nadal treść listu, a nie

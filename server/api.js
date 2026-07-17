@@ -12,8 +12,9 @@ import {
 import { listFolders, createFolder, renameFolder, deleteFolder } from './folders.js';
 import { WELCOME_SUBJECT, WELCOME_BODY } from './seed.js';
 import {
-  saveUpload, listAttachments, getAttachment, MAX_FILE_BYTES,
+  saveUpload, listAttachments, getAttachment, getAttachmentByCid, MAX_FILE_BYTES,
 } from './attachments.js';
+import { htmlCytujeCid } from './mime.js';
 import { now } from './db.js';
 import { registrationOpen, passwordMinLength } from './settings.js';
 import { aliasLimit, aliasCount, aliasesWord } from './aliases.js';
@@ -226,8 +227,33 @@ export function registerApiRoutes(router, db) {
       updateMessage(db, user.id, msg.id, { is_read: true });
       msg.is_read = 1;
     }
-    const attachments = msg.attachments_count ? listAttachments(db, user.id, msg.id) : [];
-    json(res, 200, { message: msg, attachments });
+    const wszystkie = msg.attachments_count ? listAttachments(db, user.id, msg.id) : [];
+    // Osadzone są treścią, nie załącznikiem: idą do mapy `cid`, a z listy pod listem
+    // znikają, żeby logo z nagłówka nie udawało spinacza. Ale tylko te, które treść
+    // naprawdę cytuje · załącznik z Content-ID, którego nikt nie woła, zniknąłby
+    // z aplikacji zupełnie: nie ma go w treści i nie byłoby pod listem.
+    const cid = {};
+    const attachments = [];
+    for (const z of wszystkie) {
+      if (z.content_id && htmlCytujeCid(msg.body_html, z.content_id)) {
+        cid[z.content_id] = `/api/messages/${msg.id}/cid/${encodeURIComponent(z.content_id)}`;
+      } else {
+        attachments.push(z);
+      }
+    }
+    json(res, 200, { message: msg, attachments, cid });
+  });
+
+  route('GET', '/api/messages/:id/cid/:contentId', async (req, res, { user, params }) => {
+    const obrazek = getAttachmentByCid(db, user.id, Number(params.id), params.contentId);
+    if (!obrazek) return json(res, 404, { error: 'Nie znaleziono obrazka.' });
+    res.writeHead(200, {
+      'Content-Type': obrazek.mime,
+      'Content-Length': obrazek.size,
+      'Content-Disposition': 'inline',
+      'Cache-Control': 'private, max-age=86400',
+    });
+    res.end(obrazek.data);
   });
 
   // --- Załączniki -------------------------------------------------------------

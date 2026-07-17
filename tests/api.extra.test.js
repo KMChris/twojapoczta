@@ -4,10 +4,12 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../server/index.js';
-import { openMemoryDb } from '../server/db.js';
+import { openMemoryDb, now } from '../server/db.js';
+import { storeAttachment } from '../server/attachments.js';
 
 let server;
 let base;
+let db;
 
 function client() {
   let cookie = '';
@@ -28,7 +30,8 @@ function client() {
 }
 
 before(async () => {
-  const app = await createApp({ db: openMemoryDb() });
+  db = openMemoryDb();
+  const app = await createApp({ db });
   server = app.server;
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${server.address().port}`;
@@ -312,4 +315,96 @@ test('foldery: przeniesienie wiadomości, filtrowanie po folderId i licznik', as
   // Usunięcie folderu przenosi pocztę do Archiwum, a nie kasuje.
   assert.equal((await ala('DELETE', `/api/folders/${id}`)).data.moved, 1);
   assert.equal((await ala('GET', '/api/messages?folder=archive')).data.messages.length, 1);
+});
+
+// --- Obrazki osadzone (cid) --------------------------------------------------
+
+function idUzytkownika(login) {
+  return db.prepare('SELECT id FROM users WHERE login = ?').get(login).id;
+}
+
+function wstawZObrazkiem(ownerId, contentId) {
+  const wynik = db.prepare(
+    `INSERT INTO messages (owner_id, folder, from_addr, subject, body, body_html, snippet, sent_at, attachments_count)
+     VALUES (?, 'inbox', 'a@b.pl', 'Z obrazkiem', 'tekst', ?, '', ?, 1)`
+  ).run(ownerId, `<img src="cid:${contentId}">`, now());
+  const id = Number(wynik.lastInsertRowid);
+  storeAttachment(db, id, { filename: 'logo.png', mime: 'image/png', data: Buffer.from('png-bajty'), contentId });
+  return id;
+}
+
+test('cid: oddaje obrazek osadzony inline', async () => {
+  const api = client();
+  await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const id = wstawZObrazkiem(idUzytkownika('demo'), 'logo@fir.ma');
+  // rawBody z pustym ciałem daje surową odpowiedź z ciasteczkiem sesji,
+  // a `api()` parsuje tylko JSON, więc na bajty się nie nadaje.
+  const res = await api.rawBody('GET', `/api/messages/${id}/cid/${encodeURIComponent('logo@fir.ma')}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'image/png');
+  assert.match(res.headers.get('content-disposition'), /^inline/);
+  assert.equal(Buffer.from(await res.arrayBuffer()).toString(), 'png-bajty');
+});
+
+test('cid: cudza wiadomość → 404', async () => {
+  const api = client();
+  await api('POST', '/api/register', { login: 'obcy1', name: 'Obcy', password: '12345678' });
+  const idObcego = idUzytkownika('obcy1');
+  const api2 = client();
+  await api2('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const id = wstawZObrazkiem(idObcego, 'cudze@fir.ma');
+  const res = await api2.rawBody('GET', `/api/messages/${id}/cid/${encodeURIComponent('cudze@fir.ma')}`);
+  assert.equal(res.status, 404);
+});
+
+test('cid: nieznany identyfikator → 404', async () => {
+  const api = client();
+  await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const id = wstawZObrazkiem(idUzytkownika('demo'), 'jest@fir.ma');
+  const res = await api.rawBody('GET', `/api/messages/${id}/cid/nie-ma-takiego`);
+  assert.equal(res.status, 404);
+});
+
+test('cid: mapa w GET /api/messages/:id, a osadzone znikają z listy załączników', async () => {
+  const api = client();
+  await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const id = wstawZObrazkiem(idUzytkownika('demo'), 'mapa@fir.ma');
+  const { status, data } = await api('GET', `/api/messages/${id}`);
+  assert.equal(status, 200);
+  assert.equal(data.cid['mapa@fir.ma'], `/api/messages/${id}/cid/${encodeURIComponent('mapa@fir.ma')}`);
+  assert.equal(data.attachments.length, 0);
+});
+
+// Testy charakteryzujące: przechodzą już dziś, bo `GET /api/messages/:id` w ogóle nie
+// filtruje załączników, więc nie są dowodem regresji dla tej zmiany. Pilnują ich, bo po
+// wprowadzeniu mapy `cid` załącznik z Content-ID mógłby zniknąć z listy, mimo że treść
+// go nie cytuje · nie byłoby go wtedy ani w treści, ani pod listem.
+test('cid: załącznik z Content-ID, którego treść nie cytuje, nadal zostaje na liście', async () => {
+  const api = client();
+  await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const ownerId = idUzytkownika('demo');
+  const wynik = db.prepare(
+    `INSERT INTO messages (owner_id, folder, from_addr, subject, body, body_html, snippet, sent_at, attachments_count)
+     VALUES (?, 'inbox', 'a@b.pl', 'Sierota', 'tekst', '<p>Bez obrazkow</p>', '', ?, 1)`
+  ).run(ownerId, now());
+  const id = Number(wynik.lastInsertRowid);
+  storeAttachment(db, id, { filename: 'sierota.png', mime: 'image/png', data: Buffer.from('png'), contentId: 'sierota@fir.ma' });
+  const { data } = await api('GET', `/api/messages/${id}`);
+  assert.deepEqual(data.cid, {});
+  assert.equal(data.attachments.length, 1);
+  assert.equal(data.attachments[0].filename, 'sierota.png');
+});
+
+test('cid: list bez HTML nadal nie gubi załącznika z Content-ID', async () => {
+  const api = client();
+  await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const ownerId = idUzytkownika('demo');
+  const wynik = db.prepare(
+    `INSERT INTO messages (owner_id, folder, from_addr, subject, body, body_html, snippet, sent_at, attachments_count)
+     VALUES (?, 'inbox', 'a@b.pl', 'Sam tekst', 'tekst', '', '', ?, 1)`
+  ).run(ownerId, now());
+  const id = Number(wynik.lastInsertRowid);
+  storeAttachment(db, id, { filename: 'zalacznik.png', mime: 'image/png', data: Buffer.from('png'), contentId: 'bez-html@fir.ma' });
+  const { data } = await api('GET', `/api/messages/${id}`);
+  assert.equal(data.attachments.length, 1);
 });

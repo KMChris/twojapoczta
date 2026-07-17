@@ -5,6 +5,7 @@ import net from 'node:net';
 import tls from 'node:tls';
 import crypto from 'node:crypto';
 import { resolveMx } from 'node:dns/promises';
+import { htmlCytujeCid } from './mime.js';
 
 const COMMAND_TIMEOUT_MS = 15_000;
 
@@ -102,19 +103,6 @@ function kodujRfc2231(filename) {
 // i pełna w `filename*` (RFC 2231), bo inaczej znaki spoza ASCII giną po drodze.
 function naglowekDisposition(typ, filename) {
   return `Content-Disposition: ${typ}; filename="${nazwaAscii(filename)}"; filename*=UTF-8''${kodujRfc2231(filename)}`;
-}
-
-// Osadzony jest tylko ten załącznik, którego `cid:` naprawdę pada w HTML-u. Załącznik
-// z Content-ID, do którego nikt się nie odwołuje, zostaje zwykły: `inline` z martwym
-// `cid:` byłby u odbiorcy niewidoczny, a jako załącznik jest widoczny.
-function htmlCytujeCid(html, contentId) {
-  if (!html || !contentId) return false;
-  const wzorzec = contentId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // Dopasowanie dokładne, bo lokalna część identyfikatora jest case-sensitive i odbiorca
-  // wiąże `cid:` dokładnie · chowamy do `related` tylko to, co na pewno się zwiąże, a przy
-  // niepewności zostawiamy widoczny załącznik zamiast `inline` z martwym `cid:`.
-  // Lookahead pilnuje, żeby `cid:logo@fir.ma` nie złapało się na `cid:logo@fir.mail`.
-  return new RegExp(`cid:${wzorzec}(?![\\w.@%+-])`).test(html);
 }
 
 // Część osadzona: kotwica `Content-ID` w ostrych nawiasach, bo tak czyta ją odbiorca

@@ -104,6 +104,22 @@ export function getAttachment(db, ownerId, messageId, attachmentId) {
   return { ...meta, data: blob.data };
 }
 
+// Obrazek osadzony po Content-ID. Jak `getAttachment`, ale adresowany tym,
+// czym adresuje go treść listu.
+export function getAttachmentByCid(db, ownerId, messageId, contentId) {
+  const meta = db
+    .prepare(
+      `SELECT a.id, a.filename, a.mime, a.size, a.blob_hash FROM attachments a
+       JOIN messages m ON m.id = a.message_id
+       WHERE a.content_id = ? AND m.id = ? AND m.owner_id = ?`
+    )
+    .get(String(contentId), messageId, ownerId);
+  if (!meta) return null;
+  const blob = db.prepare('SELECT data FROM blobs WHERE hash = ?').get(meta.blob_hash);
+  if (!blob) return null;
+  return { ...meta, data: blob.data };
+}
+
 function pruneUploads(db) {
   const granica = new Date(Date.now() - UPLOAD_TTL_MS).toISOString();
   const wynik = db.prepare('DELETE FROM uploads WHERE created_at < ?').run(granica);
