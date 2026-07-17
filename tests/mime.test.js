@@ -368,6 +368,26 @@ test('parseMessage: część osadzona bez nazwy pliku dostaje nazwę syntetyczn�
   assert.equal(wynik.attachments[0].filename, 'osadzony-x_y.png');
 });
 
+test('parseMessage: część tekstowa oznaczona jako załącznik bez nazwy zostaje treścią listu', () => {
+  const raw = buf([
+    'From: a@b.pl',
+    'Subject: Dziwna dyspozycja',
+    'Content-Type: multipart/mixed; boundary="gr"',
+    '',
+    '--gr',
+    'Content-Type: text/plain; charset=utf-8',
+    'Content-Disposition: attachment',
+    '',
+    'Treść mimo dziwnej dyspozycji',
+    '--gr--',
+    '',
+  ].join('\r\n'));
+  const wynik = parseMessage(raw);
+  assert.equal(wynik.body, 'Treść mimo dziwnej dyspozycji');
+  assert.doesNotMatch(wynik.body, /--gr/); // nigdy surowe granice MIME w oczy użytkownika
+  assert.equal(wynik.attachments.length, 0);
+});
+
 test('parseMessage: zwykły załącznik nadal nie ma contentId', () => {
   const raw = buf([
     'From: a@b.pl',

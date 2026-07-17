@@ -245,11 +245,15 @@ function walkPart(buffer, wynik, depth) {
 
   if (jestZalacznikiem) {
     const nazwa = filename ?? syntetycznaNazwa(contentId, ct.value);
-    if (!nazwa) return;
-    if (wynik.attachments.length >= MAX_FILES_PER_MESSAGE) return;
-    if (dane.length === 0 || dane.length > MAX_FILE_BYTES) return;
-    wynik.attachments.push({ filename: nazwa, mime: ct.value, data: dane, contentId });
-    return;
+    // Bez nazwy nie ma czego zapisać, więc spadamy do gałęzi tekstowych, tak jak
+    // przed dołożeniem cid: część text/* oznaczona jako załącznik, ale bez nazwy,
+    // ma dalej zostać treścią listu, a nie zniknąć.
+    if (nazwa) {
+      if (wynik.attachments.length >= MAX_FILES_PER_MESSAGE) return;
+      if (dane.length === 0 || dane.length > MAX_FILE_BYTES) return;
+      wynik.attachments.push({ filename: nazwa, mime: ct.value, data: dane, contentId });
+      return;
+    }
   }
 
   if (ct.value === 'text/plain' && wynik.body == null) {
