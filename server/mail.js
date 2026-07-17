@@ -516,13 +516,27 @@ function wyslijZaplanowana(db, msg) {
     const at = addr.lastIndexOf('@');
     const domena = addr.slice(at + 1);
     if (domena === DOMAIN) {
-      const recipient = findMailbox(db, addr.slice(0, at));
-      if (!recipient) {
+      // Ta sama polityka co w resolveRecipients, ale ubrana w „nieosiagalni":
+      // nadawcy nie ma już przy klawiaturze, więc odmowa wraca pocztą, nie błędem.
+      const cel = resolveDelivery(db, addr.slice(0, at));
+      if (!cel) {
         nieosiagalni.push({ adres: addr, powod: 'skrzynka nie istnieje' });
-      } else if (!hasRoom(db, recipient.id, przybywa)) {
-        nieosiagalni.push({ adres: addr, powod: 'skrzynka odbiorcy jest pełna' });
-      } else if (!resolved.some((r) => r.id === recipient.id)) {
-        resolved.push(recipient);
+        continue;
+      }
+      if (cel.kind === 'team' && !cel.mailboxes.length) {
+        nieosiagalni.push({ adres: addr, powod: 'skrzynka zespołu nie ma członków' });
+        continue;
+      }
+      const zMiejscem = cel.mailboxes.filter((s) => hasRoom(db, s.id, przybywa));
+      if (!zMiejscem.length) {
+        nieosiagalni.push({
+          adres: addr,
+          powod: cel.kind === 'team' ? 'skrzynka zespołu jest pełna' : 'skrzynka odbiorcy jest pełna',
+        });
+        continue;
+      }
+      for (const skrzynka of zMiejscem) {
+        if (!resolved.some((r) => r.id === skrzynka.id)) resolved.push(skrzynka);
       }
     } else if (process.env.TP_EXTERNAL === '1') {
       zewnetrzni.push(addr);

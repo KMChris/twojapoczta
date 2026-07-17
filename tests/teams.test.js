@@ -7,7 +7,7 @@ import {
   findTeam, teamById, teamMailboxes, teamMembers, userTeams, canSendAs,
   listTeams, createTeam, renameTeam, deleteTeam, setMember, removeMember,
 } from '../server/teams.js';
-import { resolveDelivery, addressTaken, sendMessage, SYSTEM_SENDER } from '../server/mail.js';
+import { resolveDelivery, addressTaken, sendMessage, fireScheduled, SYSTEM_SENDER } from '../server/mail.js';
 
 function konto(db, login) {
   return Number(
@@ -359,5 +359,60 @@ test('adresowanie wprost wygrywa też wtedy, gdy zespół stoi w kopercie pierws
     body: 'x',
   });
   assert.match(wynik.error, /jan@twojapoczta\.com/, 'kolejność adresów nie zmienia tego, kto odpowiada za skrzynkę');
+  db.close();
+});
+
+test('zaplanowany list na adres zespołu rozchodzi się do członków', () => {
+  const db = openMemoryDb();
+  const nadawca = { id: konto(db, 'klient'), login: 'klient', name: 'Klient' };
+  const jan = konto(db, 'jan');
+  const ania = konto(db, 'ania');
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  setMember(db, zespol.id, jan, false);
+  setMember(db, zespol.id, ania, false);
+
+  sendMessage(db, nadawca, {
+    to: 'sprzedaz@twojapoczta.com',
+    subject: 'Za chwilę',
+    body: 'x',
+    scheduledAt: new Date(Date.now() + 1000).toISOString(),
+  });
+  // Cofamy termin zamiast czekać: strażnik patrzy wyłącznie na scheduled_at.
+  db.prepare("UPDATE messages SET scheduled_at = ? WHERE folder = 'scheduled'").run(new Date(Date.now() - 1000).toISOString());
+  assert.equal(fireScheduled(db), 1);
+
+  for (const id of [jan, ania]) {
+    assert.equal(
+      db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND folder = 'inbox'").get(id).n,
+      1,
+      'członek dostaje zaplanowany list'
+    );
+  }
+  db.close();
+});
+
+test('zaplanowany list na pusty zespół wraca zwrotem, nie znika', () => {
+  const db = openMemoryDb();
+  const nadawca = { id: konto(db, 'klient'), login: 'klient', name: 'Klient' };
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  const jan = konto(db, 'jan');
+  setMember(db, zespol.id, jan, false);
+
+  sendMessage(db, nadawca, {
+    to: 'sprzedaz@twojapoczta.com',
+    subject: 'Sierota',
+    body: 'x',
+    scheduledAt: new Date(Date.now() + 1000).toISOString(),
+  });
+  // Skład znika między zaplanowaniem a nadaniem.
+  db.prepare('DELETE FROM team_members WHERE team_id = ?').run(zespol.id);
+  db.prepare("UPDATE messages SET scheduled_at = ? WHERE folder = 'scheduled'").run(new Date(Date.now() - 1000).toISOString());
+  fireScheduled(db);
+
+  const zwrot = db
+    .prepare("SELECT * FROM messages WHERE owner_id = ? AND folder = 'inbox' AND subject LIKE 'Zwrot%'")
+    .get(nadawca.id);
+  assert.ok(zwrot, 'nadawca dostaje zwrot');
+  assert.match(zwrot.body, /nie ma członków/);
   db.close();
 });
