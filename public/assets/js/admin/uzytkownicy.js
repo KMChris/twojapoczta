@@ -31,7 +31,7 @@ export function initUzytkownicy(stan) {
     if (!filtr) return lista;
     const igla = bezOgonkow(filtr);
     return lista.filter((u) =>
-      bezOgonkow(`${u.login} ${u.name} ${u.aliases.map((a) => a.alias).join(' ')}`).includes(igla)
+      bezOgonkow(`${u.login} ${u.name} ${u.aliases.map((a) => a.alias).join(' ')} ${u.teams.map((t) => t.local_part).join(' ')}`).includes(igla)
     );
   }
 
@@ -78,6 +78,7 @@ export function initUzytkownicy(stan) {
       el('th', {}, 'Wiadomości'),
       el('th', {}, 'Zajętość'),
       el('th', {}, 'Aliasy'),
+      el('th', {}, 'Zespoły'),
       el('th', {}, 'Ostatnie logowanie')
     );
 
@@ -104,6 +105,7 @@ export function initUzytkownicy(stan) {
         el('td', { class: 'mono' }, String(u.messages)),
         el('td', { class: 'mono' }, formatujRozmiar(u.storage_bytes) + (u.quota_mb ? ` / ${u.quota_mb} MB` : '')),
         el('td', { class: 'mono' }, String(u.aliases.length) + (u.alias_limit == null ? '' : ` / ${u.alias_limit}`)),
+        el('td', { class: 'mono' }, String(u.teams.length)),
         el('td', { class: 'mono' }, u.last_login_at ? krotkiCzas(u.last_login_at) : '—')
       )
     );
@@ -295,6 +297,21 @@ export function initUzytkownicy(stan) {
       )
     );
 
+    // Tylko do odczytu: zespół ma własny ekran, tu odpowiadamy na pytanie
+    // „dlaczego Jan dostaje tę pocztę", bez obchodzenia wszystkich zespołów.
+    const zespolyKonta = u.teams.length
+      ? el('ul', { class: 'zespoly' },
+          ...u.teams.map((t) =>
+            el('li', { class: 'zespol' },
+              el('span', { class: 'zespol-nazwa' }, t.name),
+              el('span', { class: 'zespol-adres mono' }, t.address),
+              el('span', { class: `zespol-prawo${t.can_send ? ' moze-wysylac' : ''}` },
+                t.can_send ? 'odbiór i wysyłka' : 'odbiór')
+            )
+          )
+        )
+      : el('p', { class: 'karta-opis' }, 'Nie należy do żadnego zespołu.');
+
     // Sesje i usunięcie
     const wylogujWszedzie = el('button', {
       class: 'btn-drugi',
@@ -348,6 +365,8 @@ export function initUzytkownicy(stan) {
         el('p', { class: 'grupa-tytul' }, 'Aliasy'),
         limitAliasowRzad,
         aliasyBlok,
+        el('p', { class: 'grupa-tytul' }, 'Zespoły'),
+        zespolyKonta,
         usun ? el('p', { class: 'grupa-tytul' }, 'Strefa ostrożności') : null,
         usun ? el('div', { class: 'konto-rzad' }, usun) : null
       )

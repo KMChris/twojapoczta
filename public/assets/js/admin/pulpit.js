@@ -95,7 +95,7 @@ export function initPulpit() {
       return toast(blad.message, { blad: true });
     }
 
-    const { users, messages, storage, sessions, aliases, traffic, server, gateway } = dane;
+    const { users, messages, storage, sessions, aliases, teams, traffic, server, gateway } = dane;
 
     kontener.replaceChildren(
       el('div', { class: 'sekcja-naglowek' },
@@ -110,7 +110,8 @@ export function initPulpit() {
         kafel('Wiadomości', messages.total, 'we wszystkich skrzynkach'),
         kafel('Zajętość', formatujRozmiar(storage.bytes), `w tym załączniki ${formatujRozmiar(storage.attachments)}`),
         kafel('Aktywne sesje', sessions.active, 'zalogowane urządzenia'),
-        kafel('Aliasy', aliases, 'dodatkowe adresy')
+        kafel('Aliasy', aliases, 'dodatkowe adresy'),
+        kafel('Zespoły', teams, 'skrzynki funkcyjne')
       ),
 
       el('div', { class: 'karta' },
