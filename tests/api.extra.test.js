@@ -343,6 +343,9 @@ test('cid: oddaje obrazek osadzony inline', async () => {
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('content-type'), 'image/png');
   assert.match(res.headers.get('content-disposition'), /^inline/);
+  // Tyle samo, co sąsiednia trasa załącznika · treść jest zależna od sesji, a cache nie
+  // kluczuje po ciasteczku, więc okno pomijania serwera ma być tak krótkie, jak tam.
+  assert.equal(res.headers.get('cache-control'), 'private, max-age=3600');
   assert.equal(Buffer.from(await res.arrayBuffer()).toString(), 'png-bajty');
 });
 

@@ -256,7 +256,7 @@ export function registerApiRoutes(router, db) {
       'Content-Type': obrazek.mime,
       'Content-Length': obrazek.size,
       'Content-Disposition': 'inline',
-      'Cache-Control': 'private, max-age=86400',
+      'Cache-Control': 'private, max-age=3600',
     });
     res.end(obrazek.data);
   });
