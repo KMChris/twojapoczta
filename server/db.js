@@ -160,6 +160,7 @@ function migrate(db) {
   // DEFAULT 5 wypełnia istniejące konta piątką, więc limit sprzed panelu zostaje w mocy.
   ensureColumn(db, 'users', 'alias_limit', 'alias_limit INTEGER DEFAULT 5');
   ensureColumn(db, 'messages', 'body_html', "body_html TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, 'attachments', 'content_id', 'content_id TEXT');
   ensureColumn(db, 'messages', 'cc_addr', "cc_addr TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, 'messages', 'bcc_addr', "bcc_addr TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, 'messages', 'scheduled_at', 'scheduled_at TEXT');

@@ -12,6 +12,7 @@ import {
   listMessages, getMessage, updateMessage, deleteMessage, unreadCounts,
   saveDraft, sendMessage, deliverInbound, deliverSystemMessage, REAL_FOLDERS,
   fireScheduled, resolveSender, setForwarding, getForwarding,
+  MAX_BODY_HTML_BYTES,
 } from '../server/mail.js';
 
 function fresh() {
@@ -870,4 +871,46 @@ test('wysyłka jako zespół na zewnątrz: nagłówek From na drucie niesie nazw
     delete process.env.TP_SMTP_ROUTE;
     await new Promise((r) => server.close(r));
   }
+});
+
+// --- HTML poczty przychodzącej -----------------------------------------------
+
+test('deliverInbound: zapisuje body_html i content_id załącznika', () => {
+  const { db, user } = fresh();
+  const demo = user('demo');
+  deliverInbound(db, demo.id, {
+    from: { name: 'A', addr: 'a@b.pl' },
+    subject: 'HTML',
+    body: 'tekst',
+    html: '<p>treść <b>HTML</b></p>',
+    attachments: [{ filename: 'logo.png', mime: 'image/png', data: Buffer.from('png'), contentId: 'logo@fir.ma' }],
+  }, { toAddr: addressOf('demo') });
+
+  const msg = db.prepare('SELECT body_html FROM messages WHERE owner_id = ?').get(demo.id);
+  assert.equal(msg.body_html, '<p>treść <b>HTML</b></p>');
+  assert.equal(db.prepare('SELECT content_id FROM attachments').get().content_id, 'logo@fir.ma');
+});
+
+test('deliverInbound: brak HTML zapisuje pusty string, nie null', () => {
+  const { db, user } = fresh();
+  const demo = user('demo');
+  deliverInbound(db, demo.id, {
+    from: { name: '', addr: 'a@b.pl' }, subject: 'Tekst', body: 'sam tekst', html: null, attachments: [],
+  }, { toAddr: addressOf('demo') });
+  assert.equal(db.prepare('SELECT body_html FROM messages').get().body_html, '');
+});
+
+test('deliverInbound: HTML powyżej limitu jest odrzucany, tekst zostaje', () => {
+  const { db, user } = fresh();
+  const demo = user('demo');
+  deliverInbound(db, demo.id, {
+    from: { name: '', addr: 'a@b.pl' },
+    subject: 'Grubas',
+    body: 'tekst zapasowy',
+    html: '<p>' + 'x'.repeat(MAX_BODY_HTML_BYTES) + '</p>',
+    attachments: [],
+  }, { toAddr: addressOf('demo') });
+  const msg = db.prepare('SELECT body, body_html FROM messages').get();
+  assert.equal(msg.body_html, '');
+  assert.equal(msg.body, 'tekst zapasowy');
 });

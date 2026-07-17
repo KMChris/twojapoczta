@@ -83,7 +83,7 @@ export function bindUploads(db, uploads, messageIds) {
 export function listAttachments(db, ownerId, messageId) {
   return db
     .prepare(
-      `SELECT a.id, a.filename, a.mime, a.size FROM attachments a
+      `SELECT a.id, a.filename, a.mime, a.size, a.content_id FROM attachments a
        JOIN messages m ON m.id = a.message_id
        WHERE m.id = ? AND m.owner_id = ? ORDER BY a.id`
     )
@@ -111,14 +111,22 @@ function pruneUploads(db) {
 }
 
 // Zapis załącznika prosto z parsera (poczta przychodząca), bez tokenów uploadu.
-export function storeAttachment(db, messageId, { filename, mime, data }) {
+export function storeAttachment(db, messageId, { filename, mime, data, contentId = null }) {
   const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
   if (!buffer.length || buffer.length > MAX_FILE_BYTES) return false;
   const hash = crypto.createHash('sha256').update(buffer).digest('hex');
   db.prepare('INSERT OR IGNORE INTO blobs (hash, data, size) VALUES (?, ?, ?)').run(hash, buffer, buffer.length);
   db.prepare(
-    'INSERT INTO attachments (message_id, filename, mime, size, blob_hash) VALUES (?, ?, ?, ?, ?)'
-  ).run(messageId, sanitizeFilename(filename), sanitizeMime(mime), buffer.length, hash);
+    `INSERT INTO attachments (message_id, filename, mime, size, blob_hash, content_id)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(
+    messageId,
+    sanitizeFilename(filename),
+    sanitizeMime(mime),
+    buffer.length,
+    hash,
+    contentId ? String(contentId).slice(0, 200) : null
+  );
   return true;
 }
 

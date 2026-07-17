@@ -43,6 +43,17 @@ test('storageUsage liczy bajty treści i załączników', () => {
   db.close();
 });
 
+test('storageUsage: liczy także body_html, nie tylko body', () => {
+  const db = openMemoryDb();
+  const id = uzytkownik(db, 'ktos');
+  const przed = storageUsage(db, id);
+  db.prepare(
+    `INSERT INTO messages (owner_id, folder, from_addr, subject, body, body_html, snippet, sent_at)
+     VALUES (?, 'inbox', 'a@b.pl', 'T', '12345', '1234567890', '', ?)`
+  ).run(id, now());
+  assert.equal(storageUsage(db, id) - przed, 15);
+});
+
 test('hasRoom: bez limitu zawsze tak, z limitem szanuje zużycie i dokładane bajty', () => {
   const db = openMemoryDb();
   const bezLimitu = uzytkownik(db, 'wolny');

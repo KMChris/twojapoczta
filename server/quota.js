@@ -4,7 +4,10 @@
 // Zajętość skrzynki w bajtach: treści wiadomości + rozmiary załączników.
 export function storageUsage(db, userId) {
   const tresci = db
-    .prepare('SELECT COALESCE(SUM(LENGTH(CAST(body AS BLOB))), 0) AS b FROM messages WHERE owner_id = ?')
+    .prepare(
+      `SELECT COALESCE(SUM(LENGTH(CAST(body AS BLOB)) + LENGTH(CAST(body_html AS BLOB))), 0) AS b
+       FROM messages WHERE owner_id = ?`
+    )
     .get(userId);
   const zalaczniki = db
     .prepare(

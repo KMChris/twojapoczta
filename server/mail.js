@@ -18,6 +18,9 @@ export const SYSTEM_SENDER = { login: 'zespol', name: 'Zespół TwojaPoczta' };
 export const MAX_SCHEDULE_AHEAD_MS = 366 * 24 * 3600_000;
 // Najdłuższy łańcuch przekierowań (A→B→C); dalej list się zatrzymuje.
 export const MAX_FORWARD_HOPS = 3;
+// Powyżej tego progu HTML zostaje odrzucony, a list pokaże się jako tekst.
+// Render wielomegabajtowego drzewa potrafi zawiesić kartę, a tekst zawsze jest.
+export const MAX_BODY_HTML_BYTES = 2 * 1024 * 1024;
 
 export function addressOf(login) {
   return `${login}@${DOMAIN}`;
@@ -831,6 +834,9 @@ export function deliverInbound(db, mailboxUserId, parsed, { toAddr }) {
   let id;
   db.exec('BEGIN');
   try {
+    const surowyHtml = parsed.html ?? '';
+    const bodyHtml = Buffer.byteLength(surowyHtml, 'utf8') > MAX_BODY_HTML_BYTES ? '' : surowyHtml;
+
     id = insertMessage(db, mailboxUserId, {
       folder: 'inbox',
       from_name: parsed.from.name ?? '',
@@ -838,6 +844,7 @@ export function deliverInbound(db, mailboxUserId, parsed, { toAddr }) {
       to_addr: toAddr ?? '',
       subject: parsed.subject || '(bez tematu)',
       body: parsed.body ?? '',
+      body_html: bodyHtml,
       is_read: 0,
       sent_at: now(),
     });
