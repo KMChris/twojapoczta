@@ -3,6 +3,7 @@
 import { hashPassword } from './auth.js';
 import { now } from './db.js';
 import { deliverSystemMessage, addressOf, makeSnippet, SYSTEM_SENDER } from './mail.js';
+import { createTeam, setMember } from './teams.js';
 
 export const WELCOME_SUBJECT = 'Witaj w TwojejPoczcie 👋';
 
@@ -60,6 +61,11 @@ export async function seedIfEmpty(db) {
   }
   // Demo pokazuje też panel administratora.
   db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(users.demo);
+
+  // Skrzynka zespołowa na demo: demo nadaje jako „Dział Sprzedaży", Ania tylko odbiera.
+  const sprzedaz = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  setMember(db, sprzedaz.id, users.demo, true);
+  setMember(db, sprzedaz.id, users.ania, false);
 
   const insert = db.prepare(
     `INSERT INTO messages

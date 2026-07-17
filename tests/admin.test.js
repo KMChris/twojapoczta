@@ -617,9 +617,9 @@ test('zespoły: zakładanie, kolizja adresu, skład, prawo wysyłki i audyt', as
       .run('jan-zesp', 'Jan Kowalski', 'x', now()).lastInsertRowid
   );
 
-  const zalozony = await api('POST', '/api/admin/teams', { local_part: 'sprzedaz', name: 'Dział Sprzedaży' });
+  const zalozony = await api('POST', '/api/admin/teams', { local_part: 'handlowcy', name: 'Handel' });
   assert.equal(zalozony.status, 201);
-  assert.equal(zalozony.data.team.address, 'sprzedaz@twojapoczta.com');
+  assert.equal(zalozony.data.team.address, 'handlowcy@twojapoczta.com');
   assert.deepEqual(zalozony.data.team.members, [], 'świeży zespół nie ma składu');
   const id = zalozony.data.team.id;
 
@@ -639,7 +639,7 @@ test('zespoły: zakładanie, kolizja adresu, skład, prawo wysyłki i audyt', as
 
   const nazwa = await api('PATCH', `/api/admin/teams/${id}`, { name: 'Sprzedaż i Obsługa' });
   assert.equal(nazwa.data.team.name, 'Sprzedaż i Obsługa');
-  assert.equal(nazwa.data.team.local_part, 'sprzedaz', 'adres zespołu jest niezmienny');
+  assert.equal(nazwa.data.team.local_part, 'handlowcy', 'adres zespołu jest niezmienny');
 
   const wypisany = await api('DELETE', `/api/admin/teams/${id}/members/${jan}`);
   assert.deepEqual(wypisany.data.team.members, []);
@@ -681,4 +681,21 @@ test('adres zespołu blokuje nowy login i nowy alias', async () => {
   const demoId = db.prepare('SELECT id FROM users WHERE login = ?').get('demo').id;
   const alias = await api('POST', `/api/admin/users/${demoId}/aliases`, { alias: 'marketing' });
   assert.equal(alias.status, 409);
+});
+
+// Seed zakłada jeden zespół demonstracyjny, żeby panel miał co pokazać od startu.
+// Pinuje prawo wysyłki per członek: to ono odróżnia skrzynkę zespołową od aliasu.
+test('seed zakłada zespół demonstracyjny: demo nadaje, Ania tylko odbiera', async () => {
+  const api = client();
+  await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const { status, data } = await api('GET', '/api/admin/teams');
+  assert.equal(status, 200);
+  const sprzedaz = data.teams.find((t) => t.local_part === 'sprzedaz');
+  assert.ok(sprzedaz, 'seed zakłada zespół sprzedaz');
+  assert.equal(sprzedaz.name, 'Dział Sprzedaży');
+  assert.equal(sprzedaz.address, 'sprzedaz@twojapoczta.com');
+  const demo = sprzedaz.members.find((m) => m.login === 'demo');
+  const ania = sprzedaz.members.find((m) => m.login === 'ania');
+  assert.equal(demo.can_send, true, 'demo nadaje z Działu Sprzedaży');
+  assert.equal(ania.can_send, false, 'Ania tylko odbiera');
 });

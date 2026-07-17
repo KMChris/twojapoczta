@@ -99,10 +99,12 @@ test('registration validates login format and duplicates', async () => {
 });
 
 test('adres zespołu jest zajęty dla rejestracji i dla aliasu', async () => {
-  createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  // Świeży adres, nie „sprzedaz" z seedu: test zakłada własny zespół, więc musi
+  // wziąć nazwę, której seed nie zajął, inaczej createTeam trafia w UNIQUE.
+  createTeam(db, { localPart: 'serwis', name: 'Serwis' });
 
   const rejestracja = await client()('POST', '/api/register', {
-    login: 'sprzedaz',
+    login: 'serwis',
     name: 'Podszywacz',
     password: 'haslo1234',
   });
@@ -111,7 +113,7 @@ test('adres zespołu jest zajęty dla rejestracji i dla aliasu', async () => {
 
   const api = client();
   await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
-  const alias = await api('POST', '/api/aliases', { alias: 'sprzedaz' });
+  const alias = await api('POST', '/api/aliases', { alias: 'serwis' });
   assert.equal(alias.status, 409);
 });
 
@@ -345,12 +347,14 @@ test('profile can be updated', async () => {
 });
 
 test('GET /api/teams pokazuje przynależność i nie daje jej zmienić', async () => {
-  const demoId = db.prepare('SELECT id FROM users WHERE login = ?').get('demo').id;
+  // Aktorem jest michal: konto z rosteru, którego seed nie wpisał do żadnego
+  // zespołu, więc lista przynależności ma dokładnie jeden wpis i deepEqual zostaje ścisłe.
+  const michalId = db.prepare('SELECT id FROM users WHERE login = ?').get('michal').id;
   const zespol = createTeam(db, { localPart: 'wsparcie', name: 'Wsparcie' });
-  setMember(db, zespol.id, demoId, true);
+  setMember(db, zespol.id, michalId, true);
 
   const api = client();
-  await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  await api('POST', '/api/login', { login: 'michal', password: 'demo1234' });
 
   const lista = await api('GET', '/api/teams');
   assert.equal(lista.status, 200);
