@@ -266,6 +266,9 @@ export function saveDraft(db, user, { id, to, cc, bcc, from, subject, body, body
 }
 
 // Rozkłada adresy na lokalne skrzynki i adresatów zewnętrznych (albo zwraca błąd).
+// Zespół rozwija się na członków; każda skrzynka niesie viaTeam, czyli adres zespołu,
+// przez który tu trafiła (null = nadawca poprosił o nią wprost). Ta różnica decyduje
+// potem, czy pełna skrzynka wywala wysyłkę, czy tylko wypada z rozdzielnika.
 function resolveRecipients(db, addresses) {
   const resolved = [];
   const zewnetrzni = [];
@@ -276,9 +279,23 @@ function resolveRecipients(db, addresses) {
     if (at < 1 || !domena) return { error: `Adres „${addr}" wygląda na niepoprawny.` };
 
     if (domena === DOMAIN) {
-      const recipient = findMailbox(db, local);
-      if (!recipient) return { error: `Nie znaleziono skrzynki „${addr}".` };
-      if (!resolved.some((r) => r.id === recipient.id)) resolved.push(recipient);
+      const cel = resolveDelivery(db, local);
+      if (!cel) return { error: `Nie znaleziono skrzynki „${addr}".` };
+      if (cel.kind === 'team' && !cel.mailboxes.length) {
+        return { error: `Skrzynka zespołu „${addr}" nie ma jeszcze członków.` };
+      }
+      const viaTeam = cel.kind === 'team' ? addr : null;
+      for (const skrzynka of cel.mailboxes) {
+        const juz = resolved.find((r) => r.id === skrzynka.id);
+        // Adresowanie wprost wygrywa nad członkostwem, bez względu na kolejność
+        // adresów w kopercie: kto został poproszony z imienia, ten odpowiada za
+        // swoją skrzynkę jak zawsze.
+        if (juz) {
+          if (!viaTeam) juz.viaTeam = null;
+          continue;
+        }
+        resolved.push({ ...skrzynka, viaTeam });
+      }
       continue;
     }
 
@@ -348,15 +365,29 @@ export function sendMessage(db, user, { to, cc, bcc, from, subject, body, bodyHt
   if (claimed.error) return { error: claimed.error };
 
   // Limit miejsca odbiorców: kopia do Odebranych musi się zmieścić.
+  // Adresat wpisany wprost z pełną skrzynką wywala wysyłkę, jak zawsze. Członek
+  // zespołu tylko wypada z rozdzielnika: jedna pełna skrzynka nie może odcinać
+  // firmowego adresu, a komunikat o niej zdradzałby nadawcy skład zespołu.
   const przybywa =
     Buffer.byteLength(body ?? '', 'utf8') +
     Buffer.byteLength(bodyHtml ?? '', 'utf8') +
     claimed.uploads.reduce((suma, u) => suma + u.size, 0);
+  const pomijani = new Set();
   for (const recipient of adresaci.resolved) {
-    if (!hasRoom(db, recipient.id, przybywa)) {
+    if (hasRoom(db, recipient.id, przybywa)) continue;
+    if (!recipient.viaTeam) {
       return { error: `Skrzynka „${addressOf(recipient.login)}" jest pełna. Wiadomość nie została wysłana.` };
     }
+    pomijani.add(recipient.id);
   }
+  // Zespół, w którym miejsca nie ma nikt, jest nieosiągalny i nadawca musi to wiedzieć.
+  for (const adresZespolu of new Set(adresaci.resolved.map((r) => r.viaTeam).filter(Boolean))) {
+    const czlonkowie = adresaci.resolved.filter((r) => r.viaTeam === adresZespolu);
+    if (czlonkowie.every((r) => pomijani.has(r.id))) {
+      return { error: `Skrzynka zespołu „${adresZespolu}" jest pełna. Wiadomość nie została wysłana.` };
+    }
+  }
+  const odbiorcy = adresaci.resolved.filter((r) => !pomijani.has(r.id));
 
   const base = {
     from_name: user.name,
@@ -402,7 +433,7 @@ export function sendMessage(db, user, { to, cc, bcc, from, subject, body, bodyHt
   let kopie;
   db.exec('BEGIN');
   try {
-    kopie = deliverCopies(db, user.id, base, adresaci.resolved, { bccAddr: udw.join(', ') });
+    kopie = deliverCopies(db, user.id, base, odbiorcy, { bccAddr: udw.join(', ') });
     bindUploads(db, claimed.uploads, kopie.map((k) => k.id));
     if (draftId) {
       db.prepare("DELETE FROM messages WHERE owner_id = ? AND id = ? AND folder = 'drafts'").run(user.id, draftId);
