@@ -135,6 +135,19 @@ test('zakresujSelektor: wiodący kombinator nie ucieka na rodzeństwo kontenera'
   assert.equal(zakresujSelektor('> .child', 'list-1'), '#list-1 .child');
 });
 
+// W odróżnieniu od gołego `+ .x` (reguła top-level nie zaczyna się kombinatorem — nieosiągalne)
+// `body + .x` to legalny selektor, który CSSOM zachowuje w selectorText: OSIĄGALNE przez Task 6.
+// Zdjęcie korzenia `body`/`html` odsłania kombinator stojący za nim, więc bez naprzemiennego
+// zdejmowania aż do stabilizacji `#list-1 + .x` uciekłoby na rodzeństwo kontenera.
+test('zakresujSelektor: korzeń html/body nie odsłania kombinatora ucieczki', () => {
+  assert.equal(zakresujSelektor('body + .x', 'list-1'), '#list-1 .x');
+  assert.equal(zakresujSelektor('html ~ .y', 'list-1'), '#list-1 .y');
+  assert.equal(zakresujSelektor('body > .z', 'list-1'), '#list-1 .z');
+  // regresja: dotychczasowe zachowanie zostaje
+  assert.equal(zakresujSelektor('body .tresc', 'list-1'), '#list-1 .tresc');
+  assert.equal(zakresujSelektor('body', 'list-1'), '#list-1');
+});
+
 test('rozstrzygnijMedia: warunek pasujący do motywu wchodzi bezwarunkowo', () => {
   assert.deepEqual(rozstrzygnijMedia('(prefers-color-scheme: dark)', true), { decyzja: 'bezwarunkowo' });
   assert.deepEqual(rozstrzygnijMedia('(prefers-color-scheme: light)', false), { decyzja: 'bezwarunkowo' });

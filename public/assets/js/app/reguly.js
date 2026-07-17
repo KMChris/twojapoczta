@@ -137,15 +137,21 @@ export function zakresujSelektor(selektor, id) {
   if (czesci.length === 0) return `#${id}`;
   return czesci
     .map((czesc) => {
-      // Wiodący kombinator (`+`/`~`/`>`) zdejmujemy przed prefiksowaniem, żeby `#${id}`
-      // nie stanął bezpośrednio przed `+`/`~` i nie wskoczył na rodzeństwo kontenera
-      // (element interfejsu poza listem); `> .x` upraszczamy tak samo, a `#${id} .x` i tak
-      // zostaje w kontenerze. Przez klasyczny selectorText z CSSOM to nieosiągalne (reguła
-      // najwyższego poziomu nie zaczyna się kombinatorem) — domknięcie totalności, nie łata.
-      const bezKombinatora = czesc.replace(/^[\s+~>]+/, '');
-      if (/^(html|body)$/i.test(bezKombinatora)) return `#${id}`;
-      const bezKorzenia = bezKombinatora.replace(/^(html|body)\b\s*/i, '').trim();
-      return bezKorzenia ? `#${id} ${bezKorzenia}` : `#${id}`;
+      // Przedrostek korzenia (`html`/`body`) i wiodący kombinator (`+`/`~`/`>`) zdejmujemy
+      // naprzemiennie, aż do stabilizacji: zdjęcie `body`/`html` odsłania kombinator, który
+      // wcześniej stał za korzeniem (i odwrotnie), więc jeden przebieg nie wystarcza. Bez tego
+      // `body + .x` dałoby `#${id} + .x` i wskoczyło na rodzeństwo kontenera (element interfejsu
+      // poza listem). W odróżnieniu od gołego `+ .x` (nieosiągalnego — reguła top-level nie
+      // zaczyna się kombinatorem) `body + .x` JEST osiągalne przez selectorText z CSSOM, więc to
+      // zamknięcie osiągalnej ucieczki, nie sama totalność. Pętla kończy się dla każdego wejścia:
+      // string tylko się skraca albo zostaje (wtedy `!==` przerywa).
+      let reszta = czesc.trim();
+      let poprzednia;
+      do {
+        poprzednia = reszta;
+        reszta = reszta.replace(/^(html|body)\b\s*/i, '').replace(/^[\s+~>]+/, '');
+      } while (reszta !== poprzednia);
+      return reszta ? `#${id} ${reszta}` : `#${id}`;
     })
     .join(', ');
 }
