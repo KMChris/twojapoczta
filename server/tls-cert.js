@@ -12,7 +12,8 @@ import { generateSelfSigned } from './x509.js';
 const DNI_WAZNOSCI = 1825; // 5 lat: samopodpisanego i tak nikt nie sprawdza
 const PROG_ODNOWIENIA_DNI = 30;
 
-// { hostname, katalog, zrodlo, mtime, context, cert, ostrzezenie, zly, nazwaBezPokrycia }
+// { hostname, katalog, zrodlo, mtime, context, cert, ostrzezenie,
+//   zly, zlyZapasowy, zapisPadl, wolnoGenerowac, nazwaBezPokrycia }
 let konfiguracja = null;
 
 export function initTls(dataDir, { hostname }) {
@@ -24,7 +25,10 @@ export function initTls(dataDir, { hostname }) {
     context: null,
     cert: null,
     ostrzezenie: null,
-    zly: null, // { certPath, mtime } pliku, który się nie wczytał
+    zly: null, // { certPath, mtime, mtimeKlucza } wskazanej pary, która się nie wczytała
+    zlyZapasowy: undefined, // mtime pary zapasowej, która się nie wczytała: do odtworzenia
+    zapisPadl: undefined, // mtime, przy którym zapis zapasowego już raz padł
+    wolnoGenerowac: false, // budżet keygenu na jedno wywołanie secureContext()
     nazwaBezPokrycia: false, // samopodpisany nie obejmuje hostname i nic na to nie poradzimy
   };
   // Budujemy od razu, żeby błąd konfiguracji był widoczny w logu przy starcie,
@@ -43,14 +47,21 @@ export function configureTls(cfg) {
 
 export function secureContext() {
   if (!konfiguracja) return null;
+  // Budżet na wywołanie. EHLO i STARTTLS pytają nas przy każdym połączeniu,
+  // a keygen to ułamek milisekundy zablokowanej pętli zdarzeń, więc jedna
+  // próba i ani jednej więcej. Wybór źródła bywa poniżej wołany dwa razy.
+  konfiguracja.wolnoGenerowac = true;
   try {
     const zrodlo = wybierzZrodlo();
-    const kontekst = zbuduj(zrodlo);
-    // Wskazany plik zawiódł, a w pamięci nie ma nic dobrego: schodzimy na
-    // zapasowy jeszcze w tym wywołaniu, bo zepsuty plik nie może zdjąć
-    // szyfrowania. Jest już zapamiętany jako zły, więc wybór go ominie.
-    if (!kontekst && zrodlo.wskazany) return zbuduj(wybierzZrodlo());
-    return kontekst;
+    const kontekst = zrodlo ? zbuduj(zrodlo) : konfiguracja.context;
+    if (kontekst) return kontekst;
+    // Nic dobrego w pamięci. Gdy źródła w ogóle nie ma, druga próba nic nie
+    // wniesie. Gdy było i zawiodło, jest już zapamiętane, więc wybór pójdzie
+    // inną drogą: wskazany zejdzie na zapasowy, a zapasowy odtworzy się z
+    // keygenu. Stąd naprawa jeszcze przy tym połączeniu, a nie od następnego.
+    if (!zrodlo) return null;
+    const drugie = wybierzZrodlo();
+    return drugie ? zbuduj(drugie) : null;
   } catch (err) {
     // Dysk tylko do odczytu, brak miejsca na klucz: nie wywracamy połączenia.
     console.error('[tls] nie udało się przygotować certyfikatu:', err.message);
@@ -67,6 +78,13 @@ function zbuduj(zrodlo) {
   try {
     const certPem = readFileSync(zrodlo.certPath, 'utf8');
     const keyPem = readFileSync(zrodlo.keyPath, 'utf8');
+    // Pusty plik to nie to samo co brak pliku: '' jest fałszywe, więc
+    // createSecureContext przyjmuje key: '' jak brak klucza i buduje kontekst
+    // bez niego. Panel świeciłby wtedy „enabled", EHLO ogłaszałoby STARTTLS,
+    // a handshake padał. Zero bajtów zostaje po utracie zasilania (rename
+    // trafia na dysk przed treścią) albo po urwanym kopiowaniu.
+    if (!certPem.trim()) throw new Error(`pusty plik certyfikatu: ${zrodlo.certPath}`);
+    if (!keyPem.trim()) throw new Error(`pusty plik klucza: ${zrodlo.keyPath}`);
     konfiguracja.context = tls.createSecureContext({ cert: certPem, key: keyPem });
     // Przy fullchain z certbota X509Certificate bierze pierwszy blok, czyli leafa.
     konfiguracja.cert = new crypto.X509Certificate(certPem);
@@ -82,6 +100,11 @@ function zbuduj(zrodlo) {
       // Zostajemy tu, bez powrotu przez wybierzZrodlo, więc ostrzeżenie trzeba
       // odświeżyć na miejscu: panel pytany raz nie może widzieć stanu sprzed awarii.
       if (konfiguracja.context && konfiguracja.zrodlo?.wskazany) ostrzez(ostatniDobry(zrodlo.certPath, zrodlo.keyPath));
+    } else {
+      // Cudzego pliku nie ruszamy, ale zapasowy jest nasz: zamiast odkładać go
+      // na półkę do zmiany mtime, robimy nową parę. Oba pliki naraz, więc to
+      // leczy i klucz, i certyfikat, bez oglądania się, który z nich padł.
+      konfiguracja.zlyZapasowy = zrodlo.mtime;
     }
     return konfiguracja.context;
   }
@@ -142,8 +165,16 @@ function wybierzZrodlo() {
     }
   }
   const zapasowy = zrodloSamopodpisane();
-  ostrzez([powod, ostrzezenieNazwy()].filter(Boolean).join(' · ') || null);
+  ostrzez([powod, ostrzezenieZapasowego(zapasowy)].filter(Boolean).join(' · ') || null);
   return zapasowy;
+}
+
+// Zapasowego nie ma i nie umiemy go zrobić: szyfrowania nie będzie, więc panel
+// musi powiedzieć dlaczego. Katalog naprawia się z zewnątrz i sam chmod nie
+// rusza mtime, po którym poznajemy zmianę, stąd wprost prośba o restart.
+function ostrzezenieZapasowego(zapasowy) {
+  if (zapasowy) return ostrzezenieNazwy();
+  return `Nie udało się przygotować certyfikatu zapasowego w ${konfiguracja.katalog}. Szyfrowanie jest wyłączone: sprawdź prawa do katalogu i miejsce na dysku, potem zrestartuj usługę.`;
 }
 
 function ostrzezenieNazwy() {
@@ -164,6 +195,9 @@ function zapamietajZly({ certPath, mtime, mtimeKlucza }) {
   konfiguracja.zly = { certPath, mtime, mtimeKlucza };
 }
 
+// Źródło zapasowe albo null, gdy zapasowego nie ma i nie da się go zrobić.
+// Null znaczy „nie ma z czego budować": wołający ma wtedy nie schodzić na dysk
+// ani nie logować, bo powtarzałby to przy każdym połączeniu.
 function zrodloSamopodpisane() {
   const { katalog, hostname } = konfiguracja;
   const certPath = path.join(katalog, 'self-signed-cert.pem');
@@ -174,16 +208,30 @@ function zrodloSamopodpisane() {
 
   if (!trzebaWygenerowac(cel)) return cel;
 
-  const { certPem, keyPem } = generateSelfSigned({ hostname, days: DNI_WAZNOSCI });
-  mkdirSync(katalog, { recursive: true });
-  zapiszAtomowo(keyPath, keyPem, 0o600);
-  zapiszAtomowo(certPath, certPem, 0o644);
-  zdatny(new crypto.X509Certificate(certPem)); // klasyfikacja świeżego: panel ma ją mieć od razu
-  return { ...cel, mtime: mtimeAlbo(certPath) };
+  // Nowa para pomoże raz na stan dysku. Gdy zapis padnie (ENOSPC, EROFS, tls/
+  // zostawione przez roota), mtime nie drgnie i następna próba skończy się tak
+  // samo, więc odpuszczamy do zmiany na dysku. Bez tego pełny dysk zalewa się
+  // własnym logiem, a każde EHLO pali keygen.
+  if (konfiguracja.zapisPadl === cel.mtime || !konfiguracja.wolnoGenerowac) return null;
+  konfiguracja.wolnoGenerowac = false;
+  try {
+    mkdirSync(katalog, { recursive: true }); // najpierw miejsce, potem keygen
+    const { certPem, keyPem } = generateSelfSigned({ hostname, days: DNI_WAZNOSCI });
+    zapiszAtomowo(keyPath, keyPem, 0o600);
+    zapiszAtomowo(certPath, certPem, 0o644);
+    zdatny(new crypto.X509Certificate(certPem)); // klasyfikacja świeżego: panel ma ją mieć od razu
+    return { ...cel, mtime: mtimeAlbo(certPath) };
+  } catch (err) {
+    console.error('[tls] nie udało się zapisać zapasowego certyfikatu:', err.message);
+    konfiguracja.zapisPadl = cel.mtime;
+    return null;
+  }
 }
 
+// Czy to, co leży na dysku, nadaje się do służby. Fałsz znaczy „bierz jak jest".
 function trzebaWygenerowac({ certPath, mtime }) {
   if (mtime === null) return true; // ktoś wyczyścił tls/: odtwarzamy, zamiast czytać w kółko
+  if (konfiguracja.zlyZapasowy === mtime) return true; // para się nie wczytała: nowa będzie lepsza
   // Certyfikat z tego samego pliku, a plik od tamtej pory nie drgnął: termin
   // sprawdzamy na obiekcie z pamięci, bez parsowania PEM-a na połączenie.
   const swiezy = konfiguracja.zrodlo?.certPath === certPath && konfiguracja.mtime === mtime;
@@ -233,7 +281,10 @@ function mtimeAlbo(sciezka) {
   }
 }
 
-// Zapis obok i przemianowanie: serwer nigdy nie przeczyta połowy pliku.
+// Zapis obok i przemianowanie: żaden czytelnik nie zobaczy połowy pliku.
+// Uwaga, to nie jest trwałość: bez fsync utrata zasilania potrafi zostawić
+// rename na dysku przed treścią, czyli plik zerowej długości. Dlatego zbuduj()
+// sprawdza pustkę, zamiast ufać, że skoro plik jest, to coś w nim jest.
 function zapiszAtomowo(sciezka, tresc, mode) {
   const tymczasowy = `${sciezka}.tmp`;
   writeFileSync(tymczasowy, tresc, { mode });

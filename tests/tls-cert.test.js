@@ -5,6 +5,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import net from 'node:net';
+import tls from 'node:tls';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,6 +17,47 @@ const HOST = 'mx.twojadomena.pl';
 
 function tymczasowy() {
   return mkdtempSync(path.join(os.tmpdir(), 'tp-tls-'));
+}
+
+// Liczy prawdziwe keygeny: x509.js woła crypto.generateKeyPairSync na tym samym
+// obiekcie modułu, więc podmiana tutaj jest widoczna i tam. Keygen to ułamek
+// milisekundy zablokowanej pętli zdarzeń, więc liczba na połączenie ma znaczenie.
+function zliczKeygeny(fn) {
+  const prawdziwy = crypto.generateKeyPairSync;
+  let ile = 0;
+  crypto.generateKeyPairSync = (...a) => {
+    ile++;
+    return prawdziwy.apply(crypto, a);
+  };
+  try {
+    fn();
+  } finally {
+    crypto.generateKeyPairSync = prawdziwy;
+  }
+  return ile;
+}
+
+// Prawdziwy handshake na podanym kontekście: „enabled" ma znaczyć działający
+// TLS, a nie samo to, że createSecureContext czegoś nie odrzuciło. Gniazdo
+// stawiamy tak jak smtp.js po STARTTLS, czyli TLSSocket na surowym połączeniu:
+// tls.createServer po cichu ignoruje secureContext i przewraca każdy handshake,
+// więc test na nim zawsze świeciłby na czerwono, bez związku z certyfikatem.
+function handshake(kontekst) {
+  return new Promise((resolve, reject) => {
+    const serwer = net.createServer((surowe) => {
+      const bezpieczne = new tls.TLSSocket(surowe, { isServer: true, secureContext: kontekst });
+      bezpieczne.on('error', () => {}); // klient rozłącza się pierwszy: to nie jest błąd testu
+    });
+    serwer.on('error', reject);
+    serwer.listen(0, '127.0.0.1', () => {
+      const klient = tls.connect({ port: serwer.address().port, host: '127.0.0.1', rejectUnauthorized: false });
+      klient.on('secureConnect', () => {
+        klient.destroy();
+        serwer.close(() => resolve());
+      });
+      klient.on('error', (err) => serwer.close(() => reject(err)));
+    });
+  });
 }
 
 // Zdejmuje stan modułu i zmienne środowiskowe po każdym teście.
@@ -310,8 +353,10 @@ test('podmiana pliku przebudowuje kontekst, brak zmiany go nie rusza', () => {
   }
 });
 
-// Samopodpisany ma te same dwie dziury co wskazany, tylko po drugiej stronie
-// rozgałęzienia: certyfikat z pamięci przykrywa to, co stało się z plikiem.
+// Zapasowy jest nasz, więc na każdą awarię odpowiadamy nową parą, a nie
+// odkładaniem pliku na półkę jak przy wskazanym. Poniżej połowa certyfikatu
+// (zniknął, uszkodzony), dalej połowa klucza i przypadek, gdy nie ma gdzie
+// zapisać. Każda z nich osobno, bo każda wchodzi inną ścieżką.
 test('skasowany samopodpisany odtwarza się sam, bez logu na połączenie', () => {
   const dir = tymczasowy();
   const pierwotnyLog = console.error;
@@ -358,6 +403,108 @@ test('uszkodzony samopodpisany odtwarza się sam, bez logu na połączenie', () 
     assert.equal(tlsStatus().enabled, true);
   } finally {
     console.error = pierwotnyLog;
+    posprzataj(dir);
+  }
+});
+
+test('brak klucza samopodpisanego: para odtwarza się przy starcie', () => {
+  const dir = tymczasowy();
+  const pierwotnyLog = console.error;
+  const linie = [];
+  try {
+    initTls(dir, { hostname: HOST });
+    const certPath = path.join(dir, 'tls', 'self-signed-cert.pem');
+    const keyPath = path.join(dir, 'tls', 'self-signed-key.pem');
+    configureTls(null);
+    rmSync(keyPath); // zostaje cert bez klucza: pary nie da się wczytać
+
+    const wynik = initTls(dir, { hostname: HOST }); // restart usługi
+    assert.equal(wynik.source, 'self-signed');
+    assert.equal(wynik.certPath, certPath, 'wdrozenie.md obiecuje odtworzenie przy starcie, nie certPath: null');
+    assert.ok(existsSync(keyPath), 'klucz wrócił na dysk');
+    assert.ok(secureContext(), 'a STARTTLS w ogóle jest');
+
+    console.error = (...czesci) => linie.push(czesci.join(' '));
+    const keygeny = zliczKeygeny(() => {
+      for (let i = 0; i < 50; i++) secureContext();
+    });
+    console.error = pierwotnyLog;
+    assert.equal(keygeny, 0, 'po naprawie ani jednego keygenu na połączenie');
+    assert.deepEqual(linie, [], 'i ani jednej linii w logu');
+  } finally {
+    console.error = pierwotnyLog;
+    posprzataj(dir);
+  }
+});
+
+test('klucz samopodpisanego ma zero bajtów: para odtwarza się sama', () => {
+  const dir = tymczasowy();
+  try {
+    initTls(dir, { hostname: HOST });
+    const keyPath = path.join(dir, 'tls', 'self-signed-key.pem');
+    // Zero bajtów zostaje po utracie zasilania między rename a zrzutem na dysk.
+    writeFileSync(keyPath, '');
+    configureTls(null);
+
+    initTls(dir, { hostname: HOST });
+    assert.match(readFileSync(keyPath, 'utf8'), /PRIVATE KEY/, 'klucz odtworzony, nie zostawiony pusty');
+    assert.equal(tlsStatus().enabled, true);
+  } finally {
+    posprzataj(dir);
+  }
+});
+
+// tls/ nie do zapisu: ENOSPC, EROFS albo katalog zostawiony przez roota po
+// jednym `sudo node server/index.js`. Plik w miejscu katalogu wywraca mkdirSync
+// tak samo, a działa na każdym systemie.
+test('tls/ nie do zapisu: ani keygenu, ani linii logu na połączenie', () => {
+  const dir = tymczasowy();
+  const pierwotnyLog = console.error;
+  const linie = [];
+  try {
+    writeFileSync(path.join(dir, 'tls'), 'zajete');
+
+    console.error = (...czesci) => linie.push(czesci.join(' '));
+    initTls(dir, { hostname: HOST });
+    linie.length = 0; // start ma prawo krzyknąć raz, liczymy ruch
+    const keygeny = zliczKeygeny(() => {
+      for (let i = 0; i < 50; i++) secureContext();
+    });
+    console.error = pierwotnyLog;
+
+    assert.equal(keygeny, 0, 'zero keygenów na 50 połączeń, zamiast jednego na każde');
+    assert.deepEqual(linie, [], 'i zero linii w logu: pełny dysk nie może zalewać się własnym logiem');
+
+    const status = tlsStatus();
+    assert.equal(status.enabled, false, 'szyfrowania nie ma i nie udajemy, że jest');
+    assert.match(status.warning, /certyfikatu zapasowego/, 'panel mówi, czemu TLS leży');
+  } finally {
+    console.error = pierwotnyLog;
+    posprzataj(dir);
+  }
+});
+
+test('klucz 0-bajtowy w TP_TLS_KEY: zapasowy zamiast zielonej naklejki', async () => {
+  const dir = tymczasowy();
+  try {
+    const { certPem } = generateSelfSigned({ hostname: 'z-certbota.example.com' });
+    const certPath = path.join(dir, 'fullchain.pem');
+    const keyPath = path.join(dir, 'privkey.pem');
+    writeFileSync(certPath, certPem);
+    writeFileSync(keyPath, ''); // certbot plus utrata zasilania
+    process.env.TP_TLS_CERT = certPath;
+    process.env.TP_TLS_KEY = keyPath;
+
+    initTls(dir, { hostname: HOST });
+    const status = tlsStatus();
+    assert.equal(status.source, 'self-signed', 'pusty klucz to zepsuta para, nie działający plik');
+    assert.equal(status.subject, `CN=${HOST}`, 'i nie chwalimy się cudzym CN przy martwym handshake');
+    assert.match(status.warning, /nie da się wczytać/, 'panel mówi o zepsutej parze');
+
+    // Sedno: „enabled" ma znaczyć, że TLS naprawdę wstaje.
+    assert.equal(status.enabled, true);
+    await handshake(secureContext());
+  } finally {
     posprzataj(dir);
   }
 });
