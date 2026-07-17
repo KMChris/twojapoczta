@@ -413,10 +413,11 @@ test('cid: Content-ID o nazwie klucza z prototypu trafia do mapy jak każdy inny
   assert.equal(Buffer.from(await res.arrayBuffer()).toString(), 'BAJTY-PROTO');
 });
 
-// Testy charakteryzujące: przechodzą już dziś, bo `GET /api/messages/:id` w ogóle nie
-// filtruje załączników, więc nie są dowodem regresji dla tej zmiany. Pilnują ich, bo po
-// wprowadzeniu mapy `cid` załącznik z Content-ID mógłby zniknąć z listy, mimo że treść
-// go nie cytuje · nie byłoby go wtedy ani w treści, ani pod listem.
+// Test mieszany, po połowie. `deepEqual(data.cid, {})` to czerwień tej zmiany: przed nią
+// odpowiedź nie miała pola `cid` w ogóle, więc asercja padała na `undefined`. Asercja o
+// liście jest charakteryzująca — przechodziła już wcześniej, bo `GET /api/messages/:id`
+// nie filtrował załączników. Obie pilnują tego samego: załącznika z Content-ID, którego
+// treść nie cytuje · gdyby zniknął z listy, nie byłoby go ani w treści, ani pod listem.
 test('cid: załącznik z Content-ID, którego treść nie cytuje, nadal zostaje na liście', async () => {
   const api = client();
   await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
@@ -433,6 +434,9 @@ test('cid: załącznik z Content-ID, którego treść nie cytuje, nadal zostaje 
   assert.equal(data.attachments[0].filename, 'sierota.png');
 });
 
+// Test charakteryzujący: przechodził już przed tą zmianą, bo `GET /api/messages/:id` nie
+// filtrował załączników, więc nie jest dowodem regresji. Pilnuje granicy od drugiej strony
+// niż test wyżej: tam treść jest i nie cytuje, tu treści nie ma wcale.
 test('cid: list bez HTML nadal nie gubi załącznika z Content-ID', async () => {
   const api = client();
   await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
