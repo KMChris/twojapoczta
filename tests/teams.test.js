@@ -7,6 +7,7 @@ import {
   findTeam, teamById, teamMailboxes, teamMembers, userTeams, canSendAs,
   listTeams, createTeam, renameTeam, deleteTeam, setMember, removeMember,
 } from '../server/teams.js';
+import { resolveDelivery, addressTaken, SYSTEM_SENDER } from '../server/mail.js';
 
 function konto(db, login) {
   return Number(
@@ -130,5 +131,58 @@ test('listTeams: zespoły po adresie, każdy ze swoim składem', () => {
   assert.deepEqual(lista.map((t) => t.local_part), ['sprzedaz', 'wsparcie']);
   assert.deepEqual(lista[0].members, [], 'zespół bez członków ma pusty skład, nie null');
   assert.equal(lista[1].members[0].login, 'jan');
+  db.close();
+});
+
+test('resolveDelivery: konto, alias, zespół i adres nieznany', () => {
+  const db = openMemoryDb();
+  const jan = konto(db, 'jan');
+  const ania = konto(db, 'ania');
+  db.prepare('INSERT INTO aliases (user_id, alias, created_at) VALUES (?, ?, ?)').run(jan, 'biuro', now());
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  setMember(db, zespol.id, jan, true);
+  setMember(db, zespol.id, ania, false);
+
+  assert.equal(resolveDelivery(db, 'nie-ma'), null);
+
+  const konto1 = resolveDelivery(db, 'jan');
+  assert.equal(konto1.kind, 'user');
+  assert.equal(konto1.team, null);
+  assert.deepEqual(konto1.mailboxes.map((s) => s.login), ['jan']);
+
+  const przezAlias = resolveDelivery(db, 'biuro');
+  assert.equal(przezAlias.kind, 'user');
+  assert.deepEqual(przezAlias.mailboxes.map((s) => s.login), ['jan']);
+
+  const przezZespol = resolveDelivery(db, 'sprzedaz');
+  assert.equal(przezZespol.kind, 'team');
+  assert.equal(przezZespol.team.name, 'Dział Sprzedaży');
+  assert.deepEqual(przezZespol.mailboxes.map((s) => s.login), ['ania', 'jan']);
+  db.close();
+});
+
+test('resolveDelivery: zespół bez członków istnieje, ale nie ma dokąd doręczyć', () => {
+  const db = openMemoryDb();
+  createTeam(db, { localPart: 'pusty', name: 'Pusty' });
+  const cel = resolveDelivery(db, 'pusty');
+  assert.equal(cel.kind, 'team', 'adres istnieje, więc nie null');
+  assert.deepEqual(cel.mailboxes, [], 'ale nikt go nie obsługuje');
+  db.close();
+});
+
+test('addressTaken: login, alias, zespół i adres systemowy w jednej przestrzeni nazw', () => {
+  const db = openMemoryDb();
+  const jan = konto(db, 'jan');
+  db.prepare('INSERT INTO aliases (user_id, alias, created_at) VALUES (?, ?, ?)').run(jan, 'biuro', now());
+  createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+
+  assert.equal(addressTaken(db, 'jan'), true);
+  assert.equal(addressTaken(db, 'biuro'), true);
+  assert.equal(addressTaken(db, 'sprzedaz'), true);
+  // Adres nadawcy listów systemowych jest zastrzeżony nawet bez konta w bazie
+  // (przy TP_SEED=0 seed go nie zakłada, a deliverSystemMessage i tak z niego nadaje).
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM users WHERE login = ?').get(SYSTEM_SENDER.login).n, 0);
+  assert.equal(addressTaken(db, SYSTEM_SENDER.login), true);
+  assert.equal(addressTaken(db, 'wolny'), false);
   db.close();
 });

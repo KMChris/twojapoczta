@@ -5,6 +5,7 @@ import { claimUploads, bindUploads, gcBlobs, storeAttachment } from './attachmen
 import { hasRoom } from './quota.js';
 import { buildRawMessage, deliverExternal } from './smtp-out.js';
 import { signMessage } from './dkim.js';
+import { findTeam, teamMailboxes, canSendAs } from './teams.js';
 
 export const DOMAIN = process.env.TP_DOMAIN || 'twojapoczta.com';
 // Dozwolone wartości messages.folder. 'custom' to wartownik: mówi „folder własny",
@@ -34,6 +35,32 @@ export function findMailbox(db, localPart) {
       )
       .get(localPart) ?? null
   );
+}
+
+// Adres w naszej domenie wskazuje albo na konto (login lub alias), albo na zespół.
+// To jedyne miejsce, które wie o fan-oucie: dla zespołu zwraca wszystkie skrzynki,
+// do których ma pójść kopia. null = takiego adresu u nas nie ma.
+// Uwaga: zespół bez członków zwraca pustą listę skrzynek, a nie null. Adres
+// istnieje, tylko nikt go nie obsługuje, i wołający musi te dwa przypadki rozróżnić.
+export function resolveDelivery(db, localPart) {
+  const user = findMailbox(db, localPart);
+  if (user) return { kind: 'user', team: null, mailboxes: [user] };
+  const team = findTeam(db, localPart);
+  if (!team) return null;
+  return { kind: 'team', team, mailboxes: teamMailboxes(db, team.id) };
+}
+
+// Czy część lokalna jest zajęta? Loginy, aliasy i zespoły dzielą jedną przestrzeń
+// nazw, bo wszystkie są adresami w tej samej domenie.
+//
+// SYSTEM_SENDER.login jest zastrzeżony bez względu na bazę: seed zakłada to konto
+// tylko na instalacji demonstracyjnej, a deliverSystemMessage nadaje z tego adresu
+// zawsze (wpisuje from_addr tekstem, wiersz w users nie jest mu potrzebny). Bez tej
+// linijki przy TP_SEED=0 dowolny użytkownik mógłby zarejestrować ten adres i podszyć
+// się pod listy powitalne i zwroty.
+export function addressTaken(db, localPart) {
+  if (localPart === SYSTEM_SENDER.login) return true;
+  return !!findMailbox(db, localPart) || !!findTeam(db, localPart);
 }
 
 export function makeSnippet(body) {
