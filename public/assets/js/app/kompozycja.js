@@ -36,17 +36,24 @@ export function initKompozycja(app) {
   let zalaczniki = [];
   let uploadyWToku = 0;
 
-  // --- Nadawca (adres główny + aliasy) ------------------------------------------
+  // --- Nadawca (adres główny, aliasy, skrzynki zespołowe) ------------------------
 
   async function uzupelnijNadawcow(preferowany) {
     try {
-      const { aliases } = await api.aliasy();
-      const adresy = [app.stan.user.address, ...aliases.map((a) => a.address)];
-      wyborOd.replaceChildren(...adresy.map((adres) => el('option', { value: adres }, adres)));
+      const [{ aliases }, { teams }] = await Promise.all([api.aliasy(), api.zespoly()]);
+      const zespoly = teams.filter((t) => t.can_send);
+      const opcje = [
+        { adres: app.stan.user.address, etykieta: app.stan.user.address },
+        ...aliases.map((a) => ({ adres: a.address, etykieta: a.address })),
+        // Przy zespole pokazujemy nazwę, bo to ona zmienia się w polu Od u odbiorcy.
+        ...zespoly.map((t) => ({ adres: t.address, etykieta: `${t.name} · ${t.address}` })),
+      ];
+      wyborOd.replaceChildren(...opcje.map((o) => el('option', { value: o.adres }, o.etykieta)));
+      const adresy = opcje.map((o) => o.adres);
       wyborOd.value = adresy.includes(preferowany) ? preferowany : app.stan.user.address;
-      poleOd.hidden = adresy.length < 2;
+      poleOd.hidden = opcje.length < 2;
     } catch {
-      poleOd.hidden = true; // bez aliasów piszemy po prostu z adresu głównego
+      poleOd.hidden = true; // bez aliasów i zespołów piszemy po prostu z adresu głównego
     }
   }
 
