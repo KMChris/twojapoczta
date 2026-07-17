@@ -207,6 +207,33 @@ test('RCPT na adres zespołu rozwija kopertę na wszystkich członków', async (
   }
 });
 
+test('pełna skrzynka członka wypada z rozdzielnika, reszta zespołu dostaje list', async () => {
+  const zespol = createTeam(db, { localPart: 'wsparcie', name: 'Wsparcie' });
+  const pelny = konto('pelny-smtp');
+  const wolny = konto('wolny-smtp');
+  setMember(db, zespol.id, pelny, false);
+  setMember(db, zespol.id, wolny, false);
+  // Limit 0 MB przy pustej skrzynce jeszcze mieści bajt zerowy (usage <= limit),
+  // więc dokładamy treść: dopiero zajęte bajty czynią skrzynkę pełną.
+  db.prepare('UPDATE users SET quota_mb = 0 WHERE id = ?').run(pelny);
+  db.prepare(
+    "INSERT INTO messages (owner_id, folder, from_addr, body, snippet, sent_at) VALUES (?, 'inbox', 'ktos@example.com', ?, '', ?)"
+  ).run(pelny, 'x'.repeat(1000), now());
+
+  const k = polacz();
+  assert.match(await dostarcz(k, 'wsparcie@twojapoczta.com'), /^250 /);
+  await k.cmd('DATA');
+  assert.match(await k.cmd('Subject: Awaria\r\n\r\nnie dziala\r\n.'), /^250 /);
+  k.end();
+
+  // deliverInbound nie sprawdza limitu, więc filtr przy RCPT jest tu jedynym
+  // strażnikiem miejsca: przepuszczony członek dostałby kopię ponad swój limit.
+  const ma = (id) =>
+    db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND subject = 'Awaria'").get(id).n;
+  assert.equal(ma(wolny), 1, 'członek z miejscem dostaje kopię');
+  assert.equal(ma(pelny), 0, 'członek bez miejsca nie dostaje nic');
+});
+
 test('RCPT na zespół bez członków → 550, bez słowa o składzie', async () => {
   createTeam(db, { localPart: 'pusty', name: 'Pusty' });
   const k = polacz();
@@ -240,8 +267,55 @@ test('zespół większy niż MAX_RECIPIENTS mieści się w jednym RCPT', async (
   k.end();
 });
 
+test('zespół ponad sufit rozwinięcia → 452 i żaden członek nie dostaje kopii', async () => {
+  const zespol = createTeam(db, { localPart: 'gigant', name: 'Gigant' });
+  const czlonkowie = [];
+  for (let i = 0; i < 501; i += 1) {
+    const id = konto(`gigant${i}`);
+    czlonkowie.push(id);
+    setMember(db, zespol.id, id, false);
+  }
+  const zwykly = konto('zwykly-smtp');
+
+  const k = polacz();
+  assert.match(await k.read(), /^220 /);
+  await k.cmd('EHLO tester');
+  await k.cmd('MAIL FROM:<ktos@obca.pl>');
+  assert.match(await k.cmd('RCPT TO:<zwykly-smtp@twojapoczta.com>'), /^250 /);
+  // Limit koperty tego nie zatrzyma: to dopiero drugi adres. Zatrzymuje go sufit
+  // rozwinięcia, bo za tym jednym adresem stoi pięćset jeden skrzynek.
+  assert.match(await k.cmd('RCPT TO:<gigant@twojapoczta.com>'), /^452 /);
+  assert.match(await k.cmd('DATA'), /^354 /);
+  assert.match(await k.cmd('Subject: Gigant\r\n\r\ntresc\r\n.'), /^250 /);
+  k.end();
+
+  const ma = (id) =>
+    db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND subject = 'Gigant'").get(id).n;
+  assert.equal(ma(zwykly), 1, 'reszta koperty jedzie dalej, odmowa dotyczy jednego adresu');
+  // Odmowa nie może zostawić po sobie skrzynek w kopercie: inaczej 452 byłoby
+  // kłamstwem, a pięćset jeden kopii i tak by się zapisało.
+  assert.equal(
+    czlonkowie.reduce((suma, id) => suma + ma(id), 0),
+    0,
+    'żaden członek odrzuconego zespołu nie dostaje kopii'
+  );
+});
+
+test('powtórzony adres zespołu nie obciąża sufitu rozwinięcia drugi raz', async () => {
+  const zespol = createTeam(db, { localPart: 'polowa', name: 'Połowa' });
+  for (let i = 0; i < 300; i += 1) setMember(db, zespol.id, konto(`polowa${i}`), false);
+
+  const k = polacz();
+  assert.match(await dostarcz(k, 'polowa@twojapoczta.com'), /^250 /);
+  // Trzysta skrzynek mieści się pod sufitem, a drugi RCPT na ten sam adres nie dokłada
+  // ani jednej · liczone od nowa dałoby sześćset i odmowę za cudzy rozdzielnik.
+  assert.match(await k.cmd('RCPT TO:<polowa@twojapoczta.com>'), /^250 /);
+  k.end();
+});
+
 test('limit koperty: 50 adresów wchodzi, powtórka też, nowy ponad limit → 452', async () => {
-  for (let i = 0; i < 51; i += 1) konto(`limit${i}`);
+  const konta = [];
+  for (let i = 0; i < 51; i += 1) konta.push(konto(`limit${i}`));
   const k = polacz();
   assert.match(await k.read(), /^220 /);
   await k.cmd('EHLO tester');
@@ -252,5 +326,34 @@ test('limit koperty: 50 adresów wchodzi, powtórka też, nowy ponad limit → 4
   // Adres już policzony nie dokłada się do limitu drugi raz.
   assert.match(await k.cmd('RCPT TO:<limit0@twojapoczta.com>'), /^250 /);
   assert.match(await k.cmd('RCPT TO:<limit50@twojapoczta.com>'), /^452 /);
+  assert.match(await k.cmd('DATA'), /^354 /);
+  assert.match(await k.cmd('Subject: Limit\r\n\r\ntresc\r\n.'), /^250 /);
+  k.end();
+
+  // 452 jest chwilowe: partner ponowi próbę. Odrzucony adres, który mimo odmowy
+  // został w kopercie, dostałby ten list teraz i drugi raz po ponowieniu, więc
+  // sama odpowiedź to za mało · sprawdzamy skrzynkę.
+  const ma = (id) =>
+    db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND subject = 'Limit'").get(id).n;
+  assert.equal(ma(konta[50]), 0, 'adres odprawiony 452 nie dostaje listu');
+  assert.equal(ma(konta[0]), 1, 'a przyjęty owszem, i tylko raz mimo powtórzonego RCPT');
+});
+
+test('drugi list na tym samym połączeniu dostaje kopertę od zera', async () => {
+  for (let i = 0; i < 51; i += 1) konto(`druga${i}`);
+  const k = polacz();
+  assert.match(await k.read(), /^220 /);
+  await k.cmd('EHLO tester');
+  await k.cmd('MAIL FROM:<ktos@obca.pl>');
+  for (let i = 0; i < 50; i += 1) {
+    assert.match(await k.cmd(`RCPT TO:<druga${i}@twojapoczta.com>`), /^250 /);
+  }
+  assert.match(await k.cmd('DATA'), /^354 /);
+  assert.match(await k.cmd('Subject: Pierwszy\r\n\r\ntresc\r\n.'), /^250 /);
+  // Jedno połączenie, dwa listy: tak robi każdy MTA i drugiej kopercie nie wolno
+  // odziedziczyć licznika po pierwszej. Adres świeży, bo już policzony przeszedłby
+  // i przy nieposprzątanym zbiorze.
+  await k.cmd('MAIL FROM:<ktos@obca.pl>');
+  assert.match(await k.cmd('RCPT TO:<druga50@twojapoczta.com>'), /^250 /);
   k.end();
 });

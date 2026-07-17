@@ -11,6 +11,13 @@ import { catchallLogin } from './settings.js';
 
 export const MAX_MESSAGE_BYTES = 10 * 1024 * 1024;
 const MAX_RECIPIENTS = 50;
+// Sufit na skrzynki po rozwinięciu zespołów. MAX_RECIPIENTS liczy adresy z koperty,
+// więc sam nie ogranicza liczby kopii: za pięćdziesięcioma adresami zespołów może stać
+// ich tysiące, a każda kopia to osobny wiersz z całą treścią (bloby załączników się
+// współdzielą, treści nie · quota_mb domyślnie NULL, czyli bez limitu). Luźniejszy od
+// limitu koperty, bo rozdzielnik jest naszą sprawą, nie nadawcy: ma odciąć dopiero
+// rozmiar absurdalny, nie karać za normalne pisanie do zespołu.
+const MAX_EXPANDED_RECIPIENTS = 500;
 const IDLE_TIMEOUT_MS = 60_000;
 const CRLF = Buffer.from('\r\n');
 
@@ -184,10 +191,22 @@ export function startSmtpServer(
         if (koperta.adresy.size >= MAX_RECIPIENTS && !koperta.adresy.has(adres)) {
           return wyslij('452 4.5.3 Too many recipients');
         }
-        koperta.adresy.add(adres);
-        for (const skrzynka of zMiejscem) {
-          if (!koperta.rcpt.some((r) => r.id === skrzynka.id)) koperta.rcpt.push({ ...skrzynka, adres });
+        // Nowicjuszy liczymy przed sufitem, żeby powtórzony adres nie obciążał go drugi raz.
+        const nowe = zMiejscem.filter((s) => !koperta.rcpt.some((r) => r.id === s.id));
+        // Ta sama odpowiedź co przy limicie koperty, choć powód jest inny: obcy serwer
+        // nie ma się z niej dowiadywać, że za adresem stoi rozdzielnik i jak duży.
+        if (koperta.rcpt.length + nowe.length > MAX_EXPANDED_RECIPIENTS) {
+          return wyslij('452 4.5.3 Too many recipients');
         }
+        // Dopiero tu, po obu limitach: adres odprawiony 452 nie może zostać w kopercie,
+        // bo partner ponowi próbę i dostałby doręczenie w obie strony.
+        koperta.adresy.add(adres);
+        // `adres` zostaje ten, który przyszedł pierwszy · odwrotnie niż w resolveRecipients,
+        // gdzie adresowanie wprost wygrywa nad członkostwem bez względu na kolejność.
+        // Świadomie: tam kolejność ustawia nadawca z naszego panelu, tu jest to koperta obcego
+        // serwera i nie mówi ona nic o tym, którą tożsamość odbiorca ma zobaczyć. A i tak
+        // prawie zawsze wygrywa `parsed.to` z nagłówka (zakonczOdbior), więc stawka jest niska.
+        for (const skrzynka of nowe) koperta.rcpt.push({ ...skrzynka, adres });
         return wyslij('250 2.1.5 OK');
       }
 
