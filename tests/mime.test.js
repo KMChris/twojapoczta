@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseHeaders, parseParams, decodeCharset, decodeQuotedPrintable,
-  decodeEncodedWords, parseAddress, htmlToText, parseMessage, parseContentId,
+  decodeEncodedWords, parseAddress, htmlToText, parseMessage, parseContentId, htmlCytujeCid,
 } from '../server/mime.js';
 import { MAX_FILE_BYTES } from '../server/attachments.js';
 
@@ -290,6 +290,21 @@ test('parseContentId: zdejmuje nawiasy kątowe i puste zwraca jako null', () => 
   assert.equal(parseContentId('bez-nawiasow@x'), 'bez-nawiasow@x');
   assert.equal(parseContentId(''), null);
   assert.equal(parseContentId(undefined), null);
+});
+
+// Kotwica na końcu wzorca. Bez niej `logo@fir.ma` łapie się na cudzym `cid:logo@fir.mail`
+// i obie strony chowają nie ten załącznik, co trzeba: wysyłka wkłada go do `related`,
+// odbiór zdejmuje z listy · pod adresem `cid:`, którego treść w ogóle nie woła.
+test('htmlCytujeCid: dłuższy cid: w treści nie jest cytowaniem krótszego Content-ID', () => {
+  assert.equal(htmlCytujeCid('<img src="cid:logo@fir.ma">', 'logo@fir.ma'), true);
+  assert.equal(htmlCytujeCid('<img src="cid:logo@fir.mail">', 'logo@fir.ma'), false);
+  assert.equal(htmlCytujeCid('<img src="cid:logo@fir.ma2">', 'logo@fir.ma'), false);
+});
+
+test('htmlCytujeCid: bez treści albo bez Content-ID → false', () => {
+  assert.equal(htmlCytujeCid('', 'logo@fir.ma'), false);
+  assert.equal(htmlCytujeCid(null, 'logo@fir.ma'), false);
+  assert.equal(htmlCytujeCid('<img src="cid:logo@fir.ma">', null), false);
 });
 
 test('parseMessage: multipart/alternative oddaje część text/html obok tekstu', () => {
