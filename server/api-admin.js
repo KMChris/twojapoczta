@@ -9,7 +9,7 @@ import {
   listUsers, getUserView, createUser, deleteUser, revokeSessions, adminCount,
   userAliases, instanceStats,
 } from './admin.js';
-import { DOMAIN, addressOf, addressTaken, findMailbox, deliverSystemMessage, SYSTEM_SENDER } from './mail.js';
+import { DOMAIN, addressOf, addressTaken, resolveDelivery, deliverSystemMessage, SYSTEM_SENDER } from './mail.js';
 import { WELCOME_SUBJECT, WELCOME_BODY } from './seed.js';
 import { registrationOpen, passwordMinLength, catchallLogin, setSetting } from './settings.js';
 import { aliasLimit, aliasCount, aliasesWord, MAX_ALIAS_LIMIT } from './aliases.js';
@@ -264,12 +264,22 @@ export function registerAdminRoutes(router, db, { dataDir = null, resolver } = {
         operacje.push(() => setSetting(db, 'catchall', null));
         zmiany.push('catch-all: wyłączony');
       } else {
-        const skrzynka = findMailbox(db, String(v).trim().toLowerCase());
-        if (!skrzynka) {
-          return json(res, 400, { error: 'Catch-all musi wskazywać istniejącą skrzynkę (login albo alias).' });
+        // Catch-all może celować w zespół: smtp.js i tak przechodzi przez
+        // resolveDelivery, a skrzynka funkcyjna to dokładnie ten adres, na który
+        // catch-all zwykle chce trafiać.
+        const czesc = String(v).trim().toLowerCase();
+        const cel = resolveDelivery(db, czesc);
+        if (!cel) {
+          return json(res, 400, { error: 'Catch-all musi wskazywać istniejącą skrzynkę (login, alias albo zespół).' });
         }
-        operacje.push(() => setSetting(db, 'catchall', skrzynka.login));
-        zmiany.push(`catch-all: ${skrzynka.login}`);
+        // Zespół bez członków odsyła 550 na każdy nieznany adres (smtp.js), czyli robi
+        // dokładnie odwrotność tego, po co ustawia się catch-all.
+        if (cel.kind === 'team' && !cel.mailboxes.length) {
+          return json(res, 400, { error: `Zespół „${cel.team.name}" nie ma członków, więc catch-all odrzucałby całą pocztę.` });
+        }
+        const zapis = cel.kind === 'team' ? cel.team.local_part : cel.mailboxes[0].login;
+        operacje.push(() => setSetting(db, 'catchall', zapis));
+        zmiany.push(`catch-all: ${zapis}`);
       }
     }
 

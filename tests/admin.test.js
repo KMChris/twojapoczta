@@ -10,6 +10,7 @@ import path from 'node:path';
 import { createApp } from '../server/index.js';
 import { openMemoryDb, now } from '../server/db.js';
 import { grantAdmin } from '../server/admin.js';
+import { createTeam, setMember } from '../server/teams.js';
 import { setSetting } from '../server/settings.js';
 import { listEvents } from '../server/audit.js';
 import { configureDkim } from '../server/dkim.js';
@@ -451,6 +452,33 @@ test('GET/PATCH /api/admin/settings steruje rejestracją, hasłami i catch-all',
   } finally {
     setSetting(db, 'registration', null);
     setSetting(db, 'password_min', null);
+    setSetting(db, 'catchall', null);
+  }
+});
+
+test('catch-all celuje w zespół, ale nie w taki, który nie ma komu odbierać', async () => {
+  const admin = await adminClient();
+  const zbiorcza = createTeam(db, { localPart: 'zbiorcza', name: 'Skrzynka Zbiorcza' });
+  createTeam(db, { localPart: 'pustka', name: 'Pustka' });
+  const czlonek = await admin('POST', '/api/admin/users', { login: 'zbiorczy', name: 'Zbiorczy Pracownik', password: 'haslo1234' });
+  setMember(db, zbiorcza.id, czlonek.data.user.id, false);
+
+  try {
+    const ok = await admin('PATCH', '/api/admin/settings', { catchall: 'zbiorcza' });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.data.settings.catchall, 'zbiorcza', 'zapisuje się adres zespołu, nie login pierwszego członka');
+
+    // Zespół bez członków odsyła 550 na każdy nieznany adres (smtp.js), czyli robi
+    // dokładnie odwrotność tego, po co ustawia się catch-all.
+    const bezSkladu = await admin('PATCH', '/api/admin/settings', { catchall: 'pustka' });
+    assert.equal(bezSkladu.status, 400);
+    assert.match(bezSkladu.data.error, /Pustka/, 'administrator dowiaduje się, który zespół stoi pusty');
+    assert.equal(
+      (await admin('GET', '/api/admin/settings')).data.settings.catchall,
+      'zbiorcza',
+      'odmowa nie rusza działającego ustawienia'
+    );
+  } finally {
     setSetting(db, 'catchall', null);
   }
 });

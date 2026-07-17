@@ -8,7 +8,8 @@ import {
   listTeams, createTeam, renameTeam, deleteTeam, setMember, removeMember,
 } from '../server/teams.js';
 import {
-  resolveDelivery, addressTaken, resolveSender, saveDraft, sendMessage, fireScheduled, SYSTEM_SENDER,
+  resolveDelivery, addressTaken, resolveSender, saveDraft, sendMessage, fireScheduled,
+  setForwarding, getForwarding, SYSTEM_SENDER,
 } from '../server/mail.js';
 
 function konto(db, login) {
@@ -636,6 +637,24 @@ test('odebranie prawa wysyłki zatrzymuje list zaplanowany wcześniej', () => {
   assert.doesNotMatch(powiadomienie.body, /Wysłane/, 'listu tam nie ma, więc nie wolno tam autora odsyłać');
   assert.match(powiadomienie.body, /prawa wysyłki/, 'i nazywa powód');
   assert.match(powiadomienie.body, /sprzedaz@twojapoczta\.com/, 'oraz adres, z którego nadawać już nie wolno');
+  db.close();
+});
+
+test('przesyłanie dalej na adres zespołu odmawia, ale nie kłamie', () => {
+  const db = openMemoryDb();
+  const janId = konto(db, 'jan');
+  const jan = { id: janId, login: 'jan', name: 'Jan' };
+  createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+
+  const wynik = setForwarding(db, jan, { to: 'sprzedaz@twojapoczta.com' });
+  assert.match(wynik.error, /Nie można przesyłać poczty na adres zespołu/);
+  assert.doesNotMatch(wynik.error, /Nie znaleziono/, 'ten adres istnieje, więc nie udajemy, że go nie ma');
+  assert.equal(getForwarding(db, janId).to, '', 'odmowa nie zapisuje przekierowania');
+
+  // Kontrola gałęzi obok: adres, którego naprawdę u nas nie ma, dalej dostaje
+  // swój własny komunikat · strażnik zespołu nie może go przykryć.
+  const nieznany = setForwarding(db, jan, { to: 'nie-ma@twojapoczta.com' });
+  assert.match(nieznany.error, /Nie znaleziono skrzynki/);
   db.close();
 });
 

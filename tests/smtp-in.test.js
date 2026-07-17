@@ -255,6 +255,32 @@ test('RCPT na zespół bez członków → 550, bez słowa o składzie', async ()
   }
 });
 
+test('catch-all wskazujący zespół rozsyła nieznany adres do każdego członka', async () => {
+  const zespol = createTeam(db, { localPart: 'zbiorczy-zespol', name: 'Zbiorczy Zespół' });
+  const jan = konto('jan-zbiorczy');
+  const ania = konto('ania-zbiorcza');
+  setMember(db, zespol.id, jan, false);
+  setMember(db, zespol.id, ania, false);
+
+  setSetting(db, 'catchall', 'zbiorczy-zespol');
+  try {
+    const k = polacz();
+    // Adres nie istnieje nigdzie: dopiero catch-all na zespół daje mu odbiorców.
+    assert.match(await dostarcz(k, 'znikad@twojapoczta.com'), /^250 /);
+    await k.cmd('DATA');
+    assert.match(await k.cmd('Subject: Zbiorczy\r\n\r\ndla wszystkich\r\n.'), /^250 /);
+    k.end();
+
+    for (const id of [jan, ania]) {
+      const kopia = db.prepare("SELECT * FROM messages WHERE owner_id = ? AND subject = 'Zbiorczy'").get(id);
+      assert.ok(kopia, 'każdy członek dostaje kopię listu złapanego przez catch-all');
+      assert.equal(kopia.to_addr, 'znikad@twojapoczta.com', 'członek widzi adres, na który list naprawdę przyszedł');
+    }
+  } finally {
+    setSetting(db, 'catchall', null);
+  }
+});
+
 test('zespół większy niż MAX_RECIPIENTS mieści się w jednym RCPT', async () => {
   const zespol = createTeam(db, { localPart: 'wszyscy', name: 'Wszyscy' });
   for (let i = 0; i < 60; i += 1) setMember(db, zespol.id, konto(`tlum${i}`), false);

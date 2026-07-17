@@ -651,7 +651,12 @@ export function setForwarding(db, user, { to, keepCopy = true }) {
 
   if (domena === DOMAIN) {
     const odbiorca = findMailbox(db, cel.slice(0, at));
-    if (!odbiorca) return { error: `Nie znaleziono skrzynki „${cel}".` };
+    if (!odbiorca) {
+      // Zespół w łańcuchu przekierowań mnoży rozgałęzienia, a przesyłanie na własny
+      // zespół robi pętlę na sobie. Odmawiamy, ale mówimy dlaczego: ten adres istnieje.
+      if (findTeam(db, cel.slice(0, at))) return { error: 'Nie można przesyłać poczty na adres zespołu.' };
+      return { error: `Nie znaleziono skrzynki „${cel}".` };
+    }
     // Przekierowanie na własny adres albo alias zapętliłoby skrzynkę na siebie.
     if (odbiorca.id === user.id) return { error: 'Nie da się przesyłać poczty na własny adres.' };
   } else {
