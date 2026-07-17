@@ -365,6 +365,23 @@ test('cid: nieznany identyfikator → 404', async () => {
   assert.equal(res.status, 404);
 });
 
+// Content-ID jest unikalny najwyżej w obrębie listu, więc dwa listy mogą go mieć taki sam.
+// Własność pilnuje `owner_id`, ale to `m.id = ?` wiąże obrazek z jego listem · bez tego
+// trasa podałaby w treści jednego listu obrazek z drugiego.
+test('cid: ten sam Content-ID w dwóch moich wiadomościach → każda oddaje swój obrazek', async () => {
+  const api = client();
+  await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const ownerId = idUzytkownika('demo');
+  const id1 = wstawZObrazkiem(ownerId, 'ten-sam@fir.ma', 'OBRAZEK-PIERWSZEJ');
+  const id2 = wstawZObrazkiem(ownerId, 'ten-sam@fir.ma', 'OBRAZEK-DRUGIEJ');
+  const bajty = async (id) => {
+    const res = await api.rawBody('GET', `/api/messages/${id}/cid/${encodeURIComponent('ten-sam@fir.ma')}`);
+    return Buffer.from(await res.arrayBuffer()).toString();
+  };
+  assert.equal(await bajty(id1), 'OBRAZEK-PIERWSZEJ');
+  assert.equal(await bajty(id2), 'OBRAZEK-DRUGIEJ');
+});
+
 test('cid: mapa w GET /api/messages/:id, a osadzone znikają z listy załączników', async () => {
   const api = client();
   await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
