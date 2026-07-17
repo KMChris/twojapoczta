@@ -61,6 +61,25 @@ Tabela wszystkich kont z filtrem. Kliknięcie wiersza otwiera kartę konta:
 | Wyloguj ze wszystkich urządzeń | Unieważnia wszystkie sesje konta. |
 | Usuń konto | Kasuje konto z całą pocztą, aliasami i sesjami (dwuetapowe potwierdzenie). Własnego konta nie można usunąć. |
 
+### Zespoły
+
+Skrzynki funkcyjne instancji: wspólny adres (`sprzedaz@twojapoczta.com`)
+z własną nazwą („Dział Sprzedaży"). Poczta na ten adres rozchodzi się kopią do
+skrzynki każdego członka; zespół nie ma własnego magazynu, więc miejsce zużywa
+się u członków, gdzie działają zwykłe limity.
+
+Każdemu członkowi ustawia się osobno, czy tylko **odbiera**, czy również
+**wysyła**. Wysyłka z adresu zespołu podpisuje się nazwą zespołu, nie imieniem
+osoby, która pisze: klient odpowiada firmie, a odpowiedź wraca do wszystkich.
+
+Adres zespołu żyje w jednej przestrzeni nazw z loginami i aliasami, więc nie da
+się założyć zespołu na zajętym adresie ani konta na adresie zespołu. Sam adres
+jest niezmienny; zmienia się tylko nazwa.
+
+**Zespół bez członków odrzuca pocztę** (`550`), dlatego panel oznacza taki
+zespół ostrzeżeniem. Usunięcie zespołu zwalnia adres, a poczta już doręczona
+zostaje u członków: to ich kopie.
+
 ### Domena i DNS
 
 - **Szyfrowanie (STARTTLS)**: czy bramka SMTP szyfruje transport od obcych

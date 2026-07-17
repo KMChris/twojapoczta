@@ -34,6 +34,14 @@ export const api = {
   dodajAlias: (id, alias) => zadanie('POST', `/api/admin/users/${id}/aliases`, { alias }),
   usunAlias: (id, aliasId) => zadanie('DELETE', `/api/admin/users/${id}/aliases/${aliasId}`),
 
+  zespoly: () => zadanie('GET', '/api/admin/teams'),
+  dodajZespol: (dane) => zadanie('POST', '/api/admin/teams', dane),
+  zmienZespol: (id, dane) => zadanie('PATCH', `/api/admin/teams/${id}`, dane),
+  usunZespol: (id) => zadanie('DELETE', `/api/admin/teams/${id}`),
+  ustawCzlonka: (id, userId, can_send) =>
+    zadanie('PUT', `/api/admin/teams/${id}/members/${userId}`, { can_send }),
+  usunCzlonka: (id, userId) => zadanie('DELETE', `/api/admin/teams/${id}/members/${userId}`),
+
   ustawienia: () => zadanie('GET', '/api/admin/settings'),
   zapiszUstawienia: (dane) => zadanie('PATCH', '/api/admin/settings', dane),
   broadcast: (dane) => zadanie('POST', '/api/admin/broadcast', dane),

@@ -3,14 +3,16 @@
 import { api } from './api.js';
 import { initPulpit } from './pulpit.js';
 import { initUzytkownicy } from './uzytkownicy.js';
+import { initZespoly } from './zespoly.js';
 import { initDomena } from './domena.js';
 import { initUstawienia } from './ustawienia.js';
 import { initDziennik } from './dziennik.js';
 
-const SEKCJE = ['pulpit', 'uzytkownicy', 'domena', 'ustawienia', 'dziennik'];
+const SEKCJE = ['pulpit', 'uzytkownicy', 'zespoly', 'domena', 'ustawienia', 'dziennik'];
 const TYTULY = {
   pulpit: 'Pulpit',
   uzytkownicy: 'Użytkownicy',
+  zespoly: 'Zespoły',
   domena: 'Domena i DNS',
   ustawienia: 'Ustawienia',
   dziennik: 'Dziennik zdarzeń',
@@ -68,6 +70,7 @@ async function start() {
 
   widoki.pulpit = initPulpit();
   widoki.uzytkownicy = initUzytkownicy(stan);
+  widoki.zespoly = initZespoly();
   widoki.domena = initDomena();
   widoki.ustawienia = initUstawienia();
   widoki.dziennik = initDziennik();
