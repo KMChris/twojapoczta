@@ -199,7 +199,10 @@ export function startSmtpServer(
       if (komenda === 'VRFY') return wyslij('252 2.1.5 Cannot VRFY');
       if (komenda === 'QUIT') {
         wyslij('221 2.0.0 Bye');
-        socket.end();
+        // Kończymy to gniazdo, do którego przed chwilą pisaliśmy · po STARTTLS jest nim
+        // TLSSocket. FIN na gnieździe pod spodem działa tylko dzięki kolejności flushu
+        // i przy zatorze na wysyłce wyprzedziłby zakolejkowany rekord TLS.
+        gniazdo.end();
         return;
       }
       wyslij('500 5.5.2 Command not recognized');
@@ -265,8 +268,11 @@ export function startSmtpServer(
   });
 
   server.listen(port, host, () => {
-    const szyfr = secureContext() ? 'STARTTLS włączony' : 'bez STARTTLS';
-    log.log(`  \u{1F4E5} SMTP nasluchuje na ${host}:${port} (domena ${DOMAIN}, ${szyfr})`);
+    // secureContext() pytamy przy każdym EHLO i handshake, więc to zdanie opisuje wyłącznie
+    // chwilę startu · certyfikat, który pojawi się później, zostanie ogłoszony bez restartu.
+    // Log, który mówiłby „bez STARTTLS” o żywym serwerze, kłamałby operatorowi w oczy.
+    const szyfr = secureContext() ? 'na starcie z certyfikatem' : 'na starcie bez certyfikatu';
+    log.log(`  \u{1F4E5} SMTP nasluchuje na ${host}:${port} (domena ${DOMAIN}, STARTTLS ${szyfr})`);
   });
   return server;
 }

@@ -101,6 +101,8 @@ function polacz(naPort = port) {
   const cmd = (t) => { socket.write(t + '\r\n'); return read(); };
   const zapiszSurowo = (t) => socket.write(t);
 
+  // Zwraca CN certyfikatu, który podał serwer · po tym poznajemy, czy kontekst
+  // został pobrany teraz, czy zapamiętany kiedyś na starcie.
   async function podnies() {
     socket.removeAllListeners('data');
     const bezpieczne = tls.connect({ socket, rejectUnauthorized: false });
@@ -111,6 +113,7 @@ function polacz(naPort = port) {
     socket = bezpieczne;
     bufor = '';
     podepnij(socket);
+    return bezpieczne.getPeerCertificate()?.subject?.CN;
   }
 
   return {
@@ -119,6 +122,7 @@ function polacz(naPort = port) {
     zapiszSurowo,
     podnies,
     end: () => socket.end(),
+    zniszcz: () => socket.destroy(),
     zamkniete: () => new Promise((r) => socket.once('close', r)),
   };
 }
@@ -235,6 +239,97 @@ test('zawieszony handshake jest zrywany, i to bez plaintextu', async () => {
     new Promise((r) => setTimeout(() => r('wisi'), KROTKI_LIMIT_MS * 8)),
   ]);
   assert.equal(co, 'zamkniete', 'zawieszony handshake ma zostać zerwany, bez odpowiedzi w czystym tekście');
+});
+
+// Te dwa testy pilnują jedynego powodu, dla którego `secureContext` jest funkcją,
+// a nie gotowym kontekstem: proces MX żyje miesiącami, certyfikat z certbota trzy.
+// Kontekst zapamiętany na starcie znaczy, że po odnowieniu w dniu 60. serwer dalej
+// podaje stary · każdy partner negocjujący STARTTLS dostaje wygasły certyfikat,
+// poczta się odracza, a potem odbija. Bez zmiany kontekstu MIĘDZY wywołaniami
+// pobranie przy handshake i zapamiętanie na starcie są nie do odróżnienia.
+test('certyfikat, który pojawia się w biegu, jest ogłaszany bez restartu', async (t) => {
+  let biezacy = null; // certbota jeszcze nie było
+  const serwer = startSmtpServer(db, {
+    port: 0,
+    host: '127.0.0.1',
+    log: cichy,
+    secureContext: () => biezacy,
+  });
+  await new Promise((r) => serwer.once('listening', r));
+  const p = serwer.address().port;
+  // Sprzątamy bezwarunkowo · inaczej pierwszy nietrafiony assert zostawia serwer
+  // nasłuchujący i cały plik wisi zamiast czerwienić się uczciwie.
+  const klienci = [];
+  t.after(async () => {
+    for (const k of klienci) k.zniszcz();
+    await new Promise((r) => serwer.close(r));
+  });
+
+  const przed = polacz(p);
+  klienci.push(przed);
+  await przed.read();
+  assert.doesNotMatch(await przed.cmd('EHLO tester'), /STARTTLS/, 'bez certyfikatu nie ma czego ogłaszać');
+  assert.match(await przed.cmd('STARTTLS'), /^454 /);
+  przed.end();
+
+  // Certyfikat pojawia się w trakcie życia procesu, bez restartu.
+  const { certPem, keyPem } = generateSelfSigned({ hostname: 'swiezy.twojapoczta.com' });
+  biezacy = tls.createSecureContext({ cert: certPem, key: keyPem });
+
+  const po = polacz(p);
+  klienci.push(po);
+  await po.read();
+  assert.match(
+    await po.cmd('EHLO tester'),
+    /STARTTLS/,
+    'secureContext ma być pytany przy każdym EHLO · zapamiętany na starcie zostałby nullem na zawsze'
+  );
+  assert.match(await po.cmd('STARTTLS'), /^220 /);
+  assert.equal(await po.podnies(), 'swiezy.twojapoczta.com', 'handshake ma podać certyfikat, który właśnie istnieje');
+  po.end();
+});
+
+test('rotacja certyfikatu: handshake podaje nowy, bez restartu', async (t) => {
+  const stary = generateSelfSigned({ hostname: 'stary.twojapoczta.com' });
+  const nowy = generateSelfSigned({ hostname: 'nowy.twojapoczta.com' });
+  let biezacy = tls.createSecureContext({ cert: stary.certPem, key: stary.keyPem });
+
+  const serwer = startSmtpServer(db, {
+    port: 0,
+    host: '127.0.0.1',
+    log: cichy,
+    secureContext: () => biezacy,
+  });
+  await new Promise((r) => serwer.once('listening', r));
+  const p = serwer.address().port;
+  const klienci = [];
+  t.after(async () => {
+    for (const k of klienci) k.zniszcz();
+    await new Promise((r) => serwer.close(r));
+  });
+
+  // Podnosi połączenie do TLS i mówi, czyj certyfikat zobaczył klient.
+  async function cnPoHandshake() {
+    const k = polacz(p);
+    klienci.push(k);
+    await k.read();
+    await k.cmd('EHLO tester');
+    assert.match(await k.cmd('STARTTLS'), /^220 /);
+    const cn = await k.podnies();
+    k.end();
+    return cn;
+  }
+
+  assert.equal(await cnPoHandshake(), 'stary.twojapoczta.com');
+
+  // Certbot odnawia w dniu 60., proces żyje dalej.
+  biezacy = tls.createSecureContext({ cert: nowy.certPem, key: nowy.keyPem });
+
+  assert.equal(
+    await cnPoHandshake(),
+    'nowy.twojapoczta.com',
+    'kontekst musi być pobierany przy handshake · zapamiętany raz podawałby po odnowieniu wygasły certyfikat'
+  );
 });
 
 test('po udanym TLS zwykły limit czasu nadal działa (421, nie nagłe zerwanie)', async () => {
