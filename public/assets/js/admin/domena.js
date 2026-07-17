@@ -139,9 +139,12 @@ export function initDomena() {
         el('p', {}, 'Klucz DKIM nie jest jeszcze wygenerowany. Podpisy DKIM uwierzytelniają pocztę wychodzącą i są warunkiem dostarczalności do dużych odbiorców.'),
         el('div', { class: 'konto-rzad', style: 'margin-top: 0.8rem' },
           el('button', { class: 'btn-glowny', onclick: () => generuj() }, ikona('key'), 'Wygeneruj klucz DKIM')
-        ),
-        env.external ? null : el('p', { class: 'karta-opis' }, 'Wysyłka na zewnątrz jest wyłączona (brak TP_EXTERNAL=1). Klucz można przygotować już teraz, podpisy ruszą po włączeniu wysyłki.')
+        )
       );
+      // Dokładanie osobno, bo gołe append() dopisałoby null jako tekst „null".
+      if (!env.external) {
+        tresc.append(el('p', { class: 'karta-opis' }, 'Wysyłka na zewnątrz jest wyłączona (brak TP_EXTERNAL=1). Klucz można przygotować już teraz, podpisy ruszą po włączeniu wysyłki.'));
+      }
     } else {
       const selektor = el('input', { type: 'text', maxlength: '31', placeholder: 'np. tp2', autocapitalize: 'none', spellcheck: 'false', 'aria-label': 'Nowy selektor' });
       tresc.append(
