@@ -763,7 +763,7 @@ async function odswiezZespoly() {
       ...teams.map((zespol) =>
         el('li', { class: 'zespol' },
           el('span', { class: 'zespol-nazwa' }, zespol.name),
-          el('span', { class: 'zespol-adres mono' }, zespol.address),
+          el('span', { class: 'zespol-adres' }, zespol.address),
           el('span', { class: `zespol-prawo${zespol.can_send ? ' moze-wysylac' : ''}` },
             zespol.can_send ? 'odbiór i wysyłka' : 'odbiór')
         )
