@@ -13,11 +13,18 @@ import { generateSelfSigned } from '../server/x509.js';
 let db;
 let smtp;
 let smtpBezTls;
+let smtpKrotki;
 let port;
 let portBezTls;
+let portKrotki;
 let demoId;
 
 const cichy = { log() {}, error() {} };
+
+// Trzeci serwer ma limit czasu skrócony do ułamka sekundy · inaczej test limitu
+// musiałby czekać 60 sekund produkcyjnego IDLE_TIMEOUT_MS. Handshake na pętli
+// zwrotnej mieści się w ~30 ms, więc 500 ms to kilkunastokrotny zapas.
+const KROTKI_LIMIT_MS = 500;
 
 before(async () => {
   db = openMemoryDb();
@@ -41,11 +48,22 @@ before(async () => {
   smtpBezTls = startSmtpServer(db, { port: 0, host: '127.0.0.1', log: cichy });
   await new Promise((r) => smtpBezTls.once('listening', r));
   portBezTls = smtpBezTls.address().port;
+
+  smtpKrotki = startSmtpServer(db, {
+    port: 0,
+    host: '127.0.0.1',
+    log: cichy,
+    secureContext: () => kontekst,
+    idleTimeoutMs: KROTKI_LIMIT_MS,
+  });
+  await new Promise((r) => smtpKrotki.once('listening', r));
+  portKrotki = smtpKrotki.address().port;
 });
 
 after(async () => {
   await new Promise((r) => smtp.close(r));
   await new Promise((r) => smtpBezTls.close(r));
+  await new Promise((r) => smtpKrotki.close(r));
   db.close();
 });
 
@@ -198,4 +216,38 @@ test('STARTTLS z argumentem → 501', async () => {
   await k.cmd('EHLO tester');
   assert.match(await k.cmd('STARTTLS teraz'), /^501 /);
   k.end();
+});
+
+test('zawieszony handshake jest zrywany, i to bez plaintextu', async () => {
+  const k = polacz(portKrotki);
+  await k.read();
+  await k.cmd('EHLO tester');
+  assert.match(await k.cmd('STARTTLS'), /^220 /);
+
+  // Po 220 nie zaczynamy handshake'u i milkniemy. Bez limitu na okno handshake'u
+  // takie połączenie wisiałoby bez końca: jedna linia czystego tekstu przypina
+  // gniazdo i deskryptor, bez uwierzytelnienia (slowloris na porcie 25).
+  // Serwer ma zerwać · i ani słowa czystym tekstem, bo partner jest w środku
+  // negocjacji TLS i każda linia 4xx byłaby tam śmieciem.
+  const co = await Promise.race([
+    k.read().then((odp) => `plaintext: ${odp}`),
+    k.zamkniete().then(() => 'zamkniete'),
+    new Promise((r) => setTimeout(() => r('wisi'), KROTKI_LIMIT_MS * 8)),
+  ]);
+  assert.equal(co, 'zamkniete', 'zawieszony handshake ma zostać zerwany, bez odpowiedzi w czystym tekście');
+});
+
+test('po udanym TLS zwykły limit czasu nadal działa (421, nie nagłe zerwanie)', async () => {
+  const k = polacz(portKrotki);
+  await k.read();
+  await k.cmd('EHLO tester');
+  await k.cmd('STARTTLS');
+  await k.podnies();
+  await k.cmd('EHLO tester');
+
+  // Timer okna handshake'u musi zostać oddany gniazdu szyfrowanemu. Gdyby został
+  // uzbrojony na gnieździe surowym, ruch po TLS odświeżałby oba (łańcuch _parent)
+  // i na ciszy zerwanie ścigałoby się z 421.
+  assert.match(await k.read(), /^421 4\.4\.2 Idle timeout/);
+  await k.zamkniete();
 });

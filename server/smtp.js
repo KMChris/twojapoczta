@@ -16,7 +16,14 @@ const CRLF = Buffer.from('\r\n');
 
 export function startSmtpServer(
   db,
-  { port, host = '0.0.0.0', hostname = `mx.${DOMAIN}`, log = console, secureContext = () => null } = {}
+  {
+    port,
+    host = '0.0.0.0',
+    hostname = `mx.${DOMAIN}`,
+    log = console,
+    secureContext = () => null,
+    idleTimeoutMs = IDLE_TIMEOUT_MS,
+  } = {}
 ) {
   const server = net.createServer((socket) => {
     let gniazdo = socket;      // po STARTTLS wskazuje na gniazdo szyfrowane
@@ -52,7 +59,7 @@ export function startSmtpServer(
     // Wołane drugi raz po podniesieniu do TLS: TLSSocket to inny obiekt,
     // a nasłuchy zostają na gnieździe pod spodem.
     function podepnij(s) {
-      s.setTimeout(IDLE_TIMEOUT_MS, () => {
+      s.setTimeout(idleTimeoutMs, () => {
         wyslij('421 4.4.2 Idle timeout');
         s.end();
       });
@@ -86,12 +93,21 @@ export function startSmtpServer(
     }
 
     function podnies(kontekst) {
-      gniazdo.removeAllListeners('data'); // dalsze bajty należą do TLS-a, nie do parsera komend
-      gniazdo.setTimeout(0);              // limit czasu przejmuje gniazdo szyfrowane
-      const bezpieczne = new tls.TLSSocket(gniazdo, { isServer: true, secureContext: kontekst });
+      const surowe = gniazdo;               // za chwilę `gniazdo` wskaże na TLS-a
+      surowe.removeAllListeners('data');    // dalsze bajty należą do TLS-a, nie do parsera komend
+      // Stary limit czasu odpowiadał plaintextowym 421, a partner jest już w środku
+      // negocjacji TLS · taka linia byłaby śmieciem w protokole. Zdejmujemy go i na czas
+      // handshake'u pilnujemy gniazda surowego: bez tego klient, który wysłał STARTTLS
+      // i zamilkł, trzymałby połączenie bez końca (slowloris na porcie 25).
+      surowe.removeAllListeners('timeout');
+      surowe.setTimeout(idleTimeoutMs, () => surowe.destroy());
+      const bezpieczne = new tls.TLSSocket(surowe, { isServer: true, secureContext: kontekst });
       bezpieczne.on('error', () => bezpieczne.destroy()); // także zerwany handshake
       bezpieczne.once('secure', () => {
         // RFC 3207 §4.2: po TLS zapominamy wszystko sprzed niego, łącznie z EHLO.
+        // Ruch po TLS odświeża też timer gniazda pod spodem (łańcuch _parent), więc
+        // zostawiony tu zrywałby ciszę zamiast uprzejmego 421 · oddajemy go szyfrowanemu.
+        surowe.setTimeout(0);
         gniazdo = bezpieczne;
         szyfrowane = true;
         bufor = Buffer.alloc(0);
