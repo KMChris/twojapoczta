@@ -628,8 +628,14 @@ test('odebranie prawa wysyłki zatrzymuje list zaplanowany wcześniej', () => {
   const wersja = db.prepare("SELECT * FROM messages WHERE owner_id = ? AND folder = 'drafts'").get(janId);
   assert.ok(wersja, 'praca autora ląduje w Wersjach roboczych, nie w koszu');
   assert.equal(wersja.scheduled_at, null, 'wyzerowany termin wypisuje ją ze strażnika');
-  const zwrot = db.prepare("SELECT * FROM messages WHERE owner_id = ? AND subject LIKE 'Zwrot%'").get(janId);
-  assert.match(zwrot.body, /prawa wysyłki/);
+  const powiadomienie = db
+    .prepare('SELECT * FROM messages WHERE owner_id = ? AND subject = ?')
+    .get(janId, 'Nie wysłano: Późna oferta');
+  assert.ok(powiadomienie, 'autor dowiaduje się, że listu nie nadano');
+  assert.match(powiadomienie.body, /Wersjach roboczych/, 'powiadomienie nazywa folder, w którym list naprawdę leży');
+  assert.doesNotMatch(powiadomienie.body, /Wysłane/, 'listu tam nie ma, więc nie wolno tam autora odsyłać');
+  assert.match(powiadomienie.body, /prawa wysyłki/, 'i nazywa powód');
+  assert.match(powiadomienie.body, /sprzedaz@twojapoczta\.com/, 'oraz adres, z którego nadawać już nie wolno');
   db.close();
 });
 

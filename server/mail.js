@@ -516,9 +516,14 @@ function wyslijZaplanowana(db, msg) {
     // Do Wersji roboczych, bo praca autora ma się dać poprawić i wysłać ponownie;
     // wyzerowany scheduled_at wypisuje ją ze SELECT-a strażnika, więc nie próbuje w kółko.
     db.prepare("UPDATE messages SET folder = 'drafts', scheduled_at = NULL WHERE id = ?").run(msg.id);
-    deliverBounce(db, msg.owner_id, msg.subject, [
-      { adres: msg.from_addr, powod: 'nie masz już prawa wysyłki z tej skrzynki' },
-    ]);
+    // Nie deliverBounce: tamten zwrot mówi o adresatach, do których nie dowieziono, i odsyła
+    // po kopię do Wysłanych. Tu nie zawiódł żaden adresat, tylko nadawca stracił prawo, a list
+    // czeka w Wersjach roboczych, i to jedyne, czego autor naprawdę potrzebuje się dowiedzieć.
+    deliverSystemMessage(db, msg.owner_id, {
+      subject: `Nie wysłano: ${msg.subject}`,
+      body: `Nie nadaliśmy wiadomości „${msg.subject}", bo nie masz już prawa wysyłki z adresu ${msg.from_addr}.\n\nList czeka w Wersjach roboczych. Zmień nadawcę i wyślij go ponownie.\n\nZespół TwojaPoczta`,
+      priority: true,
+    });
     return;
   }
   const wszyscy = [
