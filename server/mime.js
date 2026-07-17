@@ -49,6 +49,24 @@ export function parseParams(value = '') {
   return { value: glowna.trim().toLowerCase(), params };
 }
 
+// Content-ID: `<logo@fir.ma>` → `logo@fir.ma`. Do tej wartości odwołuje się
+// potem `<img src="cid:logo@fir.ma">` w treści listu.
+export function parseContentId(value) {
+  const surowy = String(value ?? '').trim();
+  if (!surowy) return null;
+  const bez = surowy.replace(/^<|>$/g, '').trim();
+  return bez || null;
+}
+
+// Część osadzona bywa bez nazwy pliku, a nazwa jest wymagana przez zapis
+// załącznika. Robimy ją z Content-ID, żeby dało się ją potem rozpoznać okiem.
+function syntetycznaNazwa(contentId, mime) {
+  if (!contentId) return null;
+  const rozszerzenie = (mime.split('/')[1] ?? 'bin').replace(/\W/g, '').slice(0, 8) || 'bin';
+  const rdzen = contentId.replace(/[^\w.-]/g, '_').slice(0, 60);
+  return `osadzony-${rdzen}.${rozszerzenie}`;
+}
+
 // --- Kodowania ------------------------------------------------------------------
 
 function normalizeCharset(charset = 'utf-8') {
@@ -216,12 +234,21 @@ function walkPart(buffer, wynik, depth) {
   }
 
   const dane = decodeTransfer(body, headers['content-transfer-encoding']);
+  const contentId = parseContentId(headers['content-id']);
 
-  const jestZalacznikiem = attachmentDisposition || (filename && !ct.value.startsWith('text/'));
-  if (jestZalacznikiem && filename) {
+  // Osadzone obrazki (`cid:`) to też załącznik, nawet gdy nie mają nazwy pliku
+  // ani `Content-Disposition`. Wcześniej wypadały na końcu funkcji.
+  const jestZalacznikiem =
+    attachmentDisposition ||
+    (filename && !ct.value.startsWith('text/')) ||
+    (contentId && !ct.value.startsWith('text/'));
+
+  if (jestZalacznikiem) {
+    const nazwa = filename ?? syntetycznaNazwa(contentId, ct.value);
+    if (!nazwa) return;
     if (wynik.attachments.length >= MAX_FILES_PER_MESSAGE) return;
     if (dane.length === 0 || dane.length > MAX_FILE_BYTES) return;
-    wynik.attachments.push({ filename, mime: ct.value, data: dane });
+    wynik.attachments.push({ filename: nazwa, mime: ct.value, data: dane, contentId });
     return;
   }
 
@@ -264,6 +291,7 @@ export function parseMessage(raw) {
     to,
     subject,
     body: tekst.replace(/\r\n/g, '\n').trim(),
+    html: wynik.html,
     attachments: wynik.attachments,
     date: headers.date ?? null,
   };

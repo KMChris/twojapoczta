@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseHeaders, parseParams, decodeCharset, decodeQuotedPrintable,
-  decodeEncodedWords, parseAddress, htmlToText, parseMessage,
+  decodeEncodedWords, parseAddress, htmlToText, parseMessage, parseContentId,
 } from '../server/mime.js';
 import { MAX_FILE_BYTES } from '../server/attachments.js';
 
@@ -280,4 +280,113 @@ test('parseMessage: załącznik ponad limit rozmiaru jest pomijany', () => {
   // Nie alokujemy realnie >5MB; sprawdzamy próg pośrednio przez małą wiadomość,
   // a wariant za-duży testujemy w attachments.test.js (storeAttachment).
   assert.ok(MAX_FILE_BYTES === 5 * 1024 * 1024);
+});
+
+// --- Content-ID i HTML -------------------------------------------------------
+
+test('parseContentId: zdejmuje nawiasy kątowe i puste zwraca jako null', () => {
+  assert.equal(parseContentId('<abc123@example.com>'), 'abc123@example.com');
+  assert.equal(parseContentId('  <x@y>  '), 'x@y');
+  assert.equal(parseContentId('bez-nawiasow@x'), 'bez-nawiasow@x');
+  assert.equal(parseContentId(''), null);
+  assert.equal(parseContentId(undefined), null);
+});
+
+test('parseMessage: multipart/alternative oddaje część text/html obok tekstu', () => {
+  const raw = buf([
+    'From: Nadawca <a@b.pl>',
+    'Subject: Test',
+    'Content-Type: multipart/alternative; boundary="gr"',
+    '',
+    '--gr',
+    'Content-Type: text/plain; charset=utf-8',
+    '',
+    'Wersja tekstowa',
+    '--gr',
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    '<p>Wersja <b>HTML</b></p>',
+    '--gr--',
+    '',
+  ].join('\r\n'));
+  const wynik = parseMessage(raw);
+  assert.equal(wynik.html, '<p>Wersja <b>HTML</b></p>');
+  assert.equal(wynik.body, 'Wersja tekstowa');
+});
+
+test('parseMessage: list bez części HTML ma html równe null', () => {
+  const raw = buf('From: a@b.pl\r\nSubject: Goły tekst\r\n\r\nSama treść');
+  assert.equal(parseMessage(raw).html, null);
+});
+
+test('parseMessage: multipart/related wiąże obrazek osadzony z Content-ID', () => {
+  const raw = buf([
+    'From: a@b.pl',
+    'Subject: Z obrazkiem',
+    'Content-Type: multipart/related; boundary="gr"',
+    '',
+    '--gr',
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    '<p><img src="cid:logo@fir.ma"></p>',
+    '--gr',
+    'Content-Type: image/png',
+    'Content-ID: <logo@fir.ma>',
+    'Content-Transfer-Encoding: base64',
+    '',
+    Buffer.from('udawany-png').toString('base64'),
+    '--gr--',
+    '',
+  ].join('\r\n'));
+  const wynik = parseMessage(raw);
+  assert.match(wynik.html, /cid:logo@fir\.ma/);
+  assert.equal(wynik.attachments.length, 1);
+  assert.equal(wynik.attachments[0].contentId, 'logo@fir.ma');
+  assert.equal(wynik.attachments[0].mime, 'image/png');
+  assert.equal(wynik.attachments[0].data.toString(), 'udawany-png');
+});
+
+test('parseMessage: część osadzona bez nazwy pliku dostaje nazwę syntetyczną', () => {
+  const raw = buf([
+    'From: a@b.pl',
+    'Content-Type: multipart/related; boundary="gr"',
+    '',
+    '--gr',
+    'Content-Type: text/html',
+    '',
+    '<img src="cid:x@y">',
+    '--gr',
+    'Content-Type: image/png',
+    'Content-ID: <x@y>',
+    '',
+    'bajty',
+    '--gr--',
+    '',
+  ].join('\r\n'));
+  const wynik = parseMessage(raw);
+  assert.equal(wynik.attachments.length, 1);
+  assert.equal(wynik.attachments[0].filename, 'osadzony-x_y.png');
+});
+
+test('parseMessage: zwykły załącznik nadal nie ma contentId', () => {
+  const raw = buf([
+    'From: a@b.pl',
+    'Content-Type: multipart/mixed; boundary="gr"',
+    '',
+    '--gr',
+    'Content-Type: text/plain',
+    '',
+    'tresc',
+    '--gr',
+    'Content-Type: application/pdf; name="plik.pdf"',
+    'Content-Disposition: attachment; filename="plik.pdf"',
+    '',
+    'pdf',
+    '--gr--',
+    '',
+  ].join('\r\n'));
+  const wynik = parseMessage(raw);
+  assert.equal(wynik.attachments.length, 1);
+  assert.equal(wynik.attachments[0].filename, 'plik.pdf');
+  assert.equal(wynik.attachments[0].contentId, null);
 });
