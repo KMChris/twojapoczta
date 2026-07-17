@@ -41,6 +41,7 @@ export const api = {
   aliasy: () => zadanie('GET', '/api/aliases'),
   dodajAlias: (alias) => zadanie('POST', '/api/aliases', { alias }),
   usunAlias: (id) => zadanie('DELETE', `/api/aliases/${id}`),
+  zespoly: () => zadanie('GET', '/api/teams'),
   przekierowanie: () => zadanie('GET', '/api/forwarding'),
   ustawPrzekierowanie: (dane) => zadanie('PUT', '/api/forwarding', dane),
   uploadPlik: async (plik) => {

@@ -1921,6 +1921,40 @@ a.boczny-link {
   background: var(--papier-2);
 }
 
+.zespoly {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.zespol {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.zespol-nazwa { font-weight: 600; }
+.zespol-adres { color: var(--stempel); }
+
+.zespol-prawo {
+  margin-left: auto;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.5rem;
+  border: 1.5px solid var(--linia-2);
+  border-radius: 999px;
+  color: var(--stempel);
+  white-space: nowrap;
+}
+
+.zespol-prawo.moze-wysylac {
+  color: var(--priorytet);
+  border-color: var(--priorytet);
+}
+
 .modal-stopka {
   display: flex;
   justify-content: flex-end;

@@ -154,6 +154,18 @@ Kliknij swój awatar w prawym górnym rogu:
   krokach. Dzięki temu dwie skrzynki ustawione na siebie nawzajem
   nie zapętlą się.
 
+### Skrzynki zespołowe
+
+Skrzynka zespołowa to wspólny adres, na przykład `sprzedaz@twojapoczta.com`,
+z własną nazwą. Poczta na ten adres trafia do skrzynek wszystkich członków.
+Zespoły zakłada i prowadzi administrator, więc tej sekcji nie da się zmienić
+z poziomu skrzynki; jeśli do żadnego nie należysz, nie widzisz jej wcale.
+
+Znacznik przy zespole mówi, co Ci wolno. „Odbiór" znaczy, że dostajesz pocztę.
+„Odbiór i wysyłka" znaczy, że adres zespołu pojawi się też w polu **Od** przy
+pisaniu listu. Wysłany stamtąd list podpisuje się nazwą zespołu, a nie Twoim
+imieniem, i odpowiedź wróci do całego zespołu.
+
 ## Prywatność
 
 Twoja poczta mieszka na serwerze, którym zarządzasz Ty albo ktoś, komu ufasz.

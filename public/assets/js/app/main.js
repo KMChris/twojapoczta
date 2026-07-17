@@ -627,6 +627,7 @@ function otworzUstawienia() {
   formularzUstawien.podpis.value = stan.user.signature;
   formularzUstawien.motyw.value = stan.user.theme;
   odswiezAliasy();
+  odswiezZespoly();
   odswiezPrzekierowanie();
   ustawieniaDialog.showModal();
 }
@@ -744,6 +745,32 @@ async function dodajAlias() {
     toast('Dodano alias', { ikonaNazwa: 'mail' });
   } catch (blad) {
     toast(blad.message, { blad: true });
+  }
+}
+
+// --- Skrzynki zespołowe -----------------------------------------------------------
+
+// Tylko do odczytu: skład prowadzi administrator. Bez zespołów sekcja znika,
+// bo pusty stan, którego nie da się kliknąć, jest samym szumem.
+async function odswiezZespoly() {
+  const sekcja = document.querySelector('[data-zespoly-sekcja]');
+  try {
+    const { teams } = await api.zespoly();
+    sekcja.hidden = !teams.length;
+    if (!teams.length) return;
+    const lista = document.querySelector('[data-zespoly]');
+    lista.replaceChildren(
+      ...teams.map((zespol) =>
+        el('li', { class: 'zespol' },
+          el('span', { class: 'zespol-nazwa' }, zespol.name),
+          el('span', { class: 'zespol-adres mono' }, zespol.address),
+          el('span', { class: `zespol-prawo${zespol.can_send ? ' moze-wysylac' : ''}` },
+            zespol.can_send ? 'odbiór i wysyłka' : 'odbiór')
+        )
+      )
+    );
+  } catch {
+    sekcja.hidden = true; // przynależność to informacja dodatkowa, nie blokuje ustawień
   }
 }
 
