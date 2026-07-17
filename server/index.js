@@ -11,6 +11,7 @@ import { registerApiRoutes, requireUser, json } from './api.js';
 import { seedIfEmpty } from './seed.js';
 import { startSmtpServer } from './smtp.js';
 import { initDkim, dnsRecord, dkimConfigured } from './dkim.js';
+import { initTls, secureContext } from './tls-cert.js';
 import { DOMAIN, fireScheduled } from './mail.js';
 import { grantAdmin } from './admin.js';
 import { registerAdminRoutes } from './api-admin.js';
@@ -41,6 +42,15 @@ export async function createApp({ dataDir, db, dnsResolver } = {}) {
       initDkim(resolvedDataDir, { domain: DOMAIN });
     } catch (err) {
       console.error('[dkim] nie udało się przygotować klucza:', err.message);
+    }
+  }
+
+  // Certyfikat do STARTTLS tylko przy realnym wdrożeniu (dysk + włączona bramka SMTP).
+  if (!db && process.env.TP_SMTP_PORT) {
+    try {
+      initTls(resolvedDataDir, { hostname: process.env.TP_SMTP_HOSTNAME ?? `mx.${DOMAIN}` });
+    } catch (err) {
+      console.error('[tls] nie udało się przygotować certyfikatu:', err.message);
     }
   }
 
@@ -171,6 +181,7 @@ if (isMain) {
       port: Number(process.env.TP_SMTP_PORT),
       host: process.env.TP_SMTP_HOST ?? '0.0.0.0',
       hostname: process.env.TP_SMTP_HOSTNAME,
+      secureContext,
     });
   }
 

@@ -9,6 +9,7 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createApp } from '../server/index.js';
+import { tlsStatus, configureTls } from '../server/tls-cert.js';
 import { openDb, openMemoryDb } from '../server/db.js';
 
 const execFileP = promisify(execFile);
@@ -71,6 +72,39 @@ test('createApp z TP_EXTERNAL=1 i katalogiem danych inicjuje DKIM', async () => 
     app.db.close();
   } finally {
     delete process.env.TP_EXTERNAL;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('createApp z TP_SMTP_PORT i katalogiem danych przygotowuje certyfikat STARTTLS', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'tp-app-tls-'));
+  process.env.TP_SMTP_PORT = '2525';
+  process.env.TP_SMTP_HOSTNAME = 'mx.przyklad.pl';
+  try {
+    const app = await createApp({ dataDir: dir });
+    assert.ok(existsSync(path.join(dir, 'tls', 'self-signed-cert.pem')), 'certyfikat powstał na dysku');
+
+    const status = tlsStatus();
+    assert.equal(status.enabled, true);
+    assert.equal(status.subject, 'CN=mx.przyklad.pl', 'certyfikat na nazwę z TP_SMTP_HOSTNAME');
+    app.db.close();
+  } finally {
+    delete process.env.TP_SMTP_PORT;
+    delete process.env.TP_SMTP_HOSTNAME;
+    configureTls(null); // stan modułu nie może przeciekać do sąsiednich testów
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('createApp bez TP_SMTP_PORT nie tyka certyfikatu', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'tp-app-bez-tls-'));
+  try {
+    const app = await createApp({ dataDir: dir });
+    assert.ok(!existsSync(path.join(dir, 'tls')), 'bez bramki SMTP nie ma czego szyfrować');
+    assert.deepEqual(tlsStatus(), { enabled: false, reason: 'smtp-off' });
+    app.db.close();
+  } finally {
+    configureTls(null);
     rmSync(dir, { recursive: true, force: true });
   }
 });
