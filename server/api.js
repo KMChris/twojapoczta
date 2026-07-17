@@ -233,8 +233,8 @@ export function registerApiRoutes(router, db) {
     // naprawdę cytuje · załącznik z Content-ID, którego nikt nie woła, zniknąłby
     // z aplikacji zupełnie: nie ma go w treści i nie byłoby pod listem.
     // Mapa bez prototypu, bo klucz daje nadawca · na zwykłym `{}` `Content-ID: <__proto__>`
-    // nie zapisałby się wcale (przypisanie idzie w prototyp), a `toString` udawałby klucz
-    // już zajęty. W obu razach załącznik wypadłby z aplikacji.
+    // nie zapisałby się wcale (przypisanie idzie w setter prototypu), więc załącznik
+    // wypadłby z aplikacji: zdjęty z listy, a w mapie go nie ma.
     const cid = Object.create(null);
     const attachments = [];
     for (const z of wszystkie) {
