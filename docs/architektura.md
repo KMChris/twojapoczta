@@ -17,6 +17,7 @@ budowania. `node server/index.js` to całe wdrożenie.
                                       │
    obcy serwer   ──►  ┌───────────────┴──────────┐
    pocztowy :25       │  node:net  (smtp.js)     │
+                      │    ├─ STARTTLS (tls-cert)│
                       │    └─ mime.js → mail.js  │
                       └───────────────┬──────────┘
                                       ▼
@@ -43,7 +44,9 @@ budowania. `node server/index.js` to całe wdrożenie.
 | `seed.js`       | Konta i wiadomości demonstracyjne (pomijane przy `TP_SEED=0`), treść listu powitalnego. |
 | `attachments.js`| Załączniki: bloby adresowane sha256 (deduplikacja treści), tokeny uploadu (jednorazowe, 24 h), odśmiecanie osieroconych blobów. |
 | `mime.js`       | Parser RFC 822/MIME poczty przychodzącej: encoded-words, quoted-printable, base64, multipart rekurencyjnie, `filename*`, polskie strony kodowe, HTML→tekst awaryjnie. |
-| `smtp.js`       | Przychodzący SMTP na `node:net`: EHLO/MAIL/RCPT/DATA, dot-stuffing, limity, twarda ochrona przed relayem. |
+| `smtp.js`       | Przychodzący SMTP na `node:net`: EHLO/MAIL/RCPT/DATA, STARTTLS (RFC 3207), dot-stuffing, limity, twarda ochrona przed relayem. Kontekst TLS dostaje opcją, więc nie wie, skąd bierze się certyfikat. |
+| `tls-cert.js`   | Certyfikat dla bramki SMTP: wskazany w `TP_TLS_CERT` albo samopodpisany w `{TP_DATA_DIR}/tls/`. Kontekst przebudowuje leniwie po `mtime`, więc odnowienie nie wymaga restartu. |
+| `x509.js`       | Samopodpisany certyfikat X.509 kodowany DER-em ręcznie (Node nie umie ich wystawiać): ECDSA P-256, `serverAuth`, SAN z nazwą MX-a. |
 | `smtp-out.js`   | Wychodzący SMTP: budowanie MIME, lookup MX, oportunistyczny STARTTLS, smarthost, kolejkowanie per domena. |
 | `dkim.js`       | Podpisy DKIM (rsa-sha256, relaxed/relaxed), generowanie i przechowywanie klucza, rekord DNS. |
 | `settings.js`   | Ustawienia instancji w tabeli `settings` (rejestracja, min. długość hasła, catch-all) z fallbackiem do env: decyzje produktowe zmienialne w locie. |
@@ -193,6 +196,7 @@ Trasy panelu administratora (`/api/admin/*`) wymagają dodatkowo roli
 | `POST /api/admin/broadcast`                   | komunikat systemowy do wszystkich skrzynek |
 | `GET /api/admin/audit?action=&limit=`         | dziennik zdarzeń |
 | `GET` / `POST /api/admin/dkim`                | status/rekord · generowanie lub rotacja klucza |
+| `GET /api/admin/tls`                          | status certyfikatu STARTTLS: źródło, nazwa, ważność, odcisk |
 | `POST /api/admin/dns-check`                   | żywa weryfikacja MX/A/SPF/DKIM/DMARC |
 
 ## Bezpieczeństwo
@@ -203,6 +207,10 @@ Trasy panelu administratora (`/api/admin/*`) wymagają dodatkowo roli
 - Treść wiadomości renderowana wyłącznie jako tekst (klikalne linki budowane
   z węzłów DOM, bez `innerHTML` dla danych użytkownika).
 - SMTP przychodzący nie przyjmuje relayu; wychodzący domyślnie wyłączony.
+- STARTTLS na przychodzącym jest oportunistyczny, nigdy wymagany: MX odmawiający
+  poczty nieszyfrowanej po prostu traci listy od starszych serwerów. Stan sprzed
+  TLS jest kasowany po podniesieniu (RFC 3207 §4.2), a polecenia wstrzyknięte
+  za komendą `STARTTLS` zrywają połączenie.
 - Niebezpieczne typy załączników (`text/html`, `image/svg+xml`…) serwowane
   jako `application/octet-stream` z `Content-Disposition: attachment`.
 - Limity rozmiaru na każdym wejściu (ciało JSON, upload, wiadomość SMTP).
@@ -214,7 +222,7 @@ Trasy panelu administratora (`/api/admin/*`) wymagają dodatkowo roli
 
 ## Testy
 
-`npm test` uruchamia 331 testów na `node:test` (baza w pamięci, zero
+`npm test` uruchamia 378 testów na `node:test` (baza w pamięci, zero
 instalacji); `npm run test:coverage` dolicza raport pokrycia linii i gałęzi.
 
 - Scenariusze przekrojowe: `tests/api.test.js` (pełen obieg REST: konta,
@@ -224,11 +232,14 @@ instalacji); `npm run test:coverage` dolicza raport pokrycia linii i gałęzi.
   roli, konta, blokady, ustawienia, broadcast, DKIM, weryfikacja DNS
   na fałszywym resolverze).
 - Testy jednostkowe per moduł: `auth`, `mail`, `folders`, `mime`, `attachments`,
-  `router`, `static`, `db`, `smtp-in`, `smtp-out`, `dkim-init`, `api.extra`,
-  `index`, `settings`, `audit`, `quota`, `dns-check`. Każdy test dostaje
-  świeżą bazę w pamięci, więc nic nie współdzieli z pozostałymi.
+  `router`, `static`, `db`, `smtp-in`, `smtp-out`, `smtp-starttls`, `x509`,
+  `tls-cert`, `dkim-init`, `api.extra`, `index`, `settings`, `audit`, `quota`,
+  `aliases`, `dns-check`. Każdy test dostaje świeżą bazę w pamięci, więc nic
+  nie współdzieli z pozostałymi.
 - `tests/dkim.test.js`: wektory kanonizacji z RFC 6376 i **niezależny
   weryfikator** sprawdzający podpis na wyemitowanych, pofoldowanych bajtach.
+- `tests/x509.test.js`: certyfikat sprawdzany **cudzym parserem** (`crypto.X509Certificate`)
+  i własnym podpisem (`verify`), co wyłapuje błąd w kodowaniu DER co do bajtu.
 
 ## Zasady, których warto się trzymać
 

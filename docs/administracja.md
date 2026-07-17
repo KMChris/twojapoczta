@@ -63,6 +63,13 @@ Tabela wszystkich kont z filtrem. Kliknięcie wiersza otwiera kartę konta:
 
 ### Domena i DNS
 
+- **Szyfrowanie (STARTTLS)**: czy bramka SMTP szyfruje transport od obcych
+  serwerów, skąd bierze certyfikat (wskazany zmienną `TP_TLS_CERT` czy
+  samopodpisany), na jaką nazwę, do kiedy jest ważny i jaki ma odcisk SHA-256.
+  Poniżej 14 dni do wygaśnięcia karta zapala ostrzeżenie. Samopodpisany
+  certyfikat to stan normalny i wystarczający: obce serwery pocztowe szyfrują
+  oportunistycznie i certyfikatu nie sprawdzają. Karta niczego nie zmienia,
+  bo źródło certyfikatu jest decyzją wdrożeniową (zmienne środowiskowe).
 - **DKIM**: generowanie klucza jednym przyciskiem (odpowiednik
   `npm run dkim`), rekord TXT do skopiowania, rotacja przez nowy selektor.
   Przycisk zawsze trafia w katalog danych działającego serwera. Z konsoli

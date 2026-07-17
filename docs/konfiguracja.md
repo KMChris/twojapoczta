@@ -21,7 +21,7 @@ są trzymane w bazie i mają pierwszeństwo przed env.
 | Zmienna       | Domyślnie         | Opis |
 | ------------- | ----------------- | ---- |
 | `TP_DOMAIN`   | `twojapoczta.com` | Domena adresów e-mail (część po `@`). Interfejs pobiera ją z serwera, więc w plikach frontendu nie trzeba nic zmieniać. |
-| `TP_DATA_DIR` | `./data`          | Katalog danych: baza `twojapoczta.db` (+ pliki WAL) i podkatalog `dkim/` z kluczem prywatnym. |
+| `TP_DATA_DIR` | `./data`          | Katalog danych: baza `twojapoczta.db` (+ pliki WAL), podkatalog `dkim/` z kluczem prywatnym i `tls/` z certyfikatem zapasowym do STARTTLS. |
 | `TP_SEED`     | brak (włączony)   | `0` wyłącza tworzenie kont demonstracyjnych przy pierwszym starcie z pustą bazą. **Na produkcji zawsze `0`**: seed zakłada konto `demo` z publicznie znanym hasłem. |
 | `TP_REGISTER` | brak (otwarta)    | `0` zamyka rejestrację: `POST /api/register` zwraca 403, formularz pokazuje komunikat. Istniejące konta logują się normalnie. Przełącznik w panelu administratora nadpisuje tę zmienną. |
 
@@ -34,7 +34,9 @@ są trzymane w bazie i mają pierwszeństwo przed env.
 | `TP_SMTP_HOSTNAME` | `mx.{TP_DOMAIN}`        | Nazwa, którą serwer przedstawia się w powitaniu `220` i którą klient wychodzący podaje w `EHLO`. Powinna mieć rekord A i zgadzać się z PTR. |
 | `TP_EXTERNAL`      | brak (wyłączona)        | `1` pozwala wysyłać do adresów poza `TP_DOMAIN`. Przy pierwszym starcie generuje też klucz DKIM. Bez flagi próba wysyłki na zewnątrz kończy się czytelnym błędem w kompozycji. |
 | `TP_SMTP_ROUTE`    | brak (bezpośrednio MX)  | Smarthost `host[:port]`: cała poczta wychodząca idzie przez wskazany przekaźnik zamiast do MX odbiorców. Ratunek przy zablokowanym porcie 25 i przy problemach z reputacją IP. |
-| `TP_TLS_VERIFY`    | brak (oportunistycznie) | `1` wymusza walidację certyfikatu serwera odbiorcy przy STARTTLS (fail-closed: nieufny certyfikat = brak doręczenia + odbicie). Domyślnie TLS oportunistyczny, jak w typowych MTA. |
+| `TP_TLS_VERIFY`    | brak (oportunistycznie) | `1` wymusza walidację certyfikatu serwera odbiorcy przy STARTTLS (fail-closed: nieufny certyfikat = brak doręczenia + odbicie). Domyślnie TLS oportunistyczny, jak w typowych MTA. Dotyczy wysyłki; certyfikat własnej bramki opisują dwie zmienne niżej. |
+| `TP_TLS_CERT`      | brak (samopodpisany)    | Ścieżka do certyfikatu w PEM dla STARTTLS na **przychodzącym** SMTP (może być `fullchain.pem` z certbota). Razem z `TP_TLS_KEY` włącza STARTTLS na wskazanym certyfikacie. Bez nich serwer generuje samopodpisany do `{TP_DATA_DIR}/tls/` i też szyfruje: obce MX-y i tak certyfikatu nie sprawdzają. Odnowienie pliku serwer podchwytuje sam, bez restartu. |
+| `TP_TLS_KEY`       | brak (samopodpisany)    | Ścieżka do klucza prywatnego w PEM (`privkey.pem` z certbota). Działa wyłącznie w parze z `TP_TLS_CERT`: jedna bez drugiej jest po cichu pomijana i zostaje certyfikat samopodpisany. |
 | `TP_DKIM_SELECTOR` | `tp1`                   | Selektor DKIM, czyli nazwa rekordu TXT (`{selektor}._domainkey.{domena}`) i pliku klucza (`dkim/{selektor}.pem`). Zmiana selektora = nowy klucz i nowy rekord. |
 
 ## Typowe zestawy
@@ -123,6 +125,9 @@ Szczegóły: [panel administratora](administracja.md).
 ├── twojapoczta.db        # cała poczta: konta, wiadomości, załączniki, sesje
 ├── twojapoczta.db-wal    # dziennik WAL (SQLite zarządza sam)
 ├── twojapoczta.db-shm
-└── dkim/
-    └── tp1.pem           # klucz prywatny DKIM: chroń i rób kopie
+├── dkim/
+│   └── tp1.pem           # klucz prywatny DKIM: chroń i rób kopie
+└── tls/
+    ├── self-signed-cert.pem   # certyfikat zapasowy do STARTTLS
+    └── self-signed-key.pem    # kopii nie wymaga: odtworzy się sam
 ```

@@ -251,6 +251,100 @@ działać z kłódką.
 > `v=spf1 a mx include:twoj-hosting.pl -all`). Bez tego SPF przestaje się
 > zgadzać i całe DMARC wisi na samym DKIM.
 
+### Szyfrowanie transportu (STARTTLS)
+
+Nie musisz nic robić: przy pierwszym starcie z `TP_SMTP_PORT` serwer generuje
+sobie certyfikat do `/var/lib/twojapoczta/tls/` i ogłasza STARTTLS. W logu
+usługi stoi wtedy `STARTTLS na starcie z certyfikatem`. Sprawdzisz to
+z dowolnej innej maszyny:
+
+```sh
+openssl s_client -starttls smtp -connect mx.twojadomena.pl:25 </dev/null
+# subject=CN=mx.twojadomena.pl
+# Verify return code: 18 (self-signed certificate)
+```
+
+Handshake doszedł do skutku, więc transport jest szyfrowany. `Verify return
+code: 18` to nie usterka, tylko opis stanu: certyfikat jest samopodpisany,
+więc nikt go nie poświadczył. Samego `250-STARTTLS` to polecenie nie wypisze,
+bo openssl prowadzi rozmowę SMTP po cichu i drukuje dopiero TLS. Ogłoszenie
+zobaczysz telnetem z punktu 3, wpisując po powitaniu `EHLO test`.
+
+Certyfikat jest samopodpisany i **to w zupełności wystarcza**. Poczta między
+serwerami szyfruje oportunistycznie: Gmail zaakceptuje go bez mrugnięcia, bo
+tożsamość MX-a i tak weryfikuje się rekordami DNS (MTA-STS, DANE), a nie
+certyfikatem. Zysk jest realny: nikt po drodze nie przeczyta Twoich listów.
+
+Zaufany certyfikat od Let's Encrypt przyda się dopiero przy dostępie
+z programów pocztowych. Jeśli chcesz go mieć już teraz, zdobądź go certbotem.
+Port 80 zajmuje Twoje proxy, więc użyj `--webroot`, nie `--standalone`:
+
+```sh
+sudo apt-get install -y certbot
+sudo mkdir -p /var/www/certbot
+```
+
+W Caddym dopisz do `Caddyfile` (jawny port 80 mówi Caddy'emu, żeby nie brał
+tej nazwy na siebie):
+
+```
+mx.twojadomena.pl:80 {
+    root * /var/www/certbot
+    file_server
+}
+```
+
+W nginksie dodaj **osobny** blok `server` na nazwę MX-a. Certyfikat bierzemy
+na `mx.twojadomena.pl`, a blok z kroku 6 odpowiada tylko na `twojadomena.pl`,
+więc wyzwania by nie zobaczył:
+
+```nginx
+server {
+    listen 80;
+    server_name mx.twojadomena.pl;
+
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / { return 404; }
+}
+```
+
+Hak po odnowieniu przełoży pliki tam, gdzie przeczyta je użytkownik `poczta`:
+klucze w `/etc/letsencrypt/archive` są zastrzeżone dla roota, więc wskazanie
+zmiennymi wprost do `live/` nic by nie dało. Utwórz `/usr/local/bin/tp-cert-hook`:
+
+```sh
+#!/bin/sh
+set -eu
+KAT=/var/lib/twojapoczta/tls
+install -d -o poczta -g poczta -m 750 "$KAT"
+install -o poczta -g poczta -m 644 "$RENEWED_LINEAGE/fullchain.pem" "$KAT/mx-cert.pem.new"
+install -o poczta -g poczta -m 600 "$RENEWED_LINEAGE/privkey.pem"   "$KAT/mx-key.pem.new"
+mv "$KAT/mx-key.pem.new"  "$KAT/mx-key.pem"
+mv "$KAT/mx-cert.pem.new" "$KAT/mx-cert.pem"
+```
+
+Kopiujemy przez plik obok i `mv`, bo przemianowanie jest niepodzielne: serwer
+nigdy nie przeczyta połowy pliku. Klucz kładziemy przed certyfikatem, bo to
+data certyfikatu jest dla serwera znakiem do przeładowania pary: gdy ją
+zobaczy, nowy klucz czeka już na miejscu.
+
+```sh
+sudo chmod +x /usr/local/bin/tp-cert-hook
+sudo certbot certonly --webroot -w /var/www/certbot -d mx.twojadomena.pl \
+  --deploy-hook /usr/local/bin/tp-cert-hook
+```
+
+Na koniec wskaż pliki w unicie i zrestartuj usługę **ten jeden raz**:
+
+```ini
+Environment=TP_TLS_CERT=/var/lib/twojapoczta/tls/mx-cert.pem
+Environment=TP_TLS_KEY=/var/lib/twojapoczta/tls/mx-key.pem
+```
+
+Odnowienia co 90 dni pójdą już same, bez restartu: serwer zauważa nowy plik
+przy kolejnym połączeniu. Status certyfikatu (nazwa, ważność, odcisk) pokazuje
+panel administratora w widoku **Domena**.
+
 ## Krok 9: konta i administrator
 
 1. Wejdź na `https://twojadomena.pl/rejestracja` i załóż swoje konto.
@@ -303,6 +397,9 @@ sudo crontab -e   # dodaj linię:
 Do kopii dołącz też katalog `/var/lib/twojapoczta/dkim/` (klucz prywatny;
 bez niego po odtworzeniu trzeba by zmieniać rekord DNS).
 
+Katalogu `tls/` kopiować nie musisz: certyfikat samopodpisany odtworzy się sam
+przy starcie, a ten od certbota i tak odnawia się z `/etc/letsencrypt`.
+
 **Przywracanie:** zatrzymaj usługę, podmień plik bazy, uruchom:
 
 ```sh
@@ -317,7 +414,7 @@ sudo systemctl start twojapoczta
 ```sh
 cd /opt/twojapoczta
 sudo -u poczta git pull
-sudo -u poczta npm test        # 331 testów, zero zależności do instalowania
+sudo -u poczta npm test        # 378 testów, zero zależności do instalowania
 sudo systemctl restart twojapoczta
 ```
 
@@ -377,6 +474,7 @@ udaje. Zmiana adresu na starcie jest nieporównanie tańsza.
 | Po wejściu na stronę brak stylów | proxy tnie ścieżki `/assets` | proxy ma przekazywać cały ruch `/` bez wyjątków |
 | Rejestracja zwraca 403 | `TP_REGISTER=0` | tak ma być; konta zakłada się przy otwartej rejestracji |
 | Baza „locked" przy ręcznym grzebaniu | otwarta przez usługę (WAL) | używaj `sqlite3 .backup`, nie edytuj bazy pod działającą usługą |
+| Panel: żółta „Uwaga" na karcie STARTTLS mimo `TP_TLS_CERT` | zła ścieżka albo brak praw do odczytu | powód stoi wprost na karcie i w `journalctl -u twojapoczta`; serwer schodzi wtedy na certyfikat zapasowy, poczta chodzi dalej |
 
 ## Lista kontrolna na koniec
 
@@ -389,11 +487,9 @@ udaje. Zmiana adresu na starcie jest nieporównanie tańsza.
 - [ ] PTR ustawiony u dostawcy VPS
 - [ ] adres IP sprawdzony na czarnych listach
 - [ ] test z Gmailem: odbiór działa, `SPF: PASS`, `DKIM: PASS`
+- [ ] `openssl s_client -starttls smtp -connect mx.twojadomena.pl:25 </dev/null` kończy się handshakiem
 - [ ] cron z kopią zapasową + kopia katalogu `dkim/`
 
 ## Znane ograniczenia
 
-- Przychodzący SMTP nie oferuje jeszcze STARTTLS, więc transport od obcych
-  serwerów do Twojego może być nieszyfrowany (treść w skrzynce jest już
-  tylko Twoja). Pozycja na mapie rozwoju.
 - Brak IMAP: pocztę czytasz przez webmail (responsywny, działa na telefonie).
