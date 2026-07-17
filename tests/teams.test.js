@@ -416,3 +416,109 @@ test('zaplanowany list na pusty zespół wraca zwrotem, nie znika', () => {
   assert.match(zwrot.body, /nie ma członków/);
   db.close();
 });
+
+test('zaplanowany list na zespół z samych pełnych skrzynek wraca zwrotem o zespole', () => {
+  const db = openMemoryDb();
+  const nadawca = { id: konto(db, 'klient'), login: 'klient', name: 'Klient' };
+  const jan = konto(db, 'jan');
+  const ania = konto(db, 'ania');
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  setMember(db, zespol.id, jan, false);
+  setMember(db, zespol.id, ania, false);
+
+  sendMessage(db, nadawca, {
+    to: 'sprzedaz@twojapoczta.com',
+    subject: 'Do pełnych',
+    body: 'x',
+    scheduledAt: new Date(Date.now() + 1000).toISOString(),
+  });
+  // Skrzynki zapełniają się dopiero PO zaplanowaniu: gdyby były pełne wcześniej,
+  // sendMessage odmówiłby od razu i nic nie trafiłoby do Zaplanowanych.
+  db.prepare('UPDATE users SET quota_mb = 0 WHERE id IN (?, ?)').run(jan, ania);
+  db.prepare("UPDATE messages SET scheduled_at = ? WHERE folder = 'scheduled'").run(new Date(Date.now() - 1000).toISOString());
+  fireScheduled(db);
+
+  const zwrot = db
+    .prepare("SELECT * FROM messages WHERE owner_id = ? AND folder = 'inbox' AND subject LIKE 'Zwrot%'")
+    .get(nadawca.id);
+  assert.ok(zwrot, 'nadawca dostaje zwrot');
+  assert.match(zwrot.body, /skrzynka zespołu jest pełna/, 'zwrot nazywa pełny zespół, nie pojedynczego odbiorcę');
+  assert.doesNotMatch(zwrot.body, /jan@|ania@/, 'zwrot nie zdradza nadawcy, kto siedzi w zespole');
+  for (const id of [jan, ania]) {
+    assert.equal(
+      db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND folder = 'inbox'").get(id).n,
+      0,
+      'pełny członek nie dostaje kopii'
+    );
+  }
+  db.close();
+});
+
+// Kontrola dla gałęzi obok: zwykłe konto ma po przepisaniu pętli na resolveDelivery
+// zachowywać się dokładnie jak przed fan-outem. Ten test i ten wyżej pinują oba
+// ramiona tego samego ternarnego wyboru powodu zwrotu.
+test('zaplanowany list na pełną skrzynkę konta wraca zwrotem o odbiorcy', () => {
+  const db = openMemoryDb();
+  const nadawca = { id: konto(db, 'klient'), login: 'klient', name: 'Klient' };
+  const ania = konto(db, 'ania');
+
+  sendMessage(db, nadawca, {
+    to: 'ania@twojapoczta.com',
+    subject: 'Do pełnej',
+    body: 'x',
+    scheduledAt: new Date(Date.now() + 1000).toISOString(),
+  });
+  db.prepare('UPDATE users SET quota_mb = 0 WHERE id = ?').run(ania);
+  db.prepare("UPDATE messages SET scheduled_at = ? WHERE folder = 'scheduled'").run(new Date(Date.now() - 1000).toISOString());
+  fireScheduled(db);
+
+  const zwrot = db
+    .prepare("SELECT * FROM messages WHERE owner_id = ? AND folder = 'inbox' AND subject LIKE 'Zwrot%'")
+    .get(nadawca.id);
+  assert.ok(zwrot, 'nadawca dostaje zwrot');
+  assert.match(zwrot.body, /skrzynka odbiorcy jest pełna/, 'konto odpowiada za siebie, nie za żaden zespół');
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND folder = 'inbox'").get(ania).n,
+    0,
+    'pełne konto nie dostaje kopii'
+  );
+  db.close();
+});
+
+test('zaplanowany list omija pełnego członka i doręcza reszcie zespołu bez zwrotu', () => {
+  const db = openMemoryDb();
+  const nadawca = { id: konto(db, 'klient'), login: 'klient', name: 'Klient' };
+  const jan = konto(db, 'jan');
+  const ania = konto(db, 'ania');
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  setMember(db, zespol.id, jan, false);
+  setMember(db, zespol.id, ania, false);
+
+  sendMessage(db, nadawca, {
+    to: 'sprzedaz@twojapoczta.com',
+    subject: 'Do połowy',
+    body: 'x',
+    scheduledAt: new Date(Date.now() + 1000).toISOString(),
+  });
+  // Jan zapełnia skrzynkę między zaplanowaniem a nadaniem; zespół zostaje w zasięgu.
+  db.prepare('UPDATE users SET quota_mb = 0 WHERE id = ?').run(jan);
+  db.prepare("UPDATE messages SET scheduled_at = ? WHERE folder = 'scheduled'").run(new Date(Date.now() - 1000).toISOString());
+  fireScheduled(db);
+
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND folder = 'inbox'").get(ania).n,
+    1,
+    'członek z miejscem dostaje list'
+  );
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND folder = 'inbox'").get(jan).n,
+    0,
+    'pełny członek wypada z rozdzielnika'
+  );
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND folder = 'inbox' AND subject LIKE 'Zwrot%'").get(nadawca.id).n,
+    0,
+    'jeden pełny członek to nie powód do zwrotu'
+  );
+  db.close();
+});
