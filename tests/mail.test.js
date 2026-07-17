@@ -3,13 +3,15 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import net from 'node:net';
 import { openMemoryDb, now } from '../server/db.js';
 import { saveUpload } from '../server/attachments.js';
+import { createTeam, setMember } from '../server/teams.js';
 import {
   DOMAIN, addressOf, findMailbox, makeSnippet, parseRecipients,
   listMessages, getMessage, updateMessage, deleteMessage, unreadCounts,
   saveDraft, sendMessage, deliverInbound, deliverSystemMessage, REAL_FOLDERS,
-  fireScheduled, resolveSenderAddress, setForwarding, getForwarding,
+  fireScheduled, resolveSender, setForwarding, getForwarding,
 } from '../server/mail.js';
 
 function fresh() {
@@ -441,20 +443,22 @@ test('sendMessage: sam UDW wystarcza za adresata', () => {
   db.close();
 });
 
-test('resolveSenderAddress i sendMessage: własny alias tak, cudzy adres nie', () => {
+test('resolveSender i sendMessage: własny alias tak, cudzy adres nie', () => {
   const { db, user, users } = fresh();
   const demo = user('demo');
   db.prepare('INSERT INTO aliases (user_id, alias, created_at) VALUES (?, ?, ?)').run(users.demo, 'biuro-jana', now());
 
-  assert.equal(resolveSenderAddress(db, demo, ''), addressOf('demo'));
-  assert.equal(resolveSenderAddress(db, demo, addressOf('biuro-jana')), addressOf('biuro-jana'));
-  assert.equal(resolveSenderAddress(db, demo, addressOf('ania')), null);
-  assert.equal(resolveSenderAddress(db, demo, 'ktos@obca.pl'), null);
+  // Alias nadaje imieniem właściciela: tożsamość zmienia wyłącznie zespół.
+  assert.deepEqual(resolveSender(db, demo, ''), { addr: addressOf('demo'), name: demo.name });
+  assert.deepEqual(resolveSender(db, demo, addressOf('biuro-jana')), { addr: addressOf('biuro-jana'), name: demo.name });
+  assert.equal(resolveSender(db, demo, addressOf('ania')), null);
+  assert.equal(resolveSender(db, demo, 'ktos@obca.pl'), null);
 
   const zAliasu = sendMessage(db, demo, { to: addressOf('ania'), from: addressOf('biuro-jana'), subject: 'A', body: 'x' });
   assert.ok(!zAliasu.error);
   const [uAni] = listMessages(db, users.ania, { folder: 'inbox' });
   assert.equal(uAni.from_addr, addressOf('biuro-jana'));
+  assert.equal(uAni.from_name, demo.name);
 
   const zCudzego = sendMessage(db, demo, { to: addressOf('ania'), from: addressOf('michal'), subject: 'B', body: 'x' });
   assert.match(zCudzego.error, /własnych aliasów/);
@@ -779,4 +783,91 @@ test('updateMessage: do scheduled nie wolno, wyjście z scheduled czyści termin
   const [zwykla] = listMessages(db, users.demo, { folder: 'inbox' });
   assert.equal(updateMessage(db, users.demo, zwykla.id, { folder: 'scheduled' }), null);
   db.close();
+});
+
+// Fałszywy serwer SMTP, który przyjmuje wszystko i oddaje surowe bajty listu.
+// Potrzebny, bo dopiero na drucie widać, co klient spoza domeny naprawdę czyta.
+function startSink() {
+  const odebrane = [];
+  const server = net.createServer((sock) => {
+    let buf = '';
+    let wDanych = false;
+    let dane = '';
+    sock.write('220 sink ESMTP\r\n');
+    sock.on('data', (d) => {
+      buf += d.toString('latin1');
+      let idx;
+      while ((idx = buf.indexOf('\r\n')) !== -1) {
+        const linia = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        if (wDanych) {
+          if (linia === '.') {
+            wDanych = false;
+            odebrane.push(dane);
+            dane = '';
+            sock.write('250 2.0.0 ok\r\n');
+          } else dane += linia + '\r\n';
+          continue;
+        }
+        const cmd = linia.slice(0, 4).toUpperCase();
+        if (cmd === 'DATA') {
+          sock.write('354 dawaj\r\n');
+          wDanych = true;
+        } else if (cmd === 'QUIT') {
+          sock.write('221 pa\r\n');
+          sock.end();
+        } else sock.write('250 ok\r\n');
+      }
+    });
+    sock.on('error', () => sock.destroy());
+  });
+  return { server, odebrane };
+}
+
+// Zewnętrzne ramię tożsamości zespołu. Mieszka tu, a nie w teams.test.js, bo to plik
+// od drutu: klient spoza domeny czyta bajty nagłówka From, nie wiersz w `messages`.
+test('wysyłka jako zespół na zewnątrz: nagłówek From na drucie niesie nazwę zespołu', async () => {
+  const { server, odebrane } = startSink();
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  process.env.TP_EXTERNAL = '1';
+  process.env.TP_SMTP_ROUTE = `127.0.0.1:${server.address().port}`;
+  try {
+    const { db, user, users } = fresh();
+    const demo = user('demo');
+    const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+    setMember(db, zespol.id, users.demo, true);
+
+    const wynik = sendMessage(db, demo, {
+      to: 'klient@gdzieindziej.pl',
+      from: addressOf('sprzedaz'),
+      subject: 'Oferta',
+      body: 'x',
+    });
+    assert.ok(!wynik.error);
+
+    let raw = null;
+    for (let i = 0; i < 80 && !raw; i++) {
+      await new Promise((res) => setTimeout(res, 25));
+      raw = odebrane[0] ?? null;
+    }
+    assert.ok(raw, 'list do klienta powinien wyjść na zewnątrz');
+
+    const naglowekFrom = raw.match(/^From: (.*)$/m)?.[1];
+    assert.ok(naglowekFrom, 'list na drucie ma nagłówek From');
+    assert.match(naglowekFrom, /<sprzedaz@twojapoczta\.com>/, 'odpowiedź klienta wraca na zespół');
+    // Nazwa z ogonkami jedzie zakodowana (encodeHeaderWord), więc „Dział Sprzedaży"
+    // nie stoi na drucie dosłownie i asercja na sam tekst przechodziłaby na ślepo.
+    const zakodowana = naglowekFrom.match(/=\?UTF-8\?B\?([^?]+)\?=/)?.[1];
+    assert.ok(zakodowana, 'nazwa nadawcy jedzie jako zakodowane słowo nagłówka');
+    assert.equal(
+      Buffer.from(zakodowana, 'base64').toString('utf8'),
+      'Dział Sprzedaży',
+      'klient spoza domeny widzi firmę, nie Jana z dyżuru'
+    );
+    db.close();
+  } finally {
+    delete process.env.TP_EXTERNAL;
+    delete process.env.TP_SMTP_ROUTE;
+    await new Promise((r) => server.close(r));
+  }
 });

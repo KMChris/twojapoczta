@@ -7,7 +7,9 @@ import {
   findTeam, teamById, teamMailboxes, teamMembers, userTeams, canSendAs,
   listTeams, createTeam, renameTeam, deleteTeam, setMember, removeMember,
 } from '../server/teams.js';
-import { resolveDelivery, addressTaken, sendMessage, fireScheduled, SYSTEM_SENDER } from '../server/mail.js';
+import {
+  resolveDelivery, addressTaken, resolveSender, saveDraft, sendMessage, fireScheduled, SYSTEM_SENDER,
+} from '../server/mail.js';
 
 function konto(db, login) {
   return Number(
@@ -520,5 +522,80 @@ test('zaplanowany list omija pełnego członka i doręcza reszcie zespołu bez z
     0,
     'jeden pełny członek to nie powód do zwrotu'
   );
+  db.close();
+});
+
+test('wysyłka jako zespół: pole Od niesie nazwę zespołu, nie imię nadawcy', () => {
+  const db = openMemoryDb();
+  const janId = konto(db, 'jan');
+  const jan = { id: janId, login: 'jan', name: 'Jan Kowalski' };
+  const klient = konto(db, 'klient');
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  setMember(db, zespol.id, janId, true);
+
+  assert.deepEqual(resolveSender(db, jan, 'sprzedaz@twojapoczta.com'), {
+    addr: 'sprzedaz@twojapoczta.com',
+    name: 'Dział Sprzedaży',
+  });
+
+  sendMessage(db, jan, { to: 'klient@twojapoczta.com', from: 'sprzedaz@twojapoczta.com', subject: 'Oferta', body: 'x' });
+  const uKlienta = db.prepare("SELECT * FROM messages WHERE owner_id = ? AND folder = 'inbox'").get(klient);
+  assert.equal(uKlienta.from_name, 'Dział Sprzedaży', 'klient pisze do firmy, nie do Jana');
+  assert.equal(uKlienta.from_addr, 'sprzedaz@twojapoczta.com', 'odpowiedź wraca na zespół');
+  db.close();
+});
+
+test('bez prawa wysyłki i w cudzym zespole nadawać nie wolno', () => {
+  const db = openMemoryDb();
+  const aniaId = konto(db, 'ania');
+  const ania = { id: aniaId, login: 'ania', name: 'Ania Nowak' };
+  const obcyId = konto(db, 'obcy');
+  const obcy = { id: obcyId, login: 'obcy', name: 'Obcy' };
+  konto(db, 'klient');
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  setMember(db, zespol.id, aniaId, false);
+
+  assert.equal(resolveSender(db, ania, 'sprzedaz@twojapoczta.com'), null);
+  assert.equal(resolveSender(db, obcy, 'sprzedaz@twojapoczta.com'), null);
+
+  const wynik = sendMessage(db, ania, {
+    to: 'klient@twojapoczta.com',
+    from: 'sprzedaz@twojapoczta.com',
+    subject: 'Nie wolno',
+    body: 'x',
+  });
+  assert.match(wynik.error, /prawo wysyłki/);
+  db.close();
+});
+
+test('wersja robocza pisana jako zespół trzyma tożsamość zespołu', () => {
+  const db = openMemoryDb();
+  const janId = konto(db, 'jan');
+  const jan = { id: janId, login: 'jan', name: 'Jan Kowalski' };
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  setMember(db, zespol.id, janId, true);
+
+  const draft = saveDraft(db, jan, { from: 'sprzedaz@twojapoczta.com', subject: 'Szkic', body: 'x' });
+  assert.equal(draft.from_addr, 'sprzedaz@twojapoczta.com');
+  assert.equal(draft.from_name, 'Dział Sprzedaży', 'Wersje robocze pokazują, kim będzie ten list');
+  db.close();
+});
+
+test('przełączenie nadawcy na zespół w zapisanym szkicu przestawia też nazwę', () => {
+  const db = openMemoryDb();
+  const janId = konto(db, 'jan');
+  const jan = { id: janId, login: 'jan', name: 'Jan Kowalski' };
+  const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  setMember(db, zespol.id, janId, true);
+
+  // Autozapis okna pisania zakłada szkic, zanim padnie wybór nadawcy, a każdy
+  // następny idzie już z `id` (kompozycja.js). Nazwa musi jechać z adresem przez
+  // UPDATE, inaczej „Wersje robocze" pokazują Jana pod adresem zespołu.
+  const szkic = saveDraft(db, jan, { subject: 'Szkic', body: 'x' });
+  assert.equal(szkic.from_name, 'Jan Kowalski');
+
+  const poZmianie = saveDraft(db, jan, { id: szkic.id, from: 'sprzedaz@twojapoczta.com', subject: 'Szkic', body: 'x' });
+  assert.equal(poZmianie.from_addr, 'sprzedaz@twojapoczta.com');
+  assert.equal(poZmianie.from_name, 'Dział Sprzedaży', 'nazwa idzie za adresem, nie zostaje przy autorze');
   db.close();
 });

@@ -220,24 +220,29 @@ function insertMessage(db, ownerId, msg) {
   return Number(result.lastInsertRowid);
 }
 
-// Adres nadawcy: własny login albo jeden z własnych aliasów; inaczej null.
-export function resolveSenderAddress(db, user, from) {
+// Tożsamość nadawcy: { addr, name } albo null, gdy z tego adresu nadawać nie wolno.
+// Adres główny i alias nadają imieniem konta. Skrzynka zespołowa nadaje własną
+// nazwą: klient pisze do firmy, nie do osoby, która akurat miała dyżur, i to jest
+// cała różnica między zespołem a aliasem.
+export function resolveSender(db, user, from) {
   const wybrany = String(from ?? '').trim().toLowerCase();
-  if (!wybrany || wybrany === addressOf(user.login)) return addressOf(user.login);
+  if (!wybrany || wybrany === addressOf(user.login)) return { addr: addressOf(user.login), name: user.name };
   const at = wybrany.lastIndexOf('@');
   if (at < 1 || wybrany.slice(at + 1) !== DOMAIN) return null;
-  const alias = db
-    .prepare('SELECT 1 FROM aliases WHERE user_id = ? AND alias = ?')
-    .get(user.id, wybrany.slice(0, at));
-  return alias ? wybrany : null;
+  const local = wybrany.slice(0, at);
+  const alias = db.prepare('SELECT 1 FROM aliases WHERE user_id = ? AND alias = ?').get(user.id, local);
+  if (alias) return { addr: wybrany, name: user.name };
+  const zespol = canSendAs(db, user.id, local);
+  return zespol ? { addr: wybrany, name: zespol.name } : null;
 }
 
 export function saveDraft(db, user, { id, to, cc, bcc, from, subject, body, bodyHtml }) {
+  // W wersji roboczej niepoprawny nadawca po cichu wraca na adres główny.
+  const nadawca = resolveSender(db, user, from) ?? { addr: addressOf(user.login), name: user.name };
   const data = {
     folder: 'drafts',
-    from_name: user.name,
-    // W wersji roboczej niepoprawny nadawca po cichu wraca na adres główny.
-    from_addr: resolveSenderAddress(db, user, from) ?? addressOf(user.login),
+    from_name: nadawca.name,
+    from_addr: nadawca.addr,
     to_addr: parseRecipients(to).join(', '),
     cc_addr: parseRecipients(cc).join(', '),
     bcc_addr: parseRecipients(bcc).join(', '),
@@ -250,12 +255,14 @@ export function saveDraft(db, user, { id, to, cc, bcc, from, subject, body, body
   if (id) {
     const existing = getMessage(db, user.id, id);
     if (!existing || existing.folder !== 'drafts') return null;
+    // from_name jedzie z from_addr: odkąd nadawcą bywa zespół, nazwa i adres to jedna
+    // tożsamość i rozjechałyby się przy zmianie nadawcy w zapisanym już szkicu.
     db.prepare(
-      `UPDATE messages SET from_addr = ?, to_addr = ?, cc_addr = ?, bcc_addr = ?,
+      `UPDATE messages SET from_name = ?, from_addr = ?, to_addr = ?, cc_addr = ?, bcc_addr = ?,
          subject = ?, body = ?, body_html = ?, snippet = ?, sent_at = ?
        WHERE owner_id = ? AND id = ?`
     ).run(
-      data.from_addr, data.to_addr, data.cc_addr, data.bcc_addr,
+      data.from_name, data.from_addr, data.to_addr, data.cc_addr, data.bcc_addr,
       data.subject, data.body, data.body_html, makeSnippet(data.body), data.sent_at,
       user.id, id
     );
@@ -365,8 +372,12 @@ export function sendMessage(db, user, { to, cc, bcc, from, subject, body, bodyHt
   const wszyscy = [...new Set([...doKogo, ...dw, ...udw])];
   if (!wszyscy.length) return { error: 'Podaj co najmniej jednego adresata.' };
 
-  const fromAddr = resolveSenderAddress(db, user, from);
-  if (!fromAddr) return { error: 'Możesz nadawać tylko ze swojego adresu albo własnych aliasów.' };
+  const nadawca = resolveSender(db, user, from);
+  if (!nadawca) {
+    return {
+      error: 'Możesz nadawać tylko ze swojego adresu, własnych aliasów albo skrzynki zespołu, w której masz prawo wysyłki.',
+    };
+  }
 
   const adresaci = resolveRecipients(db, wszyscy);
   if (adresaci.error) return { error: adresaci.error };
@@ -402,8 +413,8 @@ export function sendMessage(db, user, { to, cc, bcc, from, subject, body, bodyHt
   const odbiorcy = adresaci.resolved.filter((r) => !pomijani.has(r.id));
 
   const base = {
-    from_name: user.name,
-    from_addr: fromAddr,
+    from_name: nadawca.name,
+    from_addr: nadawca.addr,
     to_addr: doKogo.join(', '),
     cc_addr: dw.join(', '),
     subject: subject?.trim() || '(bez tematu)',
@@ -467,7 +478,7 @@ export function sendMessage(db, user, { to, cc, bcc, from, subject, body, bodyHt
       }))
       .filter((z) => z.data);
     dispatchExternal(db, user.id, {
-      from: { name: user.name, addr: fromAddr },
+      from: { name: nadawca.name, addr: nadawca.addr },
       recipients: adresaci.zewnetrzni,
       to: doKogo,
       cc: dw,
