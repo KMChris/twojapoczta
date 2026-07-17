@@ -681,13 +681,15 @@ export function getForwarding(db, userId) {
 
 function kopiujZalaczniki(db, zId, doId) {
   const zalaczniki = db
-    .prepare('SELECT filename, mime, size, blob_hash FROM attachments WHERE message_id = ?')
+    .prepare('SELECT filename, mime, size, blob_hash, content_id FROM attachments WHERE message_id = ?')
     .all(zId);
   if (!zalaczniki.length) return;
+  // content_id jedzie z kopią, bo `body_html` kopiujemy dosłownie: bez kotwicy odwołanie
+  // `cid:` w treści nie miałoby do czego trafić i osadzony obrazek by nie wstał.
   const insert = db.prepare(
-    'INSERT INTO attachments (message_id, filename, mime, size, blob_hash) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO attachments (message_id, filename, mime, size, blob_hash, content_id) VALUES (?, ?, ?, ?, ?, ?)'
   );
-  for (const z of zalaczniki) insert.run(doId, z.filename, z.mime, z.size, z.blob_hash);
+  for (const z of zalaczniki) insert.run(doId, z.filename, z.mime, z.size, z.blob_hash, z.content_id);
   db.prepare('UPDATE messages SET attachments_count = ? WHERE id = ?').run(zalaczniki.length, doId);
 }
 

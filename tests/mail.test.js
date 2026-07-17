@@ -891,7 +891,11 @@ test('deliverInbound: zapisuje body_html i content_id załącznika', () => {
   assert.equal(db.prepare('SELECT content_id FROM attachments').get().content_id, 'logo@fir.ma');
 });
 
-test('deliverInbound: brak HTML zapisuje pusty string, nie null', () => {
+// Test charakteryzujący: ten inwariant trzymał już przed zapisem HTML (insertMessage
+// domyka `body_html` przez `?? ''`), więc nie jest dowodem regresji dla tej zmiany.
+// Pilnuje go, bo klient wstawia `body_html` prosto do DOM — `null` wypisałby się
+// użytkownikowi jako słowo „null".
+test('deliverInbound: brak HTML nadal zapisuje pusty string, nie null', () => {
   const { db, user } = fresh();
   const demo = user('demo');
   deliverInbound(db, demo.id, {
@@ -913,4 +917,51 @@ test('deliverInbound: HTML powyżej limitu jest odrzucany, tekst zostaje', () =>
   const msg = db.prepare('SELECT body, body_html FROM messages').get();
   assert.equal(msg.body_html, '');
   assert.equal(msg.body, 'tekst zapasowy');
+});
+
+test('deliverInbound: HTML dokładnie na limicie wchodzi, o bajt większy odpada', () => {
+  const { db, user } = fresh();
+  const demo = user('demo');
+  // Limit mierzy bajty, nie znaki, więc ciało budujemy z samego ASCII (bajt = znak)
+  // i długość potwierdzamy asercją, zamiast ufać `repeat`.
+  const htmlODlugosci = (bajty) => `<p>${'x'.repeat(bajty - '<p></p>'.length)}</p>`;
+  const naLimicie = htmlODlugosci(MAX_BODY_HTML_BYTES);
+  const oBajtZaDuzy = htmlODlugosci(MAX_BODY_HTML_BYTES + 1);
+  assert.equal(Buffer.byteLength(naLimicie, 'utf8'), MAX_BODY_HTML_BYTES);
+  assert.equal(Buffer.byteLength(oBajtZaDuzy, 'utf8'), MAX_BODY_HTML_BYTES + 1);
+
+  const dorecz = (subject, html) => deliverInbound(db, demo.id, {
+    from: { name: '', addr: 'a@b.pl' }, subject, body: 'tekst zapasowy', html, attachments: [],
+  }, { toAddr: addressOf('demo') });
+  dorecz('Na limicie', naLimicie);
+  dorecz('O bajt za duzy', oBajtZaDuzy);
+
+  // Próg jest ostry: HTML równy limitowi jeszcze wchodzi. Gdyby `>` w mail.js zmieniło
+  // się w `>=`, wiadomość na limicie po cichu straciłaby treść HTML.
+  const [wchodzi, odpada] = db.prepare('SELECT subject, body_html FROM messages ORDER BY id').all();
+  assert.equal(wchodzi.body_html, naLimicie, 'HTML o długości równej limitowi zostaje zapisany');
+  assert.equal(odpada.body_html, '', 'HTML o bajt powyżej limitu jest odrzucany');
+});
+
+test('przesyłanie dalej: kopia zachowuje kotwicę cid osadzonego obrazka', () => {
+  const { db, user, users } = fresh();
+  setForwarding(db, user('demo'), { to: addressOf('ania') });
+  deliverInbound(db, users.demo, {
+    from: { name: 'Firma', addr: 'biuro@fir.ma' },
+    subject: 'Z logo',
+    body: 'tekst',
+    html: '<p>Witamy</p><img src="cid:logo@fir.ma">',
+    attachments: [{ filename: 'logo.png', mime: 'image/png', data: Buffer.from('png'), contentId: 'logo@fir.ma' }],
+  }, { toAddr: addressOf('demo') });
+
+  // Sens pary: HTML kopii odwołuje się przez `cid:` do załącznika kopii. Jeśli kopia
+  // dostanie HTML bez załącznika o tym content_id, obrazek nie ma się z czego wyświetlić.
+  const [kopia] = listMessages(db, users.ania, { folder: 'inbox' });
+  assert.ok(kopia, 'przekierowana kopia trafia do skrzynki celu');
+  const htmlKopii = getMessage(db, users.ania, kopia.id).body_html;
+  const odwolanie = htmlKopii.match(/src="cid:([^"]+)"/)?.[1];
+  assert.ok(odwolanie, 'HTML kopii nadal niesie odwołanie cid:');
+  const zalacznik = db.prepare('SELECT content_id FROM attachments WHERE message_id = ?').get(kopia.id);
+  assert.equal(zalacznik.content_id, odwolanie, 'załącznik kopii niesie content_id, na który wskazuje cid: w jej body_html');
+  db.close();
 });
