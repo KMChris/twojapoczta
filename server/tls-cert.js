@@ -12,7 +12,7 @@ import { generateSelfSigned } from './x509.js';
 const DNI_WAZNOSCI = 1825; // 5 lat: samopodpisanego i tak nikt nie sprawdza
 const PROG_ODNOWIENIA_DNI = 30;
 
-// { hostname, katalog, zrodlo, mtime, context, cert, ostrzezenie }
+// { hostname, katalog, zrodlo, mtime, context, cert, ostrzezenie, zly, nazwaBezPokrycia }
 let konfiguracja = null;
 
 export function initTls(dataDir, { hostname }) {
@@ -24,6 +24,8 @@ export function initTls(dataDir, { hostname }) {
     context: null,
     cert: null,
     ostrzezenie: null,
+    zly: null, // { certPath, mtime } pliku, który się nie wczytał
+    nazwaBezPokrycia: false, // samopodpisany nie obejmuje hostname i nic na to nie poradzimy
   };
   // Budujemy od razu, żeby błąd konfiguracji był widoczny w logu przy starcie,
   // a nie dopiero przy pierwszym liście ze świata.
@@ -43,9 +45,26 @@ export function secureContext() {
   if (!konfiguracja) return null;
   try {
     const zrodlo = wybierzZrodlo();
-    if (konfiguracja.context && konfiguracja.zrodlo?.certPath === zrodlo.certPath && konfiguracja.mtime === zrodlo.mtime) {
-      return konfiguracja.context; // nic się nie zmieniło: bez parsowania PEM-a
-    }
+    const kontekst = zbuduj(zrodlo);
+    // Wskazany plik zawiódł, a w pamięci nie ma nic dobrego: schodzimy na
+    // zapasowy jeszcze w tym wywołaniu, bo zepsuty plik nie może zdjąć
+    // szyfrowania. Jest już zapamiętany jako zły, więc wybór go ominie.
+    if (!kontekst && zrodlo.wskazany) return zbuduj(wybierzZrodlo());
+    return kontekst;
+  } catch (err) {
+    // Dysk tylko do odczytu, brak miejsca na klucz: nie wywracamy połączenia.
+    console.error('[tls] nie udało się przygotować certyfikatu:', err.message);
+    return konfiguracja.context;
+  }
+}
+
+// Kontekst z podanego źródła albo, gdy plik zawiódł, ostatni dobry (bywa null).
+// Nie rzuca: błąd pliku nie może przerwać obsługi połączenia.
+function zbuduj(zrodlo) {
+  if (konfiguracja.context && konfiguracja.zrodlo?.certPath === zrodlo.certPath && konfiguracja.mtime === zrodlo.mtime) {
+    return konfiguracja.context; // nic się nie zmieniło: bez parsowania PEM-a
+  }
+  try {
     const certPem = readFileSync(zrodlo.certPath, 'utf8');
     const keyPem = readFileSync(zrodlo.keyPath, 'utf8');
     konfiguracja.context = tls.createSecureContext({ cert: certPem, key: keyPem });
@@ -53,10 +72,12 @@ export function secureContext() {
     konfiguracja.cert = new crypto.X509Certificate(certPem);
     konfiguracja.zrodlo = zrodlo;
     konfiguracja.mtime = zrodlo.mtime;
+    if (zrodlo.wskazany) ostrzez(null); // plik wczytany: ostrzeżenie straciło powód
     return konfiguracja.context;
   } catch (err) {
     // Plik mógł zniknąć albo być w połowie zapisu. Zostajemy przy ostatnim dobrym.
     console.error('[tls] nie udało się wczytać certyfikatu:', err.message);
+    if (zrodlo.wskazany) zapamietajZly(zrodlo);
     return konfiguracja.context;
   }
 }
@@ -84,21 +105,51 @@ export function tlsStatus() {
 
 // --- Wybór źródła ------------------------------------------------------------
 
+// Zdanie o przyczynie plus zdanie o skutku: w panelu widać jedno i drugie.
+const ZAPASOWY = 'Działa certyfikat zapasowy, samopodpisany.';
+const brakPliku = (p) => `TP_TLS_CERT albo TP_TLS_KEY wskazuje na plik, którego nie ma (${p}).`;
+const zlyPlik = (p) => `TP_TLS_CERT albo TP_TLS_KEY wskazuje na plik, którego nie da się wczytać (${p}).`;
+
 function wybierzZrodlo() {
   const certPath = process.env.TP_TLS_CERT;
   const keyPath = process.env.TP_TLS_KEY;
+  let powod = null;
   if (certPath && keyPath) {
     const mtime = mtimeAlbo(certPath);
-    if (mtime !== null && mtimeAlbo(keyPath) !== null) {
-      ostrzez(null);
+    if (mtime === null || mtimeAlbo(keyPath) === null) {
+      // Literówka nie może zatrzymać poczty ani cicho zdjąć szyfrowania:
+      // schodzimy do zapasowego, ale mówimy o tym głośno w logu i w panelu.
+      powod = `${brakPliku(certPath)} ${ZAPASOWY}`;
+    } else if (!znanyJakoZly(certPath, mtime)) {
       return { certPath, keyPath, wskazany: true, mtime };
+    } else if (konfiguracja.context && konfiguracja.zrodlo?.wskazany) {
+      // Zepsuty bywa zapis w połowie. Mamy z tego pliku dobry kontekst, więc
+      // przy nim zostajemy i nie schodzimy na dysk, aż mtime się zmieni.
+      ostrzez(`${zlyPlik(certPath)} Działa ostatni poprawnie wczytany certyfikat.`);
+      return konfiguracja.zrodlo;
+    } else {
+      // Plik jest, ale jest do niczego: dla poczty to samo co literówka.
+      powod = `${zlyPlik(certPath)} ${ZAPASOWY}`;
     }
-    // Literówka nie może zatrzymać poczty ani cicho zdjąć szyfrowania:
-    // schodzimy do zapasowego, ale mówimy o tym głośno w logu i w panelu.
-    ostrzez(`TP_TLS_CERT albo TP_TLS_KEY wskazuje na plik, którego nie ma (${certPath}). Działa certyfikat zapasowy, samopodpisany.`);
   }
   const zapasowy = zrodloSamopodpisane();
+  ostrzez([powod, ostrzezenieNazwy()].filter(Boolean).join(' · ') || null);
   return { ...zapasowy, mtime: mtimeAlbo(zapasowy.certPath) };
+}
+
+function ostrzezenieNazwy() {
+  if (!konfiguracja.nazwaBezPokrycia) return null;
+  return `Samopodpisany certyfikat nie obejmuje nazwy ${konfiguracja.hostname}. Szyfrowanie działa, ale klient, który sprawdza nazwę, jej nie dopasuje.`;
+}
+
+// Plik, który raz się nie wczytał, odpuszczamy aż do zmiany mtime. Inaczej
+// każde połączenie kosztuje dwa odczyty, nieudane parsowanie i linię w logu.
+function znanyJakoZly(certPath, mtime) {
+  return konfiguracja.zly?.certPath === certPath && konfiguracja.zly.mtime === mtime;
+}
+
+function zapamietajZly({ certPath, mtime }) {
+  konfiguracja.zly = { certPath, mtime };
 }
 
 function zrodloSamopodpisane() {
@@ -113,6 +164,10 @@ function zrodloSamopodpisane() {
   mkdirSync(katalog, { recursive: true });
   zapiszAtomowo(keyPath, keyPem, 0o600);
   zapiszAtomowo(certPath, certPem, 0o644);
+  // Domknięcie bramki nazwy: skoro świeży certyfikat jej nie przechodzi,
+  // następny też nie przejdzie (SAN spoza ASCII wychodzi z x509.js zmielony).
+  // Zapamiętujemy to i zostajemy przy nim, zamiast kręcić keygenem bez końca.
+  konfiguracja.nazwaBezPokrycia = !new crypto.X509Certificate(certPem).checkHost(hostname);
   return cel;
 }
 
@@ -122,7 +177,9 @@ function trzebaWygenerowac(certPath, hostname) {
   const wPamieci = konfiguracja.zrodlo?.certPath === certPath ? konfiguracja.cert : null;
   const cert = wPamieci ?? wczytajCert(certPath);
   if (!cert) return true;
-  if (!cert.checkHost(hostname)) return true; // zmieniony TP_SMTP_HOSTNAME
+  // Bramka nazwy tylko dopóki wiadomo, że da się ją przejść: bez tego
+  // generowalibyśmy w kółko certyfikat, który i tak jej nie przejdzie.
+  if (!konfiguracja.nazwaBezPokrycia && !cert.checkHost(hostname)) return true; // zmieniony TP_SMTP_HOSTNAME
   return (cert.validToDate.getTime() - Date.now()) / 86400_000 < PROG_ODNOWIENIA_DNI;
 }
 
