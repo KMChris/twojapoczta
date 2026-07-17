@@ -3,6 +3,7 @@
 // parsuje MIME i doręcza do folderu Odebrane.
 
 import net from 'node:net';
+import tls from 'node:tls';
 import { DOMAIN, findMailbox, deliverInbound } from './mail.js';
 import { parseMessage } from './mime.js';
 import { hasRoom } from './quota.js';
@@ -13,8 +14,14 @@ const MAX_RECIPIENTS = 50;
 const IDLE_TIMEOUT_MS = 60_000;
 const CRLF = Buffer.from('\r\n');
 
-export function startSmtpServer(db, { port, host = '0.0.0.0', hostname = `mx.${DOMAIN}`, log = console } = {}) {
+export function startSmtpServer(
+  db,
+  { port, host = '0.0.0.0', hostname = `mx.${DOMAIN}`, log = console, secureContext = () => null } = {}
+) {
   const server = net.createServer((socket) => {
+    let gniazdo = socket;      // po STARTTLS wskazuje na gniazdo szyfrowane
+    let szyfrowane = false;
+    let podnoszenie = false;   // wstrzymuje parser na czas handshake'u
     let bufor = Buffer.alloc(0);
     let wDanych = false;
     let linieDanych = [];
@@ -23,22 +30,14 @@ export function startSmtpServer(db, { port, host = '0.0.0.0', hostname = `mx.${D
     const koperta = { mailFrom: null, rcpt: [] };
 
     const wyslij = (tekst) => {
-      if (!socket.destroyed) socket.write(tekst + '\r\n');
+      if (!gniazdo.destroyed) gniazdo.write(tekst + '\r\n');
     };
 
-    socket.setTimeout(IDLE_TIMEOUT_MS, () => {
-      wyslij('421 4.4.2 Idle timeout');
-      socket.end();
-    });
-    socket.on('error', () => socket.destroy());
-
-    wyslij(`220 ${hostname} ESMTP TwojaPoczta`);
-
-    socket.on('data', (chunk) => {
+    function odbierz(chunk) {
       bufor = Buffer.concat([bufor, chunk]);
       if (bufor.length > MAX_MESSAGE_BYTES + 1024 * 1024) {
         wyslij('552 5.3.4 Message too big');
-        socket.end();
+        gniazdo.end();
         return;
       }
       try {
@@ -46,12 +45,26 @@ export function startSmtpServer(db, { port, host = '0.0.0.0', hostname = `mx.${D
       } catch (err) {
         log.error('[smtp]', err);
         wyslij('451 4.3.0 Processing error');
-        socket.end();
+        gniazdo.end();
       }
-    });
+    }
+
+    // Wołane drugi raz po podniesieniu do TLS: TLSSocket to inny obiekt,
+    // a nasłuchy zostają na gnieździe pod spodem.
+    function podepnij(s) {
+      s.setTimeout(IDLE_TIMEOUT_MS, () => {
+        wyslij('421 4.4.2 Idle timeout');
+        s.end();
+      });
+      s.on('data', odbierz);
+    }
+
+    socket.on('error', () => socket.destroy());
+    podepnij(socket);
+    wyslij(`220 ${hostname} ESMTP TwojaPoczta`);
 
     function przetworzBufor() {
-      while (true) {
+      while (!podnoszenie) {
         const idx = bufor.indexOf(0x0a);
         if (idx === -1) return;
         let linia = bufor.subarray(0, idx);
@@ -72,16 +85,54 @@ export function startSmtpServer(db, { port, host = '0.0.0.0', hostname = `mx.${D
       przepelnione = false;
     }
 
+    function podnies(kontekst) {
+      gniazdo.removeAllListeners('data'); // dalsze bajty należą do TLS-a, nie do parsera komend
+      gniazdo.setTimeout(0);              // limit czasu przejmuje gniazdo szyfrowane
+      const bezpieczne = new tls.TLSSocket(gniazdo, { isServer: true, secureContext: kontekst });
+      bezpieczne.on('error', () => bezpieczne.destroy()); // także zerwany handshake
+      bezpieczne.once('secure', () => {
+        // RFC 3207 §4.2: po TLS zapominamy wszystko sprzed niego, łącznie z EHLO.
+        gniazdo = bezpieczne;
+        szyfrowane = true;
+        bufor = Buffer.alloc(0);
+        wDanych = false;
+        resetujTransakcje();
+        podnoszenie = false;
+        podepnij(bezpieczne);
+      });
+    }
+
     function obsluzKomende(linia) {
       const komenda = linia.slice(0, 4).toUpperCase();
 
       if (komenda === 'EHLO') {
         wyslij(`250-${hostname}`);
         wyslij(`250-SIZE ${MAX_MESSAGE_BYTES}`);
+        if (!szyfrowane && secureContext()) wyslij('250-STARTTLS');
         wyslij('250 8BITMIME');
         return;
       }
       if (komenda === 'HELO') return wyslij(`250 ${hostname}`);
+
+      // Uwaga: dispatcher bierze cztery znaki, więc STARTTLS wpada tu jako 'STAR'.
+      if (komenda === 'STAR') {
+        if (!/^STARTTLS\s*$/i.test(linia)) return wyslij('501 5.5.4 Syntax: STARTTLS');
+        if (szyfrowane) return wyslij('503 5.5.1 TLS already active');
+        const kontekst = secureContext();
+        if (!kontekst) return wyslij('454 4.7.0 TLS not available');
+        // Cokolwiek przyszło razem z komendą, jest wstrzyknięciem poleceń
+        // w czystym tekście: po 220 te bajty udawałyby komendy sprzed szyfru
+        // (klasa CVE-2011-0411). Sprawdzamy PRZED odpowiedzią 220.
+        podnoszenie = true;
+        if (bufor.length) {
+          wyslij('501 5.5.4 Syntax error (pipelining after STARTTLS)');
+          gniazdo.end();
+          return;
+        }
+        wyslij('220 2.0.0 Ready to start TLS');
+        podnies(kontekst);
+        return;
+      }
 
       if (komenda === 'MAIL') {
         const match = linia.match(/^MAIL FROM:\s*<([^>]*)>(.*)$/i);
@@ -198,7 +249,8 @@ export function startSmtpServer(db, { port, host = '0.0.0.0', hostname = `mx.${D
   });
 
   server.listen(port, host, () => {
-    log.log(`  \u{1F4E5} SMTP nasluchuje na ${host}:${port} (domena ${DOMAIN})`);
+    const szyfr = secureContext() ? 'STARTTLS włączony' : 'bez STARTTLS';
+    log.log(`  \u{1F4E5} SMTP nasluchuje na ${host}:${port} (domena ${DOMAIN}, ${szyfr})`);
   });
   return server;
 }
