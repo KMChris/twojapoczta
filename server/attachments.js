@@ -105,13 +105,18 @@ export function getAttachment(db, ownerId, messageId, attachmentId) {
 }
 
 // Obrazek osadzony po Content-ID. Jak `getAttachment`, ale adresowany tym,
-// czym adresuje go treść listu.
+// czym adresuje go treść listu. Przy dwóch częściach o tym samym Content-ID
+// `ORDER BY` wiąże ten adres z pierwszym wierszem · dokładnie tym, który mapa
+// w `GET /api/messages/:id` chowa z listy załączników. Dziś to samo oddaje plan
+// zapytania, więc żaden test tego nie odróżni · piszemy to wprost, bo zgodność
+// obu stron ma zależeć od nas, a nie od tego, jaki indeks wybierze SQLite.
 export function getAttachmentByCid(db, ownerId, messageId, contentId) {
   const meta = db
     .prepare(
       `SELECT a.id, a.filename, a.mime, a.size, a.blob_hash FROM attachments a
        JOIN messages m ON m.id = a.message_id
-       WHERE a.content_id = ? AND m.id = ? AND m.owner_id = ?`
+       WHERE a.content_id = ? AND m.id = ? AND m.owner_id = ?
+       ORDER BY a.id`
     )
     .get(String(contentId), messageId, ownerId);
   if (!meta) return null;

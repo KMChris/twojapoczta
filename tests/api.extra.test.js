@@ -323,13 +323,13 @@ function idUzytkownika(login) {
   return db.prepare('SELECT id FROM users WHERE login = ?').get(login).id;
 }
 
-function wstawZObrazkiem(ownerId, contentId) {
+function wstawZObrazkiem(ownerId, contentId, dane = 'png-bajty') {
   const wynik = db.prepare(
     `INSERT INTO messages (owner_id, folder, from_addr, subject, body, body_html, snippet, sent_at, attachments_count)
      VALUES (?, 'inbox', 'a@b.pl', 'Z obrazkiem', 'tekst', ?, '', ?, 1)`
   ).run(ownerId, `<img src="cid:${contentId}">`, now());
   const id = Number(wynik.lastInsertRowid);
-  storeAttachment(db, id, { filename: 'logo.png', mime: 'image/png', data: Buffer.from('png-bajty'), contentId });
+  storeAttachment(db, id, { filename: 'logo.png', mime: 'image/png', data: Buffer.from(dane), contentId });
   return id;
 }
 
@@ -373,6 +373,44 @@ test('cid: mapa w GET /api/messages/:id, a osadzone znikają z listy załącznik
   assert.equal(status, 200);
   assert.equal(data.cid['mapa@fir.ma'], `/api/messages/${id}/cid/${encodeURIComponent('mapa@fir.ma')}`);
   assert.equal(data.attachments.length, 0);
+});
+
+// Nic nie broni nadawcy przed wysłaniem dwóch części z tym samym Content-ID. Klucz w
+// mapie jest jeden, więc drugi załącznik musi zostać na liście · gdyby oba zniknęły z
+// listy, mapa oddawałaby tylko pierwszy, a drugi nie istniałby nigdzie w aplikacji.
+test('cid: dwa załączniki z tym samym Content-ID → pierwszy w mapie, drugi zostaje na liście', async () => {
+  const api = client();
+  await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const ownerId = idUzytkownika('demo');
+  const wynik = db.prepare(
+    `INSERT INTO messages (owner_id, folder, from_addr, subject, body, body_html, snippet, sent_at, attachments_count)
+     VALUES (?, 'inbox', 'a@b.pl', 'Duplikat', 'tekst', ?, '', ?, 2)`
+  ).run(ownerId, '<img src="cid:dup@fir.ma">', now());
+  const id = Number(wynik.lastInsertRowid);
+  storeAttachment(db, id, { filename: 'pierwszy.png', mime: 'image/png', data: Buffer.from('PIERWSZY'), contentId: 'dup@fir.ma' });
+  storeAttachment(db, id, { filename: 'drugi.png', mime: 'image/png', data: Buffer.from('DRUGI'), contentId: 'dup@fir.ma' });
+
+  const { data } = await api('GET', `/api/messages/${id}`);
+  // pierwszy: osiągalny w treści, przez mapę
+  const wMapie = await api.rawBody('GET', data.cid['dup@fir.ma']);
+  assert.equal(Buffer.from(await wMapie.arrayBuffer()).toString(), 'PIERWSZY');
+  // drugi: osiągalny pod listem, przez zwykłą trasę załącznika
+  assert.deepEqual(data.attachments.map((z) => z.filename), ['drugi.png']);
+  const naLiscie = await api.rawBody('GET', `/api/messages/${id}/attachments/${data.attachments[0].id}`);
+  assert.equal(Buffer.from(await naLiscie.arrayBuffer()).toString(), 'DRUGI');
+});
+
+// Content-ID jest polem nadawcy, więc `__proto__` jest zwykłym listem, nie atakiem.
+// Na mapie z prototypem takie przypisanie znika bez śladu, a załącznik jest już zdjęty
+// z listy · zostaje w bazie, ale w aplikacji nie ma go nigdzie.
+test('cid: Content-ID o nazwie klucza z prototypu trafia do mapy jak każdy inny', async () => {
+  const api = client();
+  await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
+  const id = wstawZObrazkiem(idUzytkownika('demo'), '__proto__', 'BAJTY-PROTO');
+  const { data } = await api('GET', `/api/messages/${id}`);
+  assert.equal(data.cid['__proto__'], `/api/messages/${id}/cid/${encodeURIComponent('__proto__')}`);
+  const res = await api.rawBody('GET', data.cid['__proto__']);
+  assert.equal(Buffer.from(await res.arrayBuffer()).toString(), 'BAJTY-PROTO');
 });
 
 // Testy charakteryzujące: przechodzą już dziś, bo `GET /api/messages/:id` w ogóle nie

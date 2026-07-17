@@ -232,10 +232,15 @@ export function registerApiRoutes(router, db) {
     // znikają, żeby logo z nagłówka nie udawało spinacza. Ale tylko te, które treść
     // naprawdę cytuje · załącznik z Content-ID, którego nikt nie woła, zniknąłby
     // z aplikacji zupełnie: nie ma go w treści i nie byłoby pod listem.
-    const cid = {};
+    // Mapa bez prototypu, bo klucz daje nadawca · na zwykłym `{}` `Content-ID: <__proto__>`
+    // nie zapisałby się wcale (przypisanie idzie w prototyp), a `toString` udawałby klucz
+    // już zajęty. W obu razach załącznik wypadłby z aplikacji.
+    const cid = Object.create(null);
     const attachments = [];
     for (const z of wszystkie) {
-      if (z.content_id && htmlCytujeCid(msg.body_html, z.content_id)) {
+      // Klucz jest jeden, więc bierze go pierwszy · drugi załącznik o tym samym Content-ID
+      // zostaje na liście, bo pod jednym adresem i tak wydamy tylko pierwszy.
+      if (z.content_id && !Object.hasOwn(cid, z.content_id) && htmlCytujeCid(msg.body_html, z.content_id)) {
         cid[z.content_id] = `/api/messages/${msg.id}/cid/${encodeURIComponent(z.content_id)}`;
       } else {
         attachments.push(z);
