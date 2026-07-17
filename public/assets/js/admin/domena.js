@@ -34,15 +34,16 @@ export function initDomena() {
   async function pokaz() {
     let dkim;
     let ustawienia;
+    let tls;
     try {
-      [dkim, ustawienia] = await Promise.all([api.dkim(), api.ustawienia()]);
+      [dkim, ustawienia, tls] = await Promise.all([api.dkim(), api.ustawienia(), api.tls()]);
     } catch (blad) {
       return toast(blad.message, { blad: true });
     }
-    renderuj(dkim, ustawienia.env);
+    renderuj(dkim, ustawienia.env, tls);
   }
 
-  function renderuj(dkim, env) {
+  function renderuj(dkim, env, tls) {
     kontener.replaceChildren(
       el('div', { class: 'sekcja-naglowek' },
         el('h1', {}, 'Domena i DNS'),
@@ -51,6 +52,7 @@ export function initDomena() {
           el('span', { class: 'naklejka' }, `MX · ${env.smtp_hostname}`)
         )
       ),
+      zbudujTls(tls),
       zbudujDkim(dkim, env),
       zbudujDns(env),
       el('div', { class: 'karta' },
@@ -61,6 +63,69 @@ export function initDomena() {
             'Bez poprawnego PTR duzi odbiorcy (Gmail, Outlook) chętniej odrzucają pocztę.')
         )
       )
+    );
+  }
+
+  // --- Szyfrowanie ------------------------------------------------------------------
+
+  function opisDni(dni) {
+    if (dni < 0) return 'wygasł';
+    if (dni === 0) return 'wygasa dziś';
+    return dni === 1 ? 'za 1 dzień' : `za ${dni} dni`;
+  }
+
+  // Treść budujemy dziećmi el(), bo tylko on odsiewa null-e: gołe append()
+  // dopisałoby brak ostrzeżenia jako tekst „null", a to stan normalny.
+  function zbudujTls(tls) {
+    if (!tls.enabled) {
+      const tresc = el('div', { class: 'karta-tresc' },
+        el('p', {},
+          tls.reason === 'smtp-off'
+            ? 'Bramka SMTP jest wyłączona (brak TP_SMTP_PORT), więc nie ma czego szyfrować. STARTTLS ruszy razem z odbiorem poczty ze świata.'
+            : 'Nie udało się przygotować certyfikatu, więc poczta od obcych serwerów idzie czystym tekstem. Szczegóły w logu usługi.'),
+        tls.warning ? el('p', { class: 'karta-opis' }, tls.warning) : null
+      );
+      return el('div', { class: 'karta' },
+        el('div', { class: 'karta-naglowek' },
+          el('h2', {}, 'Szyfrowanie (STARTTLS)'),
+          el('div', { class: 'prawa' }, el('span', { class: 'naklejka naklejka-uwaga' }, 'Wyłączone'))
+        ),
+        tresc
+      );
+    }
+
+    const wskazany = tls.source === 'file';
+    const tresc = el('div', { class: 'karta-tresc' },
+      el('p', {},
+        wskazany
+          ? 'Certyfikat wskazany zmienną TP_TLS_CERT. Odnowienie pliku serwer podchwytuje sam, bez restartu usługi.'
+          : 'Certyfikat samopodpisany, wygenerowany przez serwer. Do poczty między serwerami to wystarcza: obce MX-y szyfrują oportunistycznie i certyfikatu nie sprawdzają.'),
+      tls.warning ? el('p', { class: 'karta-opis' }, tls.warning) : null,
+      el('p', {}, el('strong', {}, 'Nazwa · '), tls.subject),
+      el('p', {}, el('strong', {}, 'Wystawca · '), tls.issuer),
+      el('p', {}, el('strong', {}, 'Ważny do · '),
+        `${new Date(tls.notAfter).toLocaleDateString('pl-PL')} · ${opisDni(tls.daysLeft)}`),
+      el('p', { class: 'karta-opis' }, 'Odcisk SHA-256:'),
+      el('div', { class: 'rekord-wiersz' },
+        el('code', { class: 'rekord' }, tls.fingerprint),
+        przyciskKopiuj(tls.fingerprint)
+      )
+    );
+
+    // Naklejka nazywa powód, nie termin: przy ostrzeżeniu sam termin bywa odległy
+    // („za 1824 dni"), więc kolor wołałby o uwagę, a liczba uspokajała.
+    const wygasa = tls.daysLeft < 14;
+    const alarm = wygasa || tls.warning;
+    return el('div', { class: 'karta' },
+      el('div', { class: 'karta-naglowek' },
+        el('h2', {}, 'Szyfrowanie (STARTTLS)'),
+        el('div', { class: 'prawa' },
+          alarm
+            ? el('span', { class: 'naklejka naklejka-uwaga' }, wygasa ? opisDni(tls.daysLeft) : 'Uwaga')
+            : el('span', { class: 'naklejka naklejka-ok' }, wskazany ? 'Wskazany' : 'Samopodpisany')
+        )
+      ),
+      tresc
     );
   }
 

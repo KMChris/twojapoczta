@@ -43,5 +43,6 @@ export const api = {
 
   dkim: () => zadanie('GET', '/api/admin/dkim'),
   generujDkim: (selector) => zadanie('POST', '/api/admin/dkim', selector ? { selector } : {}),
+  tls: () => zadanie('GET', '/api/admin/tls'),
   sprawdzDns: () => zadanie('POST', '/api/admin/dns-check', {}),
 };
