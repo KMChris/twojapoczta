@@ -68,9 +68,18 @@ test('numer seryjny jest dodatni i losowy', () => {
   const b = new crypto.X509Certificate(generateSelfSigned({ hostname: 'a.pl' }).certPem);
 
   assert.notEqual(a.serialNumber, b.serialNumber);
-  // Najstarszy bit wygaszony, więc DER nie zakoduje liczby ujemnej.
-  assert.doesNotMatch(a.serialNumber, /^[89a-f]/i);
-  assert.doesNotMatch(b.serialNumber, /^[89a-f]/i);
+
+  // serialNumber to sama wartość szesnastkowo: bez bajtu znaku i bez zer
+  // wiodących, więc pierwsza cyfra nie mówi nic o znaku. Gdy wygaszony bajt
+  // zerowy poprzedza bajt z ustawionym najstarszym bitem, DER musi to zero
+  // zachować, a Node i tak je pomija. Sprawdzamy więc wartość, nie zapis.
+  for (const cert of [a, b]) {
+    const numer = BigInt(`0x${cert.serialNumber}`);
+    assert.ok(numer > 0n, `numer seryjny musi być dodatni: ${cert.serialNumber}`);
+    // Szesnaście losowych bajtów z wygaszonym najstarszym bitem to dokładnie
+    // zakres poniżej 2^127. To jedyna asercja, która wyłapie zdjęcie maski.
+    assert.ok(numer < 2n ** 127n, `najstarszy bit powinien być wygaszony: ${cert.serialNumber}`);
+  }
 });
 
 test('certyfikat naprawdę obsługuje handshake TLS', async () => {
