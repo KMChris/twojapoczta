@@ -69,15 +69,19 @@ export function ocenUrlObrazka(surowy) {
   return { rodzaj: 'odrzuc' };
 }
 
-// Podstawowa i jedyna pewna obrona przed ucieczką treści z kontenera — nie „pas do
-// szelek" dla CSS kontenera, bo ten nic nie trzyma niezawodnie. Bazowy `.czytnik`
-// (app.css:606) to `position: relative; overflow-y: auto`: przycina `absolute`
-// i przepełnienie, ale `relative` NIE zawiera `fixed` (ten ucieka do viewportu —
-// trzymałby go dopiero transform/filter/contain na przodku, których ani `.czytnik`,
-// ani `.uklad`/`body.app` na desktopie nie mają) i NIE tworzy kontekstu stackingu,
-// więc nie izoluje `z-index`. Na dokładkę kontener zmienia się z breakpointem — pod
-// `@media (max-width:1080px)` `.czytnik` bywa `fixed` + `transform` (szuflada mobilna) —
-// więc nie ma się na czym oprzeć. Dlatego `fixed`/`sticky`/`z-index` blokujemy tutaj.
+// Blokada ucieczki treści z kontenera · druga warstwa obok strukturalnego domknięcia.
+// Od Task 6 treść listu renderuje się do `.cz-body-list` (app.css), który przez
+// `contain: layout paint` staje się blokiem zawierającym dla `position: fixed` (fixed
+// ląduje przy kontenerze, nie przy viewportcie), a przez `isolation: isolate` domyka
+// kontekst układania (z-index z listu nie przebija się nad interfejs). To trzyma
+// strukturalnie. Tutaj blokujemy `fixed`/`sticky`/`z-index` dodatkowo w polityce, bo
+// nie opieramy bezpieczeństwa na jednej warstwie: przodkowie `.cz-body-list` są kruchi.
+// Bazowy `.czytnik` to `position: relative; overflow-y: auto` — przycina `absolute`
+// i przepełnienie, ale `relative` NIE zawiera `fixed` (trzymałby go dopiero
+// transform/filter/contain na przodku, których ani `.czytnik`, ani `.uklad`/`body.app`
+// na desktopie nie mają) i NIE tworzy kontekstu stackingu; pod `@media (max-width:1080px)`
+// `.czytnik` bywa `fixed` + `transform` (szuflada mobilna). Więc gdyby `contain`/`isolation`
+// kiedyś zeszły z `.cz-body-list`, polityka wciąż trzyma. Dwie warstwy są celowe — zostaw obie.
 export function czyDeklaracjaZakazana(nazwa, wartosc) {
   const n = String(nazwa).toLowerCase();
   if (n === 'z-index') return true;

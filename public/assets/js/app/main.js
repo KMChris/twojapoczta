@@ -2,10 +2,10 @@
 
 import { api } from './api.js';
 import {
-  el, ikona, krotkiCzas, pelnaData, inicjaly, kolorAwatara, wstawTrescZLinkami, toast, formatujRozmiar,
+  el, ikona, krotkiCzas, pelnaData, inicjaly, kolorAwatara, toast, formatujRozmiar,
 } from './ui.js';
 import { initKompozycja, zbudujOdpowiedz, zbudujPrzekazanie } from './kompozycja.js';
-import { sanitizeHtml } from './edytor.js';
+import { renderujTresc } from './tresc.js';
 import { initSkroty } from './skroty.js';
 import { initFoldery } from './foldery.js';
 
@@ -44,6 +44,7 @@ const stan = {
   wybranaId: null,
   otwarta: null,
   zalacznikiOtwartej: [],
+  cidOtwartej: {},
   przekierowanie: null,
 };
 
@@ -259,7 +260,7 @@ async function otworzWiadomosc(id) {
   odswiezZaznaczenieListy();
 
   try {
-    const { message, attachments } = await api.wiadomosc(id);
+    const { message, attachments, cid } = await api.wiadomosc(id);
     // W międzyczasie wybrano coś innego albo zmieniono folder, więc nie renderuj starej odpowiedzi.
     if (stan.wybranaId !== id) return;
 
@@ -270,6 +271,7 @@ async function otworzWiadomosc(id) {
 
     stan.otwarta = message;
     stan.zalacznikiOtwartej = attachments ?? [];
+    stan.cidOtwartej = cid ?? {};
     if (skrot && !skrot.is_read) {
       skrot.is_read = 1;
       listaEl.querySelector(`[data-id="${id}"]`)?.classList.remove('nieprzeczytana');
@@ -373,8 +375,7 @@ function renderujCzytnik() {
   akcje.append(ikonaAkcji('Drukuj', 'print', () => window.print()));
 
   const body = el('div', { class: 'cz-body' });
-  if (w.body_html) body.innerHTML = sanitizeHtml(w.body_html);
-  else wstawTrescZLinkami(body, w.body);
+  renderujTresc(body, w, { cid: stan.cidOtwartej });
 
   czytnikEl.append(powrot, naglowek, meta);
   if (zaplanowana && w.scheduled_at) {

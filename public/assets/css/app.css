@@ -789,6 +789,28 @@ a.boczny-link {
   text-underline-offset: 2px;
 }
 
+/* Treść listu przychodzącego · pudełko, z którego style listu nie wyjdą.
+   `contain: paint` przycina rysowanie do pudełka, `contain: layout` czyni
+   kontener blokiem zawierającym dla position: fixed (więc fixed przestaje
+   uciekać do viewportu), a `isolation: isolate` domyka kontekst układania,
+   więc z-index z listu nie przebije się nad interfejs. Silnik CSS egzekwuje
+   to strukturalnie; czarna lista fixed/sticky/z-index w reguly.js jest drugą
+   warstwą (obrona w głąb) — obie opowiadają tę samą historię. */
+.cz-body-list {
+  contain: layout paint style;
+  isolation: isolate;
+  overflow-x: auto;
+}
+
+.cz-body-list img {
+  max-width: 100%;
+  height: auto;
+}
+
+.cz-body-list table {
+  max-width: 100%;
+}
+
 .w-spinacz {
   display: inline-flex;
   flex-shrink: 0;
