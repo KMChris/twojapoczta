@@ -231,7 +231,7 @@ Trasy panelu administratora (`/api/admin/*`) wymagają dodatkowo roli
 
 ## Testy
 
-`npm test` uruchamia 378 testów na `node:test` (baza w pamięci, zero
+`npm test` uruchamia 453 testy na `node:test` (baza w pamięci, zero
 instalacji); `npm run test:coverage` dolicza raport pokrycia linii i gałęzi.
 
 - Scenariusze przekrojowe: `tests/api.test.js` (pełen obieg REST: konta,
@@ -243,7 +243,7 @@ instalacji); `npm run test:coverage` dolicza raport pokrycia linii i gałęzi.
 - Testy jednostkowe per moduł: `auth`, `mail`, `folders`, `mime`, `attachments`,
   `router`, `static`, `db`, `smtp-in`, `smtp-out`, `smtp-starttls`, `x509`,
   `tls-cert`, `dkim-init`, `api.extra`, `index`, `settings`, `audit`, `quota`,
-  `aliases`, `dns-check`. Każdy test dostaje świeżą bazę w pamięci, więc nic
+  `aliases`, `teams`, `dns-check`. Każdy test dostaje świeżą bazę w pamięci, więc nic
   nie współdzieli z pozostałymi.
 - `tests/dkim.test.js`: wektory kanonizacji z RFC 6376 i **niezależny
   weryfikator** sprawdzający podpis na wyemitowanych, pofoldowanych bajtach.
