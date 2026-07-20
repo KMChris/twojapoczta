@@ -41,7 +41,7 @@ export function initUstawienia() {
       ),
       el('label', { class: 'pole' },
         el('span', {}, 'Catch-all (poczta na nieistniejące adresy w domenie)'),
-        el('input', { name: 'catchall', type: 'text', autocapitalize: 'none', spellcheck: 'false', placeholder: 'login skrzynki zbiorczej, puste = odbijaj', value: settings.catchall ?? '' })
+        el('input', { name: 'catchall', type: 'text', autocapitalize: 'none', spellcheck: 'false', placeholder: 'login, alias albo zespół, puste = odbijaj', value: settings.catchall ?? '' })
       ),
       el('footer', { class: 'modal-stopka', style: 'padding: 0.4rem 0 0' },
         el('button', { type: 'submit', class: 'btn-zapisz' }, 'Zapisz ustawienia')
