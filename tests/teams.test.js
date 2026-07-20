@@ -1,4 +1,5 @@
-// Jednostkowe testy skrzynek zespołowych: skład, prawo wysyłki, CRUD.
+// Jednostkowe testy skrzynek zespołowych: od składu i CRUD, przez rozstrzyganie
+// adresów i fan-out doręczeń (także zaplanowanych), po tożsamość nadawcy.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -113,6 +114,13 @@ test('kaskady: usunięcie zespołu czyści skład, usunięcie konta wypisuje z z
   setMember(db, zespol.id, ania, true);
 
   db.prepare('DELETE FROM users WHERE id = ?').run(ania);
+  // teamMembers robi INNER JOIN na users, więc ukryłby wiersz osierocony bez kaskady;
+  // dopiero licznik po user_id dowodzi, że wpis członkostwa naprawdę zniknął.
+  assert.equal(
+    db.prepare('SELECT COUNT(*) AS n FROM team_members WHERE user_id = ?').get(ania).n,
+    0,
+    'wpis członkostwa znika kaskadą, nie tylko z widoku składu'
+  );
   assert.deepEqual(teamMembers(db, zespol.id).map((m) => m.login), ['jan'], 'konto znika ze składu');
 
   assert.equal(removeMember(db, zespol.id, jan), true);
@@ -671,13 +679,14 @@ test('odebranie prawa wysyłki zatrzymuje list zaplanowany wcześniej', () => {
   const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
   setMember(db, zespol.id, janId, true);
 
-  sendMessage(db, jan, {
+  const nadanie = sendMessage(db, jan, {
     to: 'klient@twojapoczta.com',
     from: 'sprzedaz@twojapoczta.com',
     subject: 'Późna oferta',
     body: 'x',
     scheduledAt: new Date(Date.now() + 1000).toISOString(),
   });
+  assert.equal(nadanie.error, undefined, 'w chwili planowania prawo wysyłki jeszcze jest');
   setMember(db, zespol.id, janId, false); // administrator odbiera prawo wysyłki
   db.prepare("UPDATE messages SET scheduled_at = ? WHERE folder = 'scheduled'").run(new Date(Date.now() - 1000).toISOString());
   fireScheduled(db);
