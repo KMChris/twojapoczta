@@ -4,8 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DOZWOLONE_TAGI, WYTNIJ_W_CALOSCI, dozwoloneAtrybuty, bezpiecznyLink, ocenUrlObrazka,
-  czyDeklaracjaZakazana, podzielSelektory, zakresujSelektor, rozstrzygnijMedia,
-  znajdzCytatyWTekscie, zostajeCosWidocznego,
+  czyWartoscSiegaPoZasob, czyDeklaracjaZakazana, podzielSelektory, zakresujSelektor,
+  rozstrzygnijMedia, znajdzCytatyWTekscie, zostajeCosWidocznego,
 } from '../public/assets/js/app/reguly.js';
 
 test('DOZWOLONE_TAGI: tabele przechodzą, bo na nich stoi layout newsletterów', () => {
@@ -88,6 +88,47 @@ test('czyDeklaracjaZakazana: position fixed/sticky wypada nawet z !important', (
   assert.ok(czyDeklaracjaZakazana('position', 'fixed !important'));
   assert.ok(czyDeklaracjaZakazana('position', 'STICKY !IMPORTANT'));
   assert.ok(!czyDeklaracjaZakazana('position', 'relative !important'));
+});
+
+// Wejścia niżej to wartości PO CSSOM, nie surowy CSS z listu · funkcja dostaje dokładnie to,
+// co oddaje getPropertyValue. Dlatego są tu obie postaci `image-set` (z gołym łańcuchem i po
+// normalizacji do url()): obrona nie ma zależeć od tego, czy normalizacja zadziała.
+test('polityka CSS: wartości sięgające po zasób padają', () => {
+  const zle = [
+    'url("http://tracker.example/a.png")',
+    'url("/\\\\tracker.example/b.png")',          // ukośnik wsteczny → //host
+    'image-set(var(--u) 1x)',
+    'var(--v)',
+    'var(--brak, url("http://tracker.example/e.png"))',
+    'url("/f.png")',                              // same-origin też
+    'url("http://tracker.example/g.png"), auto',  // cursor
+    'image-set(url("http://tracker.example/h.png") 1x)',
+    'image-set("http://tracker.example/h.png" 1x)',
+    'url("data:image/png;base64,iVBOR")',
+    'url("#filtr")',
+    'url(http\\3a //tracker.example/d.png)',      // ucieczka w custom property
+    'v\\61 r(--u)',                               // `var` w ucieczce
+  ];
+  for (const w of zle) assert.equal(czyWartoscSiegaPoZasob(w), true, w);
+});
+
+test('polityka CSS: zwykła poczta przechodzi', () => {
+  const dobre = [
+    'rgb(255, 0, 0)', 'rgba(255, 0, 0, 0.5)', 'oklch(0.7 0.1 250)',
+    'calc(100% - 20px)', 'clamp(12px, 2vw, 18px)',
+    'Arial, "Helvetica Neue", sans-serif',
+    'linear-gradient(to right, rgb(255, 255, 255), rgb(0, 0, 0))',
+    'rgba(0, 0, 0, 0.3) 0px 1px 2px',
+    '10px 20px', 'center', '#ff0000', 'solid',
+  ];
+  for (const w of dobre) assert.equal(czyWartoscSiegaPoZasob(w), false, w);
+});
+
+test('polityka CSS: funkcja jest totalna', () => {
+  assert.equal(czyWartoscSiegaPoZasob(''), false);
+  assert.equal(czyWartoscSiegaPoZasob(null), false);
+  assert.equal(czyWartoscSiegaPoZasob(undefined), false);
+  assert.equal(czyWartoscSiegaPoZasob('('), true);   // brak nazwy przed nawiasem
 });
 
 test('podzielSelektory: przecinek w :is() nie rozcina selektora', () => {

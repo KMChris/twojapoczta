@@ -17,6 +17,12 @@ export const DOZWOLONE_TAGI = new Set([
 ]);
 
 // Wycinane razem z zawartością: ich wnętrze nie jest treścią listu.
+// Wpisy są WIELKIMI literami, bo takie tagName oddaje HTML · ale `svg`, `math` i ich
+// potomkowie siedzą w obcej przestrzeni nazw, gdzie tagName zostaje małymi literami.
+// Dlatego wołający MUSI porównywać po tagName podniesionym do wielkich liter (dla HTML
+// to no-op). Bez tego `SVG` i `MATH` były tu wpisami martwymi: `<svg>` wpadał w gałąź
+// rozwijającą, jego dzieci przeżywały i `<svg><style>` stosował CSS oraz wypisywał
+// własne źródło jako tekst.
 export const WYTNIJ_W_CALOSCI = new Set([
   'SCRIPT', 'NOSCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'APPLET', 'FORM', 'INPUT',
   'BUTTON', 'TEXTAREA', 'SELECT', 'OPTION', 'SVG', 'MATH', 'TEMPLATE', 'HEAD',
@@ -67,6 +73,61 @@ export function ocenUrlObrazka(surowy) {
   if (DATA_OBRAZKA.test(tekst)) return { rodzaj: 'ok', url: tekst };
   if (/^https?:\/\//i.test(tekst)) return { rodzaj: 'zdalny', url: tekst };
   return { rodzaj: 'odrzuc' };
+}
+
+// Funkcje CSS, o których wiemy, że po zasób nie sięgają. Allowlista, nie blocklista:
+// szukanie URL-i w wartości jest omijalne (`url(http\3a //…)` w custom property omija
+// każdy regex na `https?:`, bo custom properties NIE są normalizowane i sekwencja
+// ucieczki dociera do nas nietknięta), a szukanie po nazwie funkcji też — `v\61 r(--u)`
+// przeżywa w wartości standardowej i jest normalnym wywołaniem `var()`. Więc nie pytamy
+// „czy to wygląda na pobranie", tylko „czy każde wywołanie jest z listy znanych niegroźnych".
+//
+// Lista jest celowo minimalna: tylko to, co realnie występuje w poczcie. Dokładanie do
+// niej to rozszerzanie powierzchni ataku, więc wymaga dowodu, że funkcja pobrać nie może.
+const FUNKCJE_BEZ_POBRANIA = new Set([
+  'rgb', 'rgba', 'hsl', 'hsla', 'hwb', 'lab', 'lch', 'oklab', 'oklch', 'color', 'color-mix',
+  'calc', 'min', 'max', 'clamp',
+  'linear-gradient', 'radial-gradient', 'conic-gradient',
+  'repeating-linear-gradient', 'repeating-radial-gradient', 'repeating-conic-gradient',
+]);
+
+// Nazwa funkcji to ciąg znaków przylegający do `(`. Kończy się na spacji, nawiasie lub
+// przecinku, bo tylko takie znaki mogą u nas stać przed wywołaniem.
+const WYWOLANIE = /([^\s(),]*)\(/g;
+
+// Czy wartość deklaracji może sięgnąć po zasób zewnętrzny.
+//
+// Zasada: KAŻDE `(` w wartości musi być poprzedzone nazwą z allowlisty, inaczej cała
+// deklaracja pada. Stoi to na jednym fakcie o CSS: sekwencja ucieczki nigdy nie utworzy
+// wywołania funkcji. `url\28 x\29` to jeden token identyfikatora, nie `url(x)` — żeby
+// przeglądarka zobaczyła funkcję, w tekście musi stać dosłowny `(` tuż za nazwą. Ucieczki
+// potrafią więc ukryć NAZWĘ (`\75 rl(x)` → widzimy `rl`), ale nie potrafią schować nawiasu
+// ani podstawić nazwy z listy: każda ucieczka wnosi `\` albo urywa nazwę na spacji, a
+// wtedy to, co zostaje przed `(`, nie jest już żadnym wpisem z allowlisty.
+//
+// `url` i `var` są nieobecne CELOWO, nie przez przeoczenie:
+// · `url` — to jest dokładnie ten kanał, którym wychodzi piksel śledzący.
+// · `var` — podstawienie dzieje się po nas i wciąga treść z custom property, której
+//   przeglądarka nie normalizuje. To zamyka `--u: "http://…"; background: image-set(var(--u) 1x)`
+//   oraz `--v: url(http\3a //…); background: var(--v)`. Nie dokładaj `var` „dla zgodności".
+//
+// Świadome konsekwencje:
+// · `url(data:image/png;…)` w CSS też pada, więc tła z data-URI się nie renderują. CSS nie
+//   jest u nas kanałem obrazków — ta sama decyzja, którą kod podjął już przy tłach (nie da
+//   się ich sensownie dołożyć po fakcie), tylko konsekwentnie, a nie przy okazji.
+// · `url(/f.png)` (nasz origin) też pada. Żaden uczciwy list nie wskazuje na nasze assety.
+// · Gradienty zostają — nie pobierają.
+// · Fałszywe trafienia na łańcuchach (`content: "url(x)"`) są akceptowalne. Kierunek awarii
+//   jest bezpieczny: nieznana funkcja → deklaracja pada → list wygląda skromniej. Nigdy odwrotnie.
+export function czyWartoscSiegaPoZasob(wartosc) {
+  const tekst = String(wartosc ?? '');
+  for (const [, nazwa] of tekst.matchAll(WYWOLANIE)) {
+    // Wielkość liter zdejmujemy tylko z ASCII. `toLowerCase()` sprowadziłby też znaki
+    // spoza ASCII (U+212A KELVIN SIGN → `k`), przepuszczając `oKlch(…)`, którego
+    // przeglądarka funkcją nie uzna — a to jest ten kierunek pomyłki, którego nie chcemy.
+    if (!FUNKCJE_BEZ_POBRANIA.has(nazwa.replace(/[A-Z]/g, (z) => z.toLowerCase()))) return true;
+  }
+  return false;
 }
 
 // Blokada ucieczki treści z kontenera · druga warstwa obok strukturalnego domknięcia.
