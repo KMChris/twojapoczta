@@ -231,8 +231,10 @@ Trasy panelu administratora (`/api/admin/*`) wymagają dodatkowo roli
 
 ## Testy
 
-`npm test` uruchamia 453 testy na `node:test` (baza w pamięci, zero
+`npm test` uruchamia 433 testy na `node:test` (baza w pamięci, zero
 instalacji); `npm run test:coverage` dolicza raport pokrycia linii i gałęzi.
+Uruchamiając ręcznie, podawaj pliki (`node --test tests/teams.test.js`):
+gołe `node --test tests/` nie uruchamia żadnego testu, a wygląda na sukces.
 
 - Scenariusze przekrojowe: `tests/api.test.js` (pełen obieg REST: konta,
   foldery, doręczanie, aliasy, załączniki, przełączniki produkcyjne),
