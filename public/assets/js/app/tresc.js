@@ -30,7 +30,7 @@
 import { wstawTrescZLinkami } from './ui.js';
 import {
   DOZWOLONE_TAGI, WYTNIJ_W_CALOSCI, dozwoloneAtrybuty, bezpiecznyLink,
-  ocenUrlObrazka, czyWartoscSiegaPoZasob, czyDeklaracjaZakazana, zakresujSelektor,
+  ocenUrlObrazka, czyOdrzucicDeklaracje, zakresujSelektor,
 } from './reguly.js';
 
 let licznik = 0;
@@ -39,9 +39,12 @@ let licznik = 0;
 // które i tak zniknie. Małe litery obsługują obie przestrzenie nazw naraz: dla elementów
 // HTML w dokumencie HTML selektor typu jest nieczuły na wielkość liter, a dla obcych
 // (svg, math) jest czuły i tam nazwa lokalna jest właśnie mała.
-// HEAD wypada z listy świadomie: czyscDrzewo chodzi wyłącznie po body, więc <style> z
-// <head> nie jest „z wyciętego poddrzewa" — to normalne miejsce arkusza w liście HTML
-// i ma się zbierać. Wpis HEAD w zbiorze broni przed <head> wstawionym w body.
+// HEAD wypada z listy świadomie: czyscDrzewo chodzi wyłącznie po body, więc arkusz
+// siedzący w <head> nigdy nie jest „poddrzewem do wycięcia" — to normalne miejsce arkusza
+// w liście HTML i ma się zbierać, a odsianie go zabrałoby zwykłej poczcie style. Nie
+// chodzi tu o <head> wstawiony w body: parser HTML w ogóle go tam nie wpuszcza (zmierzone:
+// znacznik znika bez śladu, a jego zawartość przelatuje wprost do body), więc obrona przed
+// taką postacią nie miałaby czego bronić.
 const PRZODKOWIE_WYCINANYCH = [...WYTNIJ_W_CALOSCI]
   .filter((tag) => tag !== 'HEAD')
   .map((tag) => tag.toLowerCase())
@@ -216,12 +219,57 @@ function czyscStylInline(wezel) {
 // umie przywrócić tła wyciętego z deklaracji: policzone tutaj obiecywałoby N obrazków
 // i pokazywało mniej. Liczymy więc wyłącznie to, co belka faktycznie przywróci —
 // bramkowane atrybuty HTML (data-src, data-background).
+//
+// Dwie ścieżki, bo SPRAWDZAMY MODEL, KTÓRY CZYTAMY (własności przez iterator i
+// getPropertyValue), A EMITUJEMY INNY ARTEFAKT (`cssText`). Dziura mieszkała dokładnie
+// w tej różnicy, nie w „zapomnieliśmy o skrótach". Gdy skrót (`background`, `mask`,
+// `list-style`, `border-image`, …) niesie `var()`, CSS trzyma wartość czekającą na
+// podstawienie NA SKRÓCIE: iterator skrótu w ogóle nie wymienia, a wszystkie jego
+// longhandy oddają `""`. Skan nie widział więc niczego i niczego nie usuwał, a `cssText`
+// serializował skrót dosłownie — `--u: "http://…"; background: image-set(var(--u) 1x)`
+// wychodził na zewnątrz nietknięty i ładował się.
+//
+// Stąd sygnał: własność WYMIENIONA przez iterator, której getPropertyValue oddaje `""`,
+// jest cieniem skrótu, którego nie widzimy. Sygnał jest wąski, bo longhand z `var()`
+// (`background-image: image-set(var(--u) 1x)`) oddaje swoją treść normalnie i pada już
+// na allowliście w reguly.js. `""` naprawdę znaczy „stoi tu coś, czego nie umiemy
+// przeczytać", a czego nie umiemy przeczytać, tego nie wolno nam wypuścić.
+//
+// Nie usuwamy wtedy pojedynczego longhandu: removeProperty('background-image') NIE
+// zdejmuje skrótu — zostawia kalekę `background-position-x: ; …` i ładunek w custom
+// property. Zdejmuje go dopiero removeProperty nazwą skrótu, której z iteratora nie mamy.
+// Dlatego przebudowujemy blok: zbieramy deklaracje widoczne i dozwolone, czyścimy
+// cssText, wstawiamy je z powrotem wraz z priorytetem (bez priorytetu gubimy
+// `!important`). Wszystko, czego nie mogliśmy zobaczyć, znika razem z czyszczeniem.
+//
+// Blok bez podstawienia zostaje na starej ścieżce — usuwaniu pojedynczych złych
+// deklaracji. Jest poprawna, a przebudowa przepisywałaby cssText każdej zwykłej
+// wiadomości bez powodu. Kierunek awarii jest bezpieczny w obie strony: `""` z innego
+// powodu niż skrót najwyżej wymusi przebudowę, a ta i tak zachowuje wyłącznie deklaracje
+// widoczne i dozwolone.
 function oczyscDeklaracje(deklaracje) {
+  const zachowane = [];
+  const doUsuniecia = [];
+  let podstawienie = false;
+
   for (const nazwa of [...deklaracje]) {
     const wartosc = deklaracje.getPropertyValue(nazwa);
-    if (czyDeklaracjaZakazana(nazwa, wartosc) || czyWartoscSiegaPoZasob(wartosc)) {
-      deklaracje.removeProperty(nazwa);
+    if (wartosc === '') {
+      podstawienie = true;
+      continue;
     }
+    if (czyOdrzucicDeklaracje(nazwa, wartosc)) doUsuniecia.push(nazwa);
+    else zachowane.push([nazwa, wartosc, deklaracje.getPropertyPriority(nazwa)]);
+  }
+
+  if (!podstawienie) {
+    for (const nazwa of doUsuniecia) deklaracje.removeProperty(nazwa);
+    return;
+  }
+
+  deklaracje.cssText = '';
+  for (const [nazwa, wartosc, priorytet] of zachowane) {
+    deklaracje.setProperty(nazwa, wartosc, priorytet);
   }
 }
 

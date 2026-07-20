@@ -108,8 +108,16 @@ const WYWOLANIE = /([^\s(),]*)\(/g;
 // `url` i `var` są nieobecne CELOWO, nie przez przeoczenie:
 // · `url` — to jest dokładnie ten kanał, którym wychodzi piksel śledzący.
 // · `var` — podstawienie dzieje się po nas i wciąga treść z custom property, której
-//   przeglądarka nie normalizuje. To zamyka `--u: "http://…"; background: image-set(var(--u) 1x)`
-//   oraz `--v: url(http\3a //…); background: var(--v)`. Nie dokładaj `var` „dla zgodności".
+//   przeglądarka nie normalizuje. Odrzucamy je wszędzie, gdzie wartość w ogóle DO NAS
+//   DOCIERA, czyli w longhandzie: `background-image: image-set(var(--u) 1x)` oddaje swoją
+//   treść przez getPropertyValue i pada tutaj. Nie dokładaj `var` „dla zgodności".
+//
+// Ta funkcja NIE zamyka natomiast wariantu skrótowego
+// (`--u: "http://…"; background: image-set(var(--u) 1x)`) i nie ma jak go zamknąć: przy
+// skrócie wartość czekająca na podstawienie siedzi na skrócie, którego iterator nie
+// wymienia, a każdy jego longhand oddaje `""`. Ta funkcja nigdy nie dostaje tam czego
+// oceniać. Zamyka to dopiero wykrycie podstawienia i przebudowa bloku w
+// tresc.js/oczyscDeklaracje — allowlista jest drugą warstwą, nie jedyną.
 //
 // Świadome konsekwencje:
 // · `url(data:image/png;…)` w CSS też pada, więc tła z data-URI się nie renderują. CSS nie
@@ -158,6 +166,22 @@ export function czyDeklaracjaZakazana(nazwa, wartosc) {
     return w === 'fixed' || w === 'sticky';
   }
   return false;
+}
+
+// Jedna decyzja „wyrzucić czy zostawić" dla pojedynczej deklaracji. Używają jej obie
+// ścieżki czyszczenia w tresc.js — atrybut `style` i reguła z <style> — i mają używać
+// tej samej, bo rozjazd między nimi to gotowa dziura.
+//
+// Custom properties (`--*`) wypadają w CAŁOŚCI, bez oglądania wartości. Argument nie
+// brzmi „mogą nieść URL" (bywa, ale to nie jest powód, bo goły łańcuch w cudzysłowie
+// niczego nie wywołuje i allowlista nie ma się o co zaczepić). Argument jest z polityki:
+// `var()` nie ma w FUNKCJE_BEZ_POBRANIA, więc jest odrzucane BEZWARUNKOWO, a bez `var()`
+// nie da się custom property odczytać. Nieodczytywalne znaczy bezużyteczne — nie niosą
+// u nas żadnej funkcji, są martwym balastem. Wycięcie ich nic nie kosztuje i zabiera
+// całą klasę nośnika, zamiast opierać się na twierdzeniu „każdy konsument i tak padnie".
+export function czyOdrzucicDeklaracje(nazwa, wartosc) {
+  if (String(nazwa).startsWith('--')) return true;
+  return czyDeklaracjaZakazana(nazwa, wartosc) || czyWartoscSiegaPoZasob(wartosc);
 }
 
 // Dzieli listę selektorów po przecinkach najwyższego poziomu. Przecinek legalnie

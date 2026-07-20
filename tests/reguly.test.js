@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DOZWOLONE_TAGI, WYTNIJ_W_CALOSCI, dozwoloneAtrybuty, bezpiecznyLink, ocenUrlObrazka,
-  czyWartoscSiegaPoZasob, czyDeklaracjaZakazana, podzielSelektory, zakresujSelektor,
+  czyWartoscSiegaPoZasob, czyDeklaracjaZakazana, czyOdrzucicDeklaracje,
+  podzielSelektory, zakresujSelektor,
   rozstrzygnijMedia, znajdzCytatyWTekscie, zostajeCosWidocznego,
 } from '../public/assets/js/app/reguly.js';
 
@@ -129,6 +130,38 @@ test('polityka CSS: funkcja jest totalna', () => {
   assert.equal(czyWartoscSiegaPoZasob(null), false);
   assert.equal(czyWartoscSiegaPoZasob(undefined), false);
   assert.equal(czyWartoscSiegaPoZasob('('), true);   // brak nazwy przed nawiasem
+});
+
+// UWAGA na zakres tych testów. czyOdrzucicDeklaracje to tylko połowa obrony przed ładunkiem
+// `--u: "http://…"; background: image-set(var(--u) 1x)`. Druga połowa — wykrycie wartości
+// czekającej na podstawienie i przebudowa bloku — jest zachowaniem CSSOM, siedzi w tresc.js
+// i w Node nie ma jak jej dotknąć. Zielone tutaj NIE znaczy, że ładunek nie wychodzi; znaczy
+// tylko, że polityka „custom property wypada" jest podpięta i się nie wykruszyła.
+//
+// Wejścia są realne, nie wymyślone: wołający podaje dokładnie parę (nazwa, getPropertyValue),
+// a getPropertyValue dla `--u` oddaje łańcuch RAZEM z cudzysłowami — stąd taka postać niżej.
+test('czyOdrzucicDeklaracje: każdy custom property wypada, niezależnie od wartości', () => {
+  assert.ok(czyOdrzucicDeklaracje('--u', '"http://tracker.example/1.png"'));
+  assert.ok(czyOdrzucicDeklaracje('--marka', '#c00'));
+  assert.ok(czyOdrzucicDeklaracje('--pusty', ''));
+  assert.ok(czyOdrzucicDeklaracje('--', 'cokolwiek'));
+});
+
+test('czyOdrzucicDeklaracje: zwykłe własności oceniane jak dotąd', () => {
+  assert.ok(!czyOdrzucicDeklaracje('color', 'red'));
+  assert.ok(!czyOdrzucicDeklaracje('background-image', 'linear-gradient(to right, rgb(0, 0, 0), rgb(255, 255, 255))'));
+  assert.ok(czyOdrzucicDeklaracje('background-image', 'url("http://tracker.example/a.png")'));
+  assert.ok(czyOdrzucicDeklaracje('background-image', 'image-set(var(--u) 1x)'));
+  assert.ok(czyOdrzucicDeklaracje('position', 'fixed'));
+  assert.ok(czyOdrzucicDeklaracje('z-index', '9999'));
+});
+
+// Nazwa własności nie jest miejscem na dopasowanie podłańcuchem: `--` liczy się wyłącznie
+// na początku. Inaczej `grid-template-columns` czy zmyślne `border--x` wypadałyby przypadkiem,
+// a to jest ten kierunek pomyłki, który psuje zwykłą pocztę bez żadnego zysku.
+test('czyOdrzucicDeklaracje: `--` w środku nazwy nie wyrzuca własności', () => {
+  assert.ok(!czyOdrzucicDeklaracje('grid-template-columns', '1fr 1fr'));
+  assert.ok(!czyOdrzucicDeklaracje('font--dziwne', 'red'));
 });
 
 test('podzielSelektory: przecinek w :is() nie rozcina selektora', () => {
