@@ -492,7 +492,8 @@ export function sendMessage(db, user, { to, cc, bcc, from, subject, body, bodyHt
   return { message: getMessage(db, user.id, kopie[0].id) };
 }
 
-// Strażnik zaplanowanych: nadaje wszystko, czego termin właśnie minął. Zwraca liczbę nadanych.
+// Strażnik zaplanowanych: podejmuje wszystko, czego termin właśnie minął.
+// Zwraca liczbę podjętych, nie doręczonych: list odmówiony też się liczy.
 export function fireScheduled(db) {
   const dojrzale = db
     .prepare("SELECT * FROM messages WHERE folder = 'scheduled' AND scheduled_at IS NOT NULL AND scheduled_at <= ?")
