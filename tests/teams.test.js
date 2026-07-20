@@ -395,6 +395,67 @@ test('zaplanowany list na adres zespołu rozchodzi się do członków', () => {
   db.close();
 });
 
+// Rozdzielnik zaplanowanych jest osobną implementacją niż resolveRecipients (spec §8),
+// więc deduplikacja po id skrzynki musi mieć własne przypięcie. Bez tego skreślenie
+// warunku w mail.js zostawia suitę zieloną, a członek dostaje list dwa razy · dokładnie
+// ta klasa błędu, którą naprawiał 9a06f95 po stronie wysyłki natychmiastowej.
+test('zaplanowany list: członek zaadresowany też wprost dostaje jedną kopię, nie dwie', () => {
+  for (const koperta of [
+    'jan@twojapoczta.com, sprzedaz@twojapoczta.com',
+    'sprzedaz@twojapoczta.com, jan@twojapoczta.com',
+  ]) {
+    const db = openMemoryDb();
+    const nadawca = { id: konto(db, 'klient'), login: 'klient', name: 'Klient' };
+    const jan = konto(db, 'jan');
+    const ania = konto(db, 'ania');
+    const zespol = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+    setMember(db, zespol.id, jan, false);
+    setMember(db, zespol.id, ania, false);
+
+    sendMessage(db, nadawca, {
+      to: koperta,
+      subject: 'Raz',
+      body: 'x',
+      scheduledAt: new Date(Date.now() + 1000).toISOString(),
+    });
+    db.prepare("UPDATE messages SET scheduled_at = ? WHERE folder = 'scheduled'").run(new Date(Date.now() - 1000).toISOString());
+    assert.equal(fireScheduled(db), 1);
+
+    const kopie = (id) =>
+      db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND folder = 'inbox'").get(id).n;
+    assert.equal(kopie(jan), 1, `Jan wpadł w kopertę „${koperta}" dwa razy, a kopia ma być jedna`);
+    assert.equal(kopie(ania), 1, 'reszta zespołu dostaje swoją kopię normalnie');
+    db.close();
+  }
+});
+
+test('zaplanowany list na dwa zespoły ze wspólnym członkiem: nadal jedna kopia', () => {
+  const db = openMemoryDb();
+  const nadawca = { id: konto(db, 'klient'), login: 'klient', name: 'Klient' };
+  const jan = konto(db, 'jan');
+  const ania = konto(db, 'ania');
+  const sprzedaz = createTeam(db, { localPart: 'sprzedaz', name: 'Dział Sprzedaży' });
+  const wsparcie = createTeam(db, { localPart: 'wsparcie', name: 'Wsparcie' });
+  setMember(db, sprzedaz.id, jan, false);
+  setMember(db, sprzedaz.id, ania, false);
+  setMember(db, wsparcie.id, jan, false); // jan siedzi w obu
+
+  sendMessage(db, nadawca, {
+    to: 'sprzedaz@twojapoczta.com, wsparcie@twojapoczta.com',
+    subject: 'Do obu',
+    body: 'x',
+    scheduledAt: new Date(Date.now() + 1000).toISOString(),
+  });
+  db.prepare("UPDATE messages SET scheduled_at = ? WHERE folder = 'scheduled'").run(new Date(Date.now() - 1000).toISOString());
+  assert.equal(fireScheduled(db), 1);
+
+  const kopie = (id) =>
+    db.prepare("SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND folder = 'inbox'").get(id).n;
+  assert.equal(kopie(jan), 1, 'członek dwóch zaadresowanych zespołów dostaje jedną kopię');
+  assert.equal(kopie(ania), 1, 'członek jednego z nich dostaje swoją');
+  db.close();
+});
+
 test('zaplanowany list na pusty zespół wraca zwrotem, nie znika', () => {
   const db = openMemoryDb();
   const nadawca = { id: konto(db, 'klient'), login: 'klient', name: 'Klient' };
