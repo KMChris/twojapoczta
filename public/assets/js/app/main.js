@@ -412,14 +412,20 @@ function renderujCzytnik() {
   // przez CORS. Zamiast udawać nieomylność, dajemy furtkę.
   if (przerobioneKolory) {
     const furtka = ikonaAkcji('Oryginalne kolory', 'ustawienia', () => {
-      const { zdalne: ile } = renderujTresc(body, w, {
-        cid: stan.cidOtwartej,
-        // Jeśli nie ma już zaparkowanych obrazków, użytkownik je odblokował
-        // (albo nigdy ich nie było) · nie cofamy tej decyzji przy przerysowaniu.
-        obrazki: !body.querySelector('img[data-src]'),
-        oryginalneKolory: true,
-      });
-      if (!ile) czytnikEl.querySelector('.cz-obrazki')?.remove();
+      // renderujTresc parkuje zdalne obrazki OD NOWA, więc bez zapamiętania decyzji
+      // furtka cofnęłaby świadome „Pokaż obrazki": obrazki wróciłyby zaparkowane, a
+      // belka (już usunięta po odblokowaniu) nie miałaby jak ich znów odsłonić.
+      // Selektor obejmuje OBA schowki bramki (data-src ORAZ data-background), tak samo
+      // jak pokazObrazki — węższe `img[data-src]` uznałoby list z pikselem tylko w
+      // data-background za „odblokowany" i odsłoniłoby go bez zgody użytkownika.
+      const obrazkiPokazane = !body.querySelector('[data-src], [data-background]');
+      renderujTresc(body, w, { cid: stan.cidOtwartej, oryginalneKolory: true });
+      // Wyłącznie gdy użytkownik SAM je wcześniej pokazał — nigdy bez zgody.
+      if (obrazkiPokazane) pokazObrazki(body);
+      // Belka schodzi po FAKTYCZNYM stanie drzewa: tylko gdy nie ma już nic do odblokowania.
+      if (!body.querySelector('[data-src], [data-background]')) {
+        czytnikEl.querySelector('.cz-obrazki')?.remove();
+      }
       furtka.remove(); // droga w jedną stronę; ponowne otwarcie listu wraca do przeróbki
     });
     akcje.append(furtka);
