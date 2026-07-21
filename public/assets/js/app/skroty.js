@@ -123,6 +123,17 @@ export function initSkroty(app, kompozycja) {
       cel instanceof HTMLSelectElement ||
       cel.isContentEditable;
 
+    // Przycisk i odnośnik same obsługują Enter i spację — przeglądarka zamienia je na
+    // kliknięcie. Skrót globalny zdublowałby więc jedno naciśnięcie na dwie akcje i to
+    // on wygrywa: `Enter` → otworzZaznaczona() przerenderowuje czytnik i kasuje efekt
+    // kliknięcia (belka „Pokaż obrazki" odparkowywała obrazki i natychmiast parkowała
+    // je z powrotem). Osobny warunek, a nie poszerzenie `wPolu`, bo `wPolu` steruje też
+    // gałęzią `Escape` (cel.blur()), a przycisk nie jest polem tekstowym i nie ma się
+    // rozmywać. `Escape` celowo zostaje poza tym wyjątkiem — jest obsłużone niżej, ale
+    // PRZED wczesnym powrotem, więc zamykanie czytnika i okien nadal działa wszędzie,
+    // także na zafokusowanym przycisku.
+    const naPrzycisku = cel instanceof HTMLButtonElement || cel instanceof HTMLAnchorElement;
+
     if (e.key === 'Escape') {
       if (document.querySelector('dialog[open]')) return; // dialog zamyka się sam
       if (kompozycja.zamknijNakladki()) return; // najpierw dymki i okienko planowania
@@ -138,7 +149,7 @@ export function initSkroty(app, kompozycja) {
       return;
     }
 
-    if (wPolu || document.querySelector('dialog[open]')) return;
+    if (wPolu || naPrzycisku || document.querySelector('dialog[open]')) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     // Otwarta kompozycja blokuje skróty zmieniające stan; szukanie i pomoc mają działać.
     if (kompozycja.otwarte() && e.key !== '/' && e.key !== '?') return;
