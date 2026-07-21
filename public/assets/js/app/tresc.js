@@ -30,8 +30,9 @@
 import { wstawTrescZLinkami } from './ui.js';
 import {
   DOZWOLONE_TAGI, WYTNIJ_W_CALOSCI, dozwoloneAtrybuty, bezpiecznyLink,
-  ocenUrlObrazka, czyOdrzucicDeklaracje, zakresujSelektor,
+  ocenUrlObrazka, czyOdrzucicDeklaracje, zakresujSelektor, rozstrzygnijMedia,
 } from './reguly.js';
+import { rgbNaOklch, odwrocJasnosc, parsujRgb, zapiszRgb } from './kolor.js';
 
 let licznik = 0;
 
@@ -67,7 +68,9 @@ export function renderujTresc(kontener, wiadomosc, opcje = {}) {
 // kontenerze z tekstem to identyfikator listu wiszący nad cudzą treścią.
 function wyczyscKontener(kontener) {
   kontener.replaceChildren();
-  kontener.classList.remove('cz-body-list');
+  // `cz-body-kartka` też schodzi: wyjątek w renderze HTML mógł polecieć już PO jej
+  // ustawieniu, a jasna kartka nad tekstowym fallbackiem to biały prostokąt bez powodu.
+  kontener.classList.remove('cz-body-list', 'cz-body-kartka');
   kontener.removeAttribute('id');
 }
 
@@ -79,8 +82,14 @@ function renderujTekst(kontener, wiadomosc) {
   return { zdalne: 0 };
 }
 
-function renderujHtml(kontener, wiadomosc, { cid = {}, obrazki = false }) {
-  const kontekst = { id: `list-${++licznik}`, cid, obrazki, zdalne: 0 };
+function renderujHtml(kontener, wiadomosc, { cid = {}, obrazki = false, oryginalneKolory = false }) {
+  const ciemny = document.documentElement.dataset.theme === 'dark';
+  const kontekst = {
+    id: `list-${++licznik}`, cid, obrazki, zdalne: 0,
+    ciemny: ciemny && !oryginalneKolory,
+    wlasnyCiemny: false,
+    pierwszeTlo: undefined,
+  };
   const doc = new DOMParser().parseFromString(wiadomosc.body_html, 'text/html');
 
   // Treść <style> zbieramy zanim czyscDrzewo usunie te elementy z drzewa. Odsiewamy przy
@@ -93,15 +102,26 @@ function renderujHtml(kontener, wiadomosc, { cid = {}, obrazki = false }) {
   czyscDrzewo(doc.body, kontekst);
   const arkusz = przetworzStyle(zrodlaStylow, kontekst);
 
+  // Decyzja raz na list, nie na element: mieszanie dałoby ciemną stopkę przy
+  // rozjaśnionej treści. Brak tła traktujemy jak jasne, bo maile projektuje
+  // się na biel.
+  const jasny = !kontekst.pierwszeTlo || rgbNaOklch(kontekst.pierwszeTlo).L > 0.5;
+  const pasmo = kontekst.ciemny && !kontekst.wlasnyCiemny && jasny ? pasmoJasnosci() : null;
+  if (pasmo) przepiszKoloryDrzewa(doc.body, pasmo);
+
   kontener.id = kontekst.id;
   kontener.classList.add('cz-body-list');
+  kontener.classList.toggle('cz-body-kartka', oryginalneKolory && ciemny);
   if (arkusz) {
     const styl = document.createElement('style');
-    styl.textContent = arkusz;
+    // Inwersję arkusza puszczamy PO przetworzStyle (allowlista funkcji, wykrycie
+    // podstawienia var()) — wejście jest już czyste, przepiszDeklaracje tylko odwraca
+    // kolory, więc druga runda CSSOM nie otwiera z powrotem kanału url()/var().
+    styl.textContent = pasmo ? przepiszArkusz(arkusz, pasmo) : arkusz;
     kontener.append(styl);
   }
   kontener.append(...doc.body.childNodes);
-  return { zdalne: kontekst.zdalne };
+  return { zdalne: kontekst.zdalne, przerobioneKolory: Boolean(pasmo) };
 }
 
 // --- Drzewo --------------------------------------------------------------------
@@ -145,7 +165,15 @@ function czyscAtrybuty(wezel, kontekst) {
     if (nazwa.startsWith('on') || !dozwolone.includes(nazwa)) wezel.removeAttribute(atrybut.name);
   }
 
-  if (wezel.hasAttribute('style')) czyscStylInline(wezel);
+  // `bgcolor` to staroszkolny sposób na tło i newslettery wciąż go używają.
+  // Przenosimy go do stylu, żeby inwersja miała jedno miejsce do przepisania.
+  const bgcolor = wezel.getAttribute('bgcolor');
+  if (bgcolor) {
+    wezel.style.backgroundColor = bgcolor;
+    wezel.removeAttribute('bgcolor');
+  }
+
+  if (wezel.hasAttribute('style')) czyscStylInline(wezel, kontekst);
 
   if (tag === 'A') {
     const href = bezpiecznyLink(wezel.getAttribute('href'));
@@ -234,8 +262,16 @@ export function pokazObrazki(kontener) {
   }
 }
 
-function czyscStylInline(wezel) {
+function czyscStylInline(wezel, kontekst) {
   oczyscDeklaracje(wezel.style);
+
+  // Pierwsze nieprzezroczyste tło w kolejności dokumentu to tło najbardziej
+  // zewnętrznego elementu, który je ustawia. Na nim opieramy decyzję o inwersji.
+  if (kontekst.pierwszeTlo === undefined) {
+    const tlo = normalizujKolor(wezel.style.backgroundColor);
+    if (tlo && tlo.a > 0.5) kontekst.pierwszeTlo = tlo;
+  }
+
   if (!wezel.getAttribute('style')) wezel.removeAttribute('style');
 }
 
@@ -326,14 +362,124 @@ function przetworzRegule(regula, kontekst) {
     return `${zakresujSelektor(regula.selectorText, kontekst.id)} { ${regula.style.cssText} }`;
   }
   if (regula instanceof CSSMediaRule) {
+    const rozstrzygniecie = rozstrzygnijMedia(regula.conditionText, kontekst.ciemny);
+    if (rozstrzygniecie.decyzja === 'odrzuc') return '';
+    // List, który ma własny dark mode, dostaje swój. Nadawca wie lepiej niż
+    // nasza inwersja, więc notujemy to i inwersji nie nakładamy.
+    if (rozstrzygniecie.decyzja !== 'zostaw' || rozstrzygniecie.warunek !== regula.conditionText) {
+      kontekst.wlasnyCiemny = true;
+    }
     const wewnetrzne = [...regula.cssRules]
       .map((r) => przetworzRegule(r, kontekst))
       .filter(Boolean)
       .join('\n');
     if (!wewnetrzne) return '';
-    return `@media ${regula.conditionText} { ${wewnetrzne} }`;
+    if (rozstrzygniecie.decyzja === 'bezwarunkowo') return wewnetrzne;
+    return `@media ${rozstrzygniecie.warunek} { ${wewnetrzne} }`;
   }
   // @import i @font-face to sieć, czyli śledzenie. @keyframes i reszta
   // odpadają, bo nazwy animacji zderzałyby się z animacjami aplikacji.
   return '';
+}
+
+// --- Ciemny motyw ---------------------------------------------------------------
+
+// Literał koloru w wartości złożonej (gradient, box-shadow). Przybliżenie,
+// i tak jest opisane w specyfikacji.
+//
+// Uwaga: to wyrażenie ma flagę `g`, więc NIE wolno wołać na nim `.test()`.
+// `.test()` na wyrażeniu z `g` jest stanowe przez `lastIndex` i dla tego
+// samego wejścia zwraca naprzemiennie true i false. Używamy tylko `.replace()`,
+// które `lastIndex` zeruje samo.
+const LITERAL_KOLORU = /#[0-9a-f]{3,8}\b|\brgba?\([^)]*\)|\bhsla?\([^)]*\)/gi;
+
+// Normalizację nazw, hexów i hsl() zostawiamy przeglądarce: wpisujemy wartość w element
+// i odczytujemy z powrotem. ALE odczyt MUSI iść przez getComputedStyle — inline
+// `style.color` NIE rozwija nazw (`white` wraca jako "white", nie rgb), a wtedy
+// `parsujRgb` zwraca null i `bgcolor="white"` zostaje białym prostokątem w ciemnym
+// motywie, czyli dokładnie ta skarga, dla której cała funkcja powstaje. Próbka MUSI
+// wisieć w dokumencie: getComputedStyle na odczepionym elemencie oddaje "" dla wszystkiego.
+const probka = document.createElement('span');
+document.body.append(probka);
+
+// Słowa kluczowe CSS przechodzą bramę inline (nie są ""), a getComputedStyle rozwiązałby
+// je do koloru RODZICA — czyli do podwójnej inwersji, bo przepiszKoloryDrzewa idzie po
+// [style] w kolejności dokumentu (rodzic przed dzieckiem), więc dziecko dziedziczyłoby już
+// odwrócony kolor i odwróciło go drugi raz. Zostawiamy je nietknięte: dziecko naturalnie
+// odziedziczy odwrócony kolor rodzica, poprawnie i za darmo.
+const SLOWA_KLUCZOWE_KOLORU = new Set(['inherit', 'initial', 'unset', 'revert', 'currentcolor']);
+
+function normalizujKolor(wartosc) {
+  probka.style.color = '';
+  probka.style.color = String(wartosc ?? '').trim();
+  // Brama na inline setterze: CSSOM odrzuca nie-kolory do "" (`12px`, `garbage`, `inherit`
+  // jest niepuste — stąd osobny warunek niżej). Bez tej bramy getComputedStyle oddałby dla
+  // śmiecia odziedziczony kolor domyślny i odwrócilibyśmy nie-kolor.
+  if (!probka.style.color) return null;
+  if (SLOWA_KLUCZOWE_KOLORU.has(probka.style.color.toLowerCase())) return null;
+  // Dopiero teraz rozwijamy nazwę/hsl na rgb. oklch()/lab() zostają dosłowne obiema drogami,
+  // więc parsujRgb je pomija — granica CSS Color 4, znane ograniczenie.
+  return parsujRgb(getComputedStyle(probka).color);
+}
+
+// Pasmo bierzemy z tokenów w czasie działania, nie na sztywno, więc zmiana
+// palety pociąga inwersję za sobą.
+function pasmoJasnosci() {
+  const style = getComputedStyle(document.documentElement);
+  const papier = normalizujKolor(style.getPropertyValue('--papier'));
+  const atrament = normalizujKolor(style.getPropertyValue('--atrament'));
+  if (!papier || !atrament) return null;
+  return { lMin: rgbNaOklch(papier).L, lMax: rgbNaOklch(atrament).L };
+}
+
+// Zwraca nową wartość albo null, gdy nie ma czego przepisywać. Wartości
+// nie-kolorowe (`12px`, `inherit`, `transparent`) przechodzą przez oba etapy
+// i wypadają jako null, więc nie trzeba trzymać listy właściwości kolorowych.
+function przepiszWartosc(wartosc, pasmo) {
+  const wprost = normalizujKolor(wartosc);
+  if (wprost) {
+    if (wprost.a === 0) return null; // przezroczyste zostaje przezroczyste
+    return zapiszRgb({ ...odwrocJasnosc(wprost, pasmo), a: wprost.a });
+  }
+  const tekst = String(wartosc);
+  const zmieniona = tekst.replace(LITERAL_KOLORU, (literal) => {
+    const rgb = normalizujKolor(literal);
+    return rgb ? zapiszRgb({ ...odwrocJasnosc(rgb, pasmo), a: rgb.a }) : literal;
+  });
+  return zmieniona === tekst ? null : zmieniona;
+}
+
+function przepiszDeklaracje(deklaracje, pasmo) {
+  for (const nazwa of [...deklaracje]) {
+    const nowa = przepiszWartosc(deklaracje.getPropertyValue(nazwa), pasmo);
+    if (nowa) deklaracje.setProperty(nazwa, nowa, deklaracje.getPropertyPriority(nazwa));
+  }
+}
+
+function przepiszKoloryDrzewa(rodzic, pasmo) {
+  for (const wezel of rodzic.querySelectorAll('[style]')) {
+    przepiszDeklaracje(wezel.style, pasmo);
+  }
+}
+
+// Arkusz jest już zakresowany i posklejany w string, więc przepuszczamy go
+// jeszcze raz przez CSSOM, zamiast trzymać reguły w pamięci. Bezpieczne, bo biegnie
+// PO przetworzStyle: wejście jest już odsiane (allowlista funkcji, wykrycie var()),
+// a przepiszDeklaracje tylko odwraca kolory — nie dokłada url(), var() ani skrótów.
+function przepiszArkusz(tekst, pasmo) {
+  const arkusz = new CSSStyleSheet();
+  try {
+    arkusz.replaceSync(tekst);
+  } catch {
+    return tekst;
+  }
+  przepiszRegulyArkusza(arkusz.cssRules, pasmo);
+  return [...arkusz.cssRules].map((r) => r.cssText).join('\n');
+}
+
+function przepiszRegulyArkusza(reguly, pasmo) {
+  for (const regula of reguly) {
+    if (regula instanceof CSSStyleRule) przepiszDeklaracje(regula.style, pasmo);
+    else if (regula.cssRules) przepiszRegulyArkusza(regula.cssRules, pasmo);
+  }
 }

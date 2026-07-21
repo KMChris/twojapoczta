@@ -811,6 +811,15 @@ a.boczny-link {
   max-width: 100%;
 }
 
+/* „Oryginalne kolory” w ciemnym motywie: list wraca na jasną kartkę, żeby
+   nie wisiał białym prostokątem bez oprawy. */
+[data-theme='dark'] .cz-body-kartka {
+  padding: 16px;
+  border-radius: var(--r-m);
+  background: #fbfaf7;
+  color: #191c24;
+}
+
 .w-spinacz {
   display: inline-flex;
   flex-shrink: 0;

@@ -405,7 +405,25 @@ function renderujCzytnik() {
   akcje.append(ikonaAkcji('Drukuj', 'print', () => window.print()));
 
   const body = el('div', { class: 'cz-body' });
-  const { zdalne } = renderujTresc(body, w, { cid: stan.cidOtwartej });
+  const { zdalne, przerobioneKolory } = renderujTresc(body, w, { cid: stan.cidOtwartej });
+
+  // Inwersja czasem chybi (logo w czarnej grafice na przezroczystym tle
+  // zniknie), a wykryć się tego nie da: canvas nie odczyta zdalnego obrazka
+  // przez CORS. Zamiast udawać nieomylność, dajemy furtkę.
+  if (przerobioneKolory) {
+    const furtka = ikonaAkcji('Oryginalne kolory', 'ustawienia', () => {
+      const { zdalne: ile } = renderujTresc(body, w, {
+        cid: stan.cidOtwartej,
+        // Jeśli nie ma już zaparkowanych obrazków, użytkownik je odblokował
+        // (albo nigdy ich nie było) · nie cofamy tej decyzji przy przerysowaniu.
+        obrazki: !body.querySelector('img[data-src]'),
+        oryginalneKolory: true,
+      });
+      if (!ile) czytnikEl.querySelector('.cz-obrazki')?.remove();
+      furtka.remove(); // droga w jedną stronę; ponowne otwarcie listu wraca do przeróbki
+    });
+    akcje.append(furtka);
+  }
 
   czytnikEl.append(powrot, naglowek, meta);
   if (zaplanowana && w.scheduled_at) {
