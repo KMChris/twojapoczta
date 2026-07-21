@@ -1471,6 +1471,55 @@ a.boczny-link {
   color: var(--polecony);
 }
 
+/* --- Belka zdalnych obrazków w czytniku ------------------------------------------ */
+
+/* Ton informacyjny, nie alarmowy: to nie jest błąd, tylko domyślna ochrona. Stąd
+   szara ikona i ciągła kreska zamiast czerwieni „poleconego". Zawija się, bo przy
+   wąskim czytniku przycisk i tak nie zmieści się obok zdania. */
+.cz-obrazki {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 1.1rem 0 0;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.88rem;
+  color: var(--atrament-2);
+  background: var(--koperta-tlo);
+  border: 1px solid var(--linia-2);
+  border-radius: var(--r-m);
+}
+
+.cz-obrazki svg {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  color: var(--stempel);
+}
+
+.cz-obrazki-tekst {
+  flex: 1;
+  min-width: 12rem;
+}
+
+.cz-obrazki-akcja {
+  flex-shrink: 0;
+  padding: 0.4em 0.9em;
+  font: inherit;
+  font-weight: 620;
+  color: var(--atrament);
+  background: var(--papier);
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-s);
+  cursor: pointer;
+  transition: border-color var(--przejscie), background var(--przejscie);
+}
+
+.cz-obrazki-akcja:hover {
+  background: var(--papier-2);
+  border-color: var(--atrament);
+}
+
 .kompozycja-stempel {
   position: absolute;
   top: 46%;

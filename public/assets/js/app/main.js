@@ -5,7 +5,7 @@ import {
   el, ikona, krotkiCzas, pelnaData, inicjaly, kolorAwatara, toast, formatujRozmiar,
 } from './ui.js';
 import { initKompozycja, zbudujOdpowiedz, zbudujPrzekazanie } from './kompozycja.js';
-import { renderujTresc } from './tresc.js';
+import { renderujTresc, pokazObrazki } from './tresc.js';
 import { initSkroty } from './skroty.js';
 import { initFoldery } from './foldery.js';
 
@@ -300,6 +300,36 @@ function ikonaAkcji(tytul, nazwaIkony, klik, { aktywna = false } = {}) {
   );
 }
 
+// Belka pojawia się tylko wtedy, gdy renderer faktycznie coś zaparkował. Zdalny
+// obrazek zdradza nadawcy moment otwarcia listu i adres IP, więc domyślnie nie
+// wczytujemy go wcale — wczytanie ma być świadomą decyzją, jednym kliknięciem.
+// `ile` bierzemy z renderera, a nie z własnego przeliczenia drzewa: to ta sama
+// liczba, którą pokazObrazki za chwilę przywróci.
+function belkaObrazkow(body, ile) {
+  const belka = el('div', { class: 'cz-obrazki' });
+  belka.append(
+    ikona('image'),
+    el(
+      'span',
+      { class: 'cz-obrazki-tekst' },
+      `Ta wiadomość zawiera obrazki z zewnątrz (${ile}). Wczytanie ich powie nadawcy, że list został otwarty.`
+    ),
+    el(
+      'button',
+      {
+        class: 'cz-obrazki-akcja',
+        type: 'button',
+        onclick: () => {
+          pokazObrazki(body);
+          belka.remove();
+        },
+      },
+      'Pokaż obrazki'
+    )
+  );
+  return belka;
+}
+
 function renderujCzytnik() {
   const w = stan.otwarta;
   czytnikEl.replaceChildren();
@@ -375,7 +405,7 @@ function renderujCzytnik() {
   akcje.append(ikonaAkcji('Drukuj', 'print', () => window.print()));
 
   const body = el('div', { class: 'cz-body' });
-  renderujTresc(body, w, { cid: stan.cidOtwartej });
+  const { zdalne } = renderujTresc(body, w, { cid: stan.cidOtwartej });
 
   czytnikEl.append(powrot, naglowek, meta);
   if (zaplanowana && w.scheduled_at) {
@@ -388,7 +418,9 @@ function renderujCzytnik() {
       )
     );
   }
-  czytnikEl.append(akcje, body);
+  czytnikEl.append(akcje);
+  if (zdalne) czytnikEl.append(belkaObrazkow(body, zdalne));
+  czytnikEl.append(body);
 
   if (stan.zalacznikiOtwartej.length) {
     const lista = el('div', { class: 'cz-zalaczniki-lista' });

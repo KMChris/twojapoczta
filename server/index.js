@@ -23,7 +23,15 @@ function setSecurityHeaders(res) {
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-      "img-src 'self' data:; font-src 'self'; connect-src 'self'; " +
+      // https: i http: są tu dla obrazków w listach, które użytkownik świadomie
+      // odblokował belką „Pokaż obrazki". Domyślnie i tak nie wczytujemy ich wcale:
+      // blokada siedzi w atrybucie-schowku (data-src, data-background), a CSP jest
+      // tylko drugą linią. http: musi być na liście, bo ocenUrlObrazka parkuje także
+      // adresy http:// — a aplikacja sama chodzi po http (server.listen niżej), więc
+      // blokada mixed content w ogóle się nie włącza i CSP jest tu jedyną bramką.
+      // Gdyby aplikacja stanęła kiedyś za TLS, obrazki http:// odetnie właśnie mixed
+      // content, czyli warstwa właściwsza, i ten człon można wtedy zdjąć.
+      "img-src 'self' data: https: http:; font-src 'self'; connect-src 'self'; " +
       "base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
   );
   res.setHeader('X-Content-Type-Options', 'nosniff');

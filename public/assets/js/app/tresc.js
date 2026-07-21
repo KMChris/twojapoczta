@@ -207,6 +207,33 @@ function bramkujObrazek(wezel, kontekst, { atrybut, schowek, poOdrzuceniu }) {
   poOdrzuceniu(wezel); // 'odrzuc'
 }
 
+// Kanały bramkowane wyżej, od strony odwrotnej: atrybut-schowek → atrybut docelowy.
+// Ta lista MUSI zostać zgodna z wywołaniami bramkujObrazek, bo to jest kontrakt belki
+// „Pokaż obrazki": kontekst.zdalne liczy dokładnie tyle, ile pokazObrazki przywróci.
+// Dołożenie trzeciego kanału do bramki bez dopisania go tutaj sprawia, że belka mówi
+// o N obrazkach, przywraca mniej i znika — a razem z nią jedyna droga do reszty.
+const SCHOWKI_OBRAZKOW = [
+  ['data-src', 'src'],
+  ['data-background', 'background'],
+];
+
+// Belka „Pokaż obrazki" przepina zaparkowane adresy w miejscu. Bez ponownego renderu,
+// bo blokada siedzi w atrybucie-schowku, a nie w CSP: wystarczy zmienić nazwę atrybutu
+// i przeglądarka pobiera obrazek sama.
+//
+// Wartości nie oceniamy drugi raz i nie musimy. Do schowka trafia wyłącznie to, co
+// ocenUrlObrazka uznało za 'zdalny' (czyli http/https), a data-src przyniesione przez
+// nadawcę nie ma prawa dożyć tego miejsca: filtr atrybutów w czyscAtrybuty biegnie
+// PRZED bramką i żadna allowlista nie zna data-*.
+export function pokazObrazki(kontener) {
+  for (const [schowek, atrybut] of SCHOWKI_OBRAZKOW) {
+    for (const wezel of kontener.querySelectorAll(`[${schowek}]`)) {
+      wezel.setAttribute(atrybut, wezel.getAttribute(schowek));
+      wezel.removeAttribute(schowek);
+    }
+  }
+}
+
 function czyscStylInline(wezel) {
   oczyscDeklaracje(wezel.style);
   if (!wezel.getAttribute('style')) wezel.removeAttribute('style');
