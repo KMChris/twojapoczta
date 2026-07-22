@@ -301,7 +301,18 @@ function czyscStylInline(wezel, kontekst) {
     if (tlo && tlo.a > 0.5) kontekst.pierwszeTlo = tlo;
   }
 
-  if (!wezel.getAttribute('style')) wezel.removeAttribute('style');
+  // Atrybut przepisujemy z KANONICZNEJ serializacji CSSOM (wezel.style.cssText), nie
+  // zostawiamy surowego źródła. Gdy CSSOM odrzuci deklarację już przy parsowaniu (bo jest
+  // nieprawidłowa: `background:url(javascript:alert(1))`, `width:expression(...)`,
+  // `-moz-binding:url(...)`), nie trafia ona do wezel.style, więc oczyscDeklaracje nie ma
+  // czego usunąć ani co przepisać — a getAttribute('style') oddawał wtedy surowy string
+  // źródłowy z bezwładnym junkiem. cssText niesie wyłącznie to, co parser przyjął i co
+  // przeżyło sanityzację, więc nieprzeczytanego junku nie ma jak w nim zostać. Reserializacja
+  // jest idempotentna i bezpieczna: ustawiamy atrybut na WŁASNĄ serializację CSSOM, którą
+  // przeglądarka odczyta tym SAMYM parserem — bez rozbieżności serializacja↔parser.
+  const czyste = wezel.style.cssText;
+  if (czyste) wezel.setAttribute('style', czyste);
+  else wezel.removeAttribute('style');
 }
 
 // Polityka URL-i w CSS to allowlista funkcji z reguly.js, nie szukanie URL-i: wartość
@@ -567,7 +578,7 @@ function zbudujGrupeCytatu(cytat) {
 
 // Odróżnia linię atrybucji od prozy zakończonej „…napisał(a):”. Dwa warunki naraz:
 // (1) tekst kończy się suffiksem atrybucji, (2) niesie cyfrę. Nasza atrybucja zawsze
-// zaczyna się datą („21 lipca 2026, 14:30, Jan napisał(a):”), więc cyfrę ma; proza
+// niesie datę i godzinę („pt., 17 lip 2026 o 09:24 Jan <…> napisał(a):”), więc cyfrę ma; proza
 // odpowiedzi tuż przed cytatem zwykle nie („Dzięki wielkie za pomoc! Jan napisał(a):”).
 // Bez warunku (2) obcy klient, który sklei odpowiedź i atrybucję w jeden goły węzeł
 // tekstowy, schowałby odpowiedź pod „•••”. Kierunek awarii bezpieczny: brak cyfry → NIE
