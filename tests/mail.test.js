@@ -16,7 +16,8 @@ import {
 } from '../server/mail.js';
 
 // Fałszywy serwer SMTP, który przyjmuje wszystko i oddaje surowe bajty listu.
-// Potrzebny, bo dopiero na drucie widać, czy `cid:` ma jeszcze kotwicę Content-ID.
+// Potrzebny, bo dopiero na drucie widać to, czego wiersz w `messages` nie pokazuje:
+// czy `cid:` ma jeszcze kotwicę Content-ID i co klient spoza domeny czyta w `From`.
 function startSink() {
   const odebrane = [];
   const server = net.createServer((sock) => {
@@ -841,45 +842,6 @@ test('updateMessage: do scheduled nie wolno, wyjście z scheduled czyści termin
   assert.equal(updateMessage(db, users.demo, zwykla.id, { folder: 'scheduled' }), null);
   db.close();
 });
-
-// Fałszywy serwer SMTP, który przyjmuje wszystko i oddaje surowe bajty listu.
-// Potrzebny, bo dopiero na drucie widać, co klient spoza domeny naprawdę czyta.
-function startSink() {
-  const odebrane = [];
-  const server = net.createServer((sock) => {
-    let buf = '';
-    let wDanych = false;
-    let dane = '';
-    sock.write('220 sink ESMTP\r\n');
-    sock.on('data', (d) => {
-      buf += d.toString('latin1');
-      let idx;
-      while ((idx = buf.indexOf('\r\n')) !== -1) {
-        const linia = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        if (wDanych) {
-          if (linia === '.') {
-            wDanych = false;
-            odebrane.push(dane);
-            dane = '';
-            sock.write('250 2.0.0 ok\r\n');
-          } else dane += linia + '\r\n';
-          continue;
-        }
-        const cmd = linia.slice(0, 4).toUpperCase();
-        if (cmd === 'DATA') {
-          sock.write('354 dawaj\r\n');
-          wDanych = true;
-        } else if (cmd === 'QUIT') {
-          sock.write('221 pa\r\n');
-          sock.end();
-        } else sock.write('250 ok\r\n');
-      }
-    });
-    sock.on('error', () => sock.destroy());
-  });
-  return { server, odebrane };
-}
 
 // Zewnętrzne ramię tożsamości zespołu. Mieszka tu, a nie w teams.test.js, bo to plik
 // od drutu: klient spoza domeny czyta bajty nagłówka From, nie wiersz w `messages`.
