@@ -52,6 +52,16 @@ const PRZODKOWIE_WYCINANYCH = [...WYTNIJ_W_CALOSCI]
   .map((tag) => tag.toLowerCase())
   .join(', ');
 
+// Twardy limit głębokości rekurencji czyscDrzewo. Bez niego list z bardzo głęboko
+// zagnieżdżonym HTML (osiągalny w limicie 2 MB treści od obcego nadawcy) wiesza kartę
+// czytnika: zmierzone 12 tys. poziomów zjada ~466 ms na głównym wątku, a rzędy dziesiątek
+// tysięcy — sekundy albo przepełnienie stosu. 256 dobieramy z dwóch stron naraz: z góry
+// z ogromnym zapasem nad uczciwą pocztą (nawet gęsto zagnieżdżone tabele newsletterów to
+// ~20-50 poziomów), z dołu daleko pod progiem, przy którym render zaczyna gryźć (tysiące).
+// 256 rekurencji jest natychmiastowe. Za limitem czyscDrzewo ucina całe poddrzewo, więc
+// limit chroni wydajność, nie zmieniając wyniku dla żadnego realnego listu.
+const MAX_GLEBOKOSC = 256;
+
 export function renderujTresc(kontener, wiadomosc, opcje = {}) {
   wyczyscKontener(kontener);
   // Normalny tekst zwija cytaty pod „•••”. Fallback niżej woła renderujTekst BEZ tej
@@ -153,7 +163,17 @@ function nazwaTagu(wezel) {
   return wezel.tagName.toUpperCase();
 }
 
-function czyscDrzewo(rodzic, kontekst) {
+function czyscDrzewo(rodzic, kontekst, glebokosc = 0) {
+  // Za twardym limitem ucinamy CAŁE poddrzewo i wracamy. Niezmiennik: do kontenera nigdy
+  // nie trafia węzeł, który nie przeszedł sanityzacji — dlatego ucięcie USUWA zbyt głębokie
+  // węzły, nie zostawia ich nietkniętych. rodzic jest w tym miejscu już bezpieczny: w ścieżce
+  // zejścia czyscAtrybuty biegnie PRZED rekurencją, a w ścieżce obcego tagu rodzic i tak zaraz
+  // znika przez unwrap. replaceChildren() kasuje więc wyłącznie jeszcze nietknięte dzieci spod
+  // granicy — nic z atrybutami on* ani innym ładunkiem nie przeżywa.
+  if (glebokosc > MAX_GLEBOKOSC) {
+    rodzic.replaceChildren();
+    return;
+  }
   for (const wezel of [...rodzic.childNodes]) {
     if (wezel.nodeType === Node.TEXT_NODE) continue;
     if (wezel.nodeType !== Node.ELEMENT_NODE) {
@@ -167,12 +187,12 @@ function czyscDrzewo(rodzic, kontekst) {
     }
     if (!DOZWOLONE_TAGI.has(tag)) {
       // Obcy znacznik znika, jego dzieci zostają (np. <article> → sama treść).
-      czyscDrzewo(wezel, kontekst);
+      czyscDrzewo(wezel, kontekst, glebokosc + 1);
       wezel.replaceWith(...wezel.childNodes);
       continue;
     }
     czyscAtrybuty(wezel, kontekst);
-    if (wezel.isConnected) czyscDrzewo(wezel, kontekst);
+    if (wezel.isConnected) czyscDrzewo(wezel, kontekst, glebokosc + 1);
   }
 }
 
