@@ -405,7 +405,14 @@ function renderujCzytnik() {
   akcje.append(ikonaAkcji('Drukuj', 'print', () => window.print()));
 
   const body = el('div', { class: 'cz-body' });
-  const { zdalne, przerobioneKolory } = renderujTresc(body, w, { cid: stan.cidOtwartej });
+  const { zdalne, przerobioneKolory, uzyteCid } = renderujTresc(body, w, { cid: stan.cidOtwartej });
+
+  // Opcja B: serwer oddaje wszystkie załączniki, a spinacze chowamy tylko dla tych, których
+  // obrazek renderer NAPRAWDĘ wstawił w treść (uzyteCid). Bez content_id spinacz nie znika
+  // nigdy; z content_id, którego treść nie wchłonęła, ZOSTAJE (to sedno opcji B). Liczymy raz,
+  // z pierwszego renderu: rozwiązanie cid nie zależy od „Oryginalnych kolorów" ani od obrazków,
+  // a re-render przy furtce nie przerysowuje tej sekcji.
+  const spinacze = stan.zalacznikiOtwartej.filter((z) => !z.content_id || !uzyteCid.has(z.content_id));
 
   // Inwersja czasem chybi (logo w czarnej grafice na przezroczystym tle
   // zniknie), a wykryć się tego nie da: canvas nie odczyta zdalnego obrazka
@@ -446,9 +453,9 @@ function renderujCzytnik() {
   if (zdalne) czytnikEl.append(belkaObrazkow(body, zdalne));
   czytnikEl.append(body);
 
-  if (stan.zalacznikiOtwartej.length) {
+  if (spinacze.length) {
     const lista = el('div', { class: 'cz-zalaczniki-lista' });
-    for (const z of stan.zalacznikiOtwartej) {
+    for (const z of spinacze) {
       lista.append(
         el(
           'a',
@@ -467,7 +474,8 @@ function renderujCzytnik() {
       el(
         'section',
         { class: 'cz-zalaczniki' },
-        el('p', { class: 'eyebrow' }, `Załączniki (${stan.zalacznikiOtwartej.length})`),
+        // Licznik liczy listę PO odfiltrowaniu skonsumowanych, żeby nagłówek nie kłamał.
+        el('p', { class: 'eyebrow' }, `Załączniki (${spinacze.length})`),
         lista
       )
     );

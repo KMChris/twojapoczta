@@ -89,7 +89,9 @@ function renderujTekst(kontener, wiadomosc, { zwijajCytaty = false } = {}) {
   // Pełny kształt jak renderujHtml: tekst nie ma kolorów do odwrócenia, więc `false`
   // na sztywno. Jawne pole zamiast `undefined` to porządek — `if (przerobioneKolory)`
   // w main.js dalej fałszywe, furtka „Oryginalne kolory” się nie pojawia.
-  return { zdalne: 0, przerobioneKolory: false };
+  // `uzyteCid` pusty: ścieżka tekstowa nie rozwiązuje żadnego cid, więc niczego nie
+  // skonsumowała. Pole MUSI być, bo main.js woła na nim `.has` niezależnie od ścieżki.
+  return { zdalne: 0, przerobioneKolory: false, uzyteCid: new Set() };
 }
 
 function renderujHtml(kontener, wiadomosc, { cid = {}, obrazki = false, oryginalneKolory = false }) {
@@ -99,6 +101,9 @@ function renderujHtml(kontener, wiadomosc, { cid = {}, obrazki = false, oryginal
     ciemny: ciemny && !oryginalneKolory,
     wlasnyCiemny: false,
     pierwszeTlo: undefined,
+    // Content-ID, które renderer faktycznie wstawił w treść (rozwiązał `cid:` na realny src).
+    // main.js chowa spinacz tylko dla tych — reszta załączników zostaje pod listem.
+    uzyteCid: new Set(),
   };
   const doc = new DOMParser().parseFromString(wiadomosc.body_html, 'text/html');
 
@@ -135,7 +140,7 @@ function renderujHtml(kontener, wiadomosc, { cid = {}, obrazki = false, oryginal
   // na treści w drzewie, zanim zwinięcie poprzenosi węzły do opakowania) i po wstawieniu
   // treści do kontenera (zwinCytaty szuka blockquote w kontenerze, nie w oderwanym doc).
   zwinCytaty(kontener);
-  return { zdalne: kontekst.zdalne, przerobioneKolory: Boolean(pasmo) };
+  return { zdalne: kontekst.zdalne, przerobioneKolory: Boolean(pasmo), uzyteCid: kontekst.uzyteCid };
 }
 
 // --- Drzewo --------------------------------------------------------------------
@@ -232,8 +237,15 @@ function bramkujObrazek(wezel, kontekst, { atrybut, schowek, poOdrzuceniu }) {
     // Object.prototype, więc `cid['toString']` oddałoby funkcję, a setAttribute wpisałby
     // jej źródło w src. `<img src="cid:toString">` to wystarczy, żeby wywołać.
     const url = Object.hasOwn(kontekst.cid, ocena.cid) ? kontekst.cid[ocena.cid] : null;
-    if (url) wezel.setAttribute(atrybut, url);
-    else wezel.removeAttribute(atrybut); // nieznany cid: złamany obrazek z alt, nie błąd renderu
+    if (url) {
+      wezel.setAttribute(atrybut, url);
+      // Faktycznie wstawiliśmy ten obrazek w treść, więc jego spinacz można schować pod listem.
+      // Porównanie po CAŁYM kluczu (Object.hasOwn wyżej) · klucz obcięty nie dopasuje się do
+      // pełnego odwołania, więc taki załącznik NIE trafi tu i zostanie widocznym spinaczem.
+      kontekst.uzyteCid.add(ocena.cid);
+    } else {
+      wezel.removeAttribute(atrybut); // nieznany cid: złamany obrazek z alt, nie błąd renderu
+    }
     return;
   }
   if (ocena.rodzaj === 'ok') {
