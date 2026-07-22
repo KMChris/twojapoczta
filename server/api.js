@@ -14,7 +14,6 @@ import { WELCOME_SUBJECT, WELCOME_BODY } from './seed.js';
 import {
   saveUpload, listAttachments, getAttachment, getAttachmentByCid, MAX_FILE_BYTES,
 } from './attachments.js';
-import { htmlCytujeCid } from './mime.js';
 import { now } from './db.js';
 import { registrationOpen, passwordMinLength } from './settings.js';
 import { aliasLimit, aliasCount, aliasesWord } from './aliases.js';
@@ -228,22 +227,20 @@ export function registerApiRoutes(router, db) {
       msg.is_read = 1;
     }
     const wszystkie = msg.attachments_count ? listAttachments(db, user.id, msg.id) : [];
-    // Osadzone są treścią, nie załącznikiem: idą do mapy `cid`, a z listy pod listem
-    // znikają, żeby logo z nagłówka nie udawało spinacza. Ale tylko te, które treść
-    // naprawdę cytuje · załącznik z Content-ID, którego nikt nie woła, zniknąłby
-    // z aplikacji zupełnie: nie ma go w treści i nie byłoby pod listem.
+    // Serwer nie zgaduje już, co jest osadzone: oddaje WSZYSTKIE załączniki pod listem i mapuje
+    // KAŻDY Content-ID. Który spinacz schować, rozstrzyga KLIENT — tylko on parsuje treść (DOM)
+    // i wie, który obrazek naprawdę wstawił. Fałszywy negatyw kosztuje wtedy złamany obrazek OBOK
+    // widocznego spinacza, a nie zgubiony plik (nie ma go ani w treści, ani pod listem).
     // Mapa bez prototypu, bo klucz daje nadawca · na zwykłym `{}` `Content-ID: <__proto__>`
-    // nie zapisałby się wcale (przypisanie idzie w setter prototypu), więc załącznik
-    // wypadłby z aplikacji: zdjęty z listy, a w mapie go nie ma.
+    // poszedłby w setter prototypu i wpis by zniknął, więc mapa nie oddałaby obrazka.
     const cid = Object.create(null);
     const attachments = [];
     for (const z of wszystkie) {
-      // Klucz jest jeden, więc bierze go pierwszy · drugi załącznik o tym samym Content-ID
-      // zostaje na liście, bo pod jednym adresem i tak wydamy tylko pierwszy.
-      if (z.content_id && !Object.hasOwn(cid, z.content_id) && htmlCytujeCid(msg.body_html, z.content_id)) {
+      attachments.push(z); // wszystkie zostają pod listem; o ukryciu spinacza decyduje klient
+      // Klucz jest jeden, więc przy zderzeniu Content-ID bierze go pierwszy · drugi i tak jest
+      // osiągalny pod listem zwykłą trasą załącznika.
+      if (z.content_id && !Object.hasOwn(cid, z.content_id)) {
         cid[z.content_id] = `/api/messages/${msg.id}/cid/${encodeURIComponent(z.content_id)}`;
-      } else {
-        attachments.push(z);
       }
     }
     json(res, 200, { message: msg, attachments, cid });

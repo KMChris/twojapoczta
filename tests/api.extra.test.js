@@ -385,20 +385,22 @@ test('cid: ten sam Content-ID w dwóch moich wiadomościach → każda oddaje sw
   assert.equal(await bajty(id2), 'OBRAZEK-DRUGIEJ');
 });
 
-test('cid: mapa w GET /api/messages/:id, a osadzone znikają z listy załączników', async () => {
+test('cid: mapa w GET /api/messages/:id zawiera każdy Content-ID, a serwer trzyma wszystkie załączniki na liście', async () => {
   const api = client();
   await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
   const id = wstawZObrazkiem(idUzytkownika('demo'), 'mapa@fir.ma');
   const { status, data } = await api('GET', `/api/messages/${id}`);
   assert.equal(status, 200);
   assert.equal(data.cid['mapa@fir.ma'], `/api/messages/${id}/cid/${encodeURIComponent('mapa@fir.ma')}`);
-  assert.equal(data.attachments.length, 0);
+  // Opcja B: osadzony obrazek zostaje TAKŻE pod listem · to klient chowa spinacz, gdy sam
+  // wstawi ten obrazek w treść. Serwer nie zdejmuje już nic z listy.
+  assert.deepEqual(data.attachments.map((z) => z.filename), ['logo.png']);
 });
 
-// Nic nie broni nadawcy przed wysłaniem dwóch części z tym samym Content-ID. Klucz w
-// mapie jest jeden, więc drugi załącznik musi zostać na liście · gdyby oba zniknęły z
-// listy, mapa oddawałaby tylko pierwszy, a drugi nie istniałby nigdzie w aplikacji.
-test('cid: dwa załączniki z tym samym Content-ID → pierwszy w mapie, drugi zostaje na liście', async () => {
+// Nic nie broni nadawcy przed wysłaniem dwóch części z tym samym Content-ID. Klucz w mapie
+// jest jeden (bierze go pierwszy), ale opcja B trzyma OBA załączniki pod listem · klient
+// schowa najwyżej ten spinacz, którego obrazek faktycznie wstawił w treść.
+test('cid: dwa załączniki z tym samym Content-ID → pierwszy w mapie, oba zostają na liście', async () => {
   const api = client();
   await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
   const ownerId = idUzytkownika('demo');
@@ -411,34 +413,37 @@ test('cid: dwa załączniki z tym samym Content-ID → pierwszy w mapie, drugi z
   storeAttachment(db, id, { filename: 'drugi.png', mime: 'image/png', data: Buffer.from('DRUGI'), contentId: 'dup@fir.ma' });
 
   const { data } = await api('GET', `/api/messages/${id}`);
-  // pierwszy: osiągalny w treści, przez mapę
+  // pierwszy: osiągalny w treści, przez mapę (klucz bierze pierwszy zapisany)
   const wMapie = await api.rawBody('GET', data.cid['dup@fir.ma']);
   assert.equal(Buffer.from(await wMapie.arrayBuffer()).toString(), 'PIERWSZY');
+  // oba zostają pod listem, w kolejności zapisu
+  assert.deepEqual(data.attachments.map((z) => z.filename), ['pierwszy.png', 'drugi.png']);
   // drugi: osiągalny pod listem, przez zwykłą trasę załącznika
-  assert.deepEqual(data.attachments.map((z) => z.filename), ['drugi.png']);
-  const naLiscie = await api.rawBody('GET', `/api/messages/${id}/attachments/${data.attachments[0].id}`);
+  const naLiscie = await api.rawBody('GET', `/api/messages/${id}/attachments/${data.attachments[1].id}`);
   assert.equal(Buffer.from(await naLiscie.arrayBuffer()).toString(), 'DRUGI');
 });
 
-// Content-ID jest polem nadawcy, więc `__proto__` jest zwykłym listem, nie atakiem.
-// Na mapie z prototypem takie przypisanie znika bez śladu, a załącznik jest już zdjęty
-// z listy · zostaje w bazie, ale w aplikacji nie ma go nigdzie.
+// Content-ID jest polem nadawcy, więc `__proto__` jest zwykłym listem, nie atakiem. Mapa bez
+// prototypu (Object.create(null)) przyjmuje go jak każdy inny klucz, a opcja B trzyma załącznik
+// także pod listem · na zwykłym `{}` przypisanie poszłoby w setter prototypu i wpis by zniknął.
 test('cid: Content-ID o nazwie klucza z prototypu trafia do mapy jak każdy inny', async () => {
   const api = client();
   await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
   const id = wstawZObrazkiem(idUzytkownika('demo'), '__proto__', 'BAJTY-PROTO');
   const { data } = await api('GET', `/api/messages/${id}`);
   assert.equal(data.cid['__proto__'], `/api/messages/${id}/cid/${encodeURIComponent('__proto__')}`);
+  // Opcja B: załącznik zostaje TAKŻE na liście, nie tylko w mapie.
+  assert.equal(data.attachments.length, 1);
   const res = await api.rawBody('GET', data.cid['__proto__']);
   assert.equal(Buffer.from(await res.arrayBuffer()).toString(), 'BAJTY-PROTO');
 });
 
-// Test mieszany, po połowie. `deepEqual(data.cid, {})` to czerwień tej zmiany: przed nią
-// odpowiedź nie miała pola `cid` w ogóle, więc asercja padała na `undefined`. Asercja o
-// liście jest charakteryzująca — przechodziła już wcześniej, bo `GET /api/messages/:id`
-// nie filtrował załączników. Obie pilnują tego samego: załącznika z Content-ID, którego
-// treść nie cytuje · gdyby zniknął z listy, nie byłoby go ani w treści, ani pod listem.
-test('cid: załącznik z Content-ID, którego treść nie cytuje, nadal zostaje na liście', async () => {
+// Opcja B odwraca ten test. Był dowodem starej polityki „serwer zgaduje po treści": treść nie
+// cytuje sieroty, więc serwer NIE mapował jej Content-ID (`data.cid` puste). Teraz serwer mapuje
+// KAŻDY Content-ID niezależnie od treści, a o pokazaniu spinacza decyduje klient (chowa go tylko,
+// gdy sam wstawił obrazek). Sierota trafia więc do mapy MIMO braku cytowania, a załącznik i tak
+// zostaje pod listem — bo klient tej treści nie wchłonął, więc spinacz zostanie widoczny.
+test('cid: serwer mapuje Content-ID niezależnie od cytowania, a załącznik zostaje na liście', async () => {
   const api = client();
   await api('POST', '/api/login', { login: 'demo', password: 'demo1234' });
   const ownerId = idUzytkownika('demo');
@@ -449,7 +454,7 @@ test('cid: załącznik z Content-ID, którego treść nie cytuje, nadal zostaje 
   const id = Number(wynik.lastInsertRowid);
   storeAttachment(db, id, { filename: 'sierota.png', mime: 'image/png', data: Buffer.from('png'), contentId: 'sierota@fir.ma' });
   const { data } = await api('GET', `/api/messages/${id}`);
-  assert.deepEqual(data.cid, {});
+  assert.equal(data.cid['sierota@fir.ma'], `/api/messages/${id}/cid/${encodeURIComponent('sierota@fir.ma')}`);
   assert.equal(data.attachments.length, 1);
   assert.equal(data.attachments[0].filename, 'sierota.png');
 });
