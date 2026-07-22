@@ -20,6 +20,7 @@ export function initZespoly() {
       el('span', { class: 'mono' }, m.address),
       el('label', { class: 'czlonek-prawo' },
         el('input', {
+          name: 'moze_wysylac',
           type: 'checkbox',
           ...(m.can_send ? { checked: 'checked' } : {}),
           onchange: async (e) => {
@@ -53,7 +54,7 @@ export function initZespoly() {
   }
 
   function karta(zespol) {
-    const wybor = el('select', {},
+    const wybor = el('select', { name: 'dopisz_konto' },
       el('option', { value: '' }, 'Dopisz konto…'),
       ...konta
         .filter((u) => !zespol.members.some((m) => m.user_id === u.id))
@@ -116,8 +117,8 @@ export function initZespoly() {
   }
 
   function rysuj() {
-    const adres = el('input', { type: 'text', placeholder: 'sprzedaz', maxlength: '30', 'aria-label': 'Adres zespołu' });
-    const nazwa = el('input', { type: 'text', placeholder: 'Dział Sprzedaży', maxlength: '60', 'aria-label': 'Nazwa zespołu' });
+    const adres = el('input', { name: 'adres', type: 'text', placeholder: 'sprzedaz', maxlength: '30', 'aria-label': 'Adres zespołu' });
+    const nazwa = el('input', { name: 'nazwa', type: 'text', placeholder: 'Dział Sprzedaży', maxlength: '60', 'aria-label': 'Nazwa zespołu' });
 
     kontener.replaceChildren(
       el('div', { class: 'sekcja-naglowek' }, el('h1', {}, 'Zespoły')),

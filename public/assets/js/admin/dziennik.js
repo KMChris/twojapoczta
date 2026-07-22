@@ -47,7 +47,7 @@ export function initDziennik() {
   }
 
   function renderuj(events) {
-    const wybor = el('select', { class: 'filtr-dziennika', 'aria-label': 'Filtruj po typie zdarzenia' },
+    const wybor = el('select', { name: 'typ_zdarzenia', class: 'filtr-dziennika', 'aria-label': 'Filtruj po typie zdarzenia' },
       el('option', { value: '' }, 'Wszystkie zdarzenia'),
       ...Object.entries(AKCJE).map(([wartosc, etykieta]) =>
         el('option', { value: wartosc }, etykieta)

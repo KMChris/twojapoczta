@@ -37,6 +37,7 @@ export function initUzytkownicy(stan) {
 
   function renderuj() {
     const szukajInput = el('input', {
+      name: 'filtr',
       type: 'search',
       placeholder: 'Filtruj konta…',
       'aria-label': 'Filtruj konta',
@@ -195,7 +196,7 @@ export function initUzytkownicy(stan) {
     const toJa = u.login === stan.user.login;
 
     // Dane podstawowe
-    const imie = el('input', { type: 'text', value: u.name, maxlength: '60', 'aria-label': 'Imię i nazwisko' });
+    const imie = el('input', { name: 'imie', type: 'text', value: u.name, maxlength: '60', 'aria-label': 'Imię i nazwisko' });
     const daneRzad = el('div', { class: 'konto-rzad' },
       el('div', { class: 'pole-obok', style: 'flex: 1' },
         imie,
@@ -215,7 +216,7 @@ export function initUzytkownicy(stan) {
     }, ikona('block'), u.is_blocked ? 'Odblokuj konto' : 'Zablokuj konto');
 
     // Limit miejsca
-    const limit = el('input', { type: 'number', min: '1', step: '1', value: u.quota_mb ?? '', placeholder: 'bez', 'aria-label': 'Limit miejsca w MB' });
+    const limit = el('input', { name: 'limit_mb', type: 'number', min: '1', step: '1', value: u.quota_mb ?? '', placeholder: 'bez', 'aria-label': 'Limit miejsca w MB' });
     const limitRzad = el('div', { class: 'konto-rzad' },
       limit,
       el('span', {}, 'MB'),
@@ -231,7 +232,7 @@ export function initUzytkownicy(stan) {
     );
 
     // Hasło
-    const haslo = el('input', { type: 'password', autocomplete: 'new-password', placeholder: 'Nowe hasło', 'aria-label': 'Nowe hasło' });
+    const haslo = el('input', { name: 'nowe_haslo', type: 'password', autocomplete: 'new-password', placeholder: 'Nowe hasło', 'aria-label': 'Nowe hasło' });
     const hasloRzad = el('div', { class: 'konto-rzad' },
       el('div', { class: 'pole-obok', style: 'flex: 1' },
         haslo,
@@ -248,6 +249,7 @@ export function initUzytkownicy(stan) {
 
     // Aliasy: limit konta + lista z dodawaniem
     const limitAliasow = el('input', {
+      name: 'limit_aliasow',
       type: 'number', min: '0', step: '1', value: u.alias_limit ?? '', placeholder: 'bez',
       'aria-label': 'Maksymalna liczba aliasów',
     });
@@ -264,7 +266,7 @@ export function initUzytkownicy(stan) {
       el('p', { class: 'opis' }, 'Puste pole = bez limitu (użytkownik nie zobaczy wtedy żadnej liczby). Zero wyłącza aliasy. Obniżenie limitu nie kasuje aliasów, które konto już ma.')
     );
 
-    const aliasInput = el('input', { type: 'text', maxlength: '30', autocapitalize: 'none', spellcheck: 'false', placeholder: 'np. biuro', 'aria-label': 'Nowy alias' });
+    const aliasInput = el('input', { name: 'alias', type: 'text', maxlength: '30', autocapitalize: 'none', spellcheck: 'false', placeholder: 'np. biuro', 'aria-label': 'Nowy alias' });
     const aliasyLista = el('ul', { class: 'aliasy' },
       ...(u.aliases.length
         ? u.aliases.map((a) =>

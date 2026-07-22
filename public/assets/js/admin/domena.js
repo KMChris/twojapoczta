@@ -146,7 +146,7 @@ export function initDomena() {
         tresc.append(el('p', { class: 'karta-opis' }, 'Wysyłka na zewnątrz jest wyłączona (brak TP_EXTERNAL=1). Klucz można przygotować już teraz, podpisy ruszą po włączeniu wysyłki.'));
       }
     } else {
-      const selektor = el('input', { type: 'text', maxlength: '31', placeholder: 'np. tp2', autocapitalize: 'none', spellcheck: 'false', 'aria-label': 'Nowy selektor' });
+      const selektor = el('input', { name: 'selektor', type: 'text', maxlength: '31', placeholder: 'np. tp2', autocapitalize: 'none', spellcheck: 'false', 'aria-label': 'Nowy selektor' });
       tresc.append(
         el('p', {}, 'Dodaj w DNS rekord TXT o nazwie i wartości:'),
         el('div', { class: 'rekord-wiersz' }, el('code', { class: 'rekord' }, dkim.record.nazwa), przyciskKopiuj(dkim.record.nazwa)),
