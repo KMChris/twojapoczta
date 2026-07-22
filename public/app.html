@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <title>Skrzynka · TwojaPoczta</title>
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/svg+xml" href="/assets/img/favicon.svg">
@@ -13,7 +14,7 @@
 </head>
 <body class="app">
 
-<svg hidden aria-hidden="true">
+<svg xmlns="http://www.w3.org/2000/svg" hidden aria-hidden="true">
   <defs>
     <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h4l2 3h6l2-3h4M5 5h14l2 8v6H3v-6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
@@ -52,10 +53,10 @@
 
 <header class="pasek">
   <button class="ikona-btn tylko-mobile" data-akcja="menu" aria-label="Pokaż foldery">
-    <svg><use href="#i-menu"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-menu"/></svg>
   </button>
   <a class="pasek-logo" href="/app" aria-label="TwojaPoczta">
-    <svg class="logo-znak" viewBox="0 0 32 32" aria-hidden="true">
+    <svg xmlns="http://www.w3.org/2000/svg" class="logo-znak" viewBox="0 0 32 32" aria-hidden="true">
       <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.4"/>
       <circle cx="16" cy="16" r="10" fill="none" stroke="currentColor" stroke-width="1"/>
       <text x="16" y="20.5" text-anchor="middle" font-size="11.5" font-weight="800">TP</text>
@@ -64,10 +65,10 @@
   </a>
 
   <div class="szukaj">
-    <svg aria-hidden="true"><use href="#i-search"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><use href="#i-search"/></svg>
     <input type="search" data-szukaj placeholder="Szukaj w poczcie…   ( / )" aria-label="Szukaj w poczcie">
     <button class="szukaj-wyczysc" data-akcja="wyczysc-szukanie" aria-label="Wyczyść wyszukiwanie" hidden>
-      <svg><use href="#i-close"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-close"/></svg>
     </button>
   </div>
 
@@ -84,25 +85,25 @@
 <div class="uklad">
   <aside class="boczny" data-boczny>
     <button class="btn-napisz" data-akcja="napisz">
-      <svg aria-hidden="true"><use href="#i-pen"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><use href="#i-pen"/></svg>
       Napisz
       <kbd>c</kbd>
     </button>
 
     <nav class="foldery" aria-label="Foldery">
-      <button class="folder" data-folder="inbox"><svg><use href="#i-inbox"/></svg> Odebrane <em data-licznik="inbox" hidden></em></button>
-      <button class="folder" data-folder="starred"><svg><use href="#i-star"/></svg> Z gwiazdką</button>
-      <button class="folder" data-folder="sent"><svg><use href="#i-send"/></svg> Wysłane</button>
-      <button class="folder" data-folder="scheduled"><svg><use href="#i-clock"/></svg> Zaplanowane <em data-licznik="scheduled" hidden></em></button>
-      <button class="folder" data-folder="drafts"><svg><use href="#i-draft"/></svg> Wersje robocze <em data-licznik="drafts" hidden></em></button>
-      <button class="folder" data-folder="archive"><svg><use href="#i-archive"/></svg> Archiwum</button>
-      <button class="folder" data-folder="spam"><svg><use href="#i-spam"/></svg> Spam <em data-licznik="spam" hidden></em></button>
-      <button class="folder" data-folder="trash"><svg><use href="#i-trash"/></svg> Kosz</button>
+      <button class="folder" data-folder="inbox"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-inbox"/></svg> Odebrane <em data-licznik="inbox" hidden></em></button>
+      <button class="folder" data-folder="starred"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-star"/></svg> Z gwiazdką</button>
+      <button class="folder" data-folder="sent"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-send"/></svg> Wysłane</button>
+      <button class="folder" data-folder="scheduled"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-clock"/></svg> Zaplanowane <em data-licznik="scheduled" hidden></em></button>
+      <button class="folder" data-folder="drafts"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-draft"/></svg> Wersje robocze <em data-licznik="drafts" hidden></em></button>
+      <button class="folder" data-folder="archive"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-archive"/></svg> Archiwum</button>
+      <button class="folder" data-folder="spam"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-spam"/></svg> Spam <em data-licznik="spam" hidden></em></button>
+      <button class="folder" data-folder="trash"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-trash"/></svg> Kosz</button>
     </nav>
 
     <nav class="foldery foldery-wlasne" aria-label="Moje foldery" data-foldery-wlasne></nav>
     <button class="folder folder-nowy" data-akcja="nowy-folder">
-      <svg aria-hidden="true"><use href="#i-folder"/></svg> Nowy folder
+      <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><use href="#i-folder"/></svg> Nowy folder
     </button>
 
     <div class="boczny-stopka">
@@ -118,7 +119,7 @@
     <header class="lista-naglowek">
       <h1 data-tytul-folderu>Odebrane</h1>
       <button class="ikona-btn" data-akcja="odswiez" title="Odśwież" aria-label="Odśwież">
-        <svg><use href="#i-refresh"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-refresh"/></svg>
       </button>
     </header>
     <div class="lista-przewijanie" data-lista tabindex="-1"></div>
@@ -126,7 +127,7 @@
 
   <section class="czytnik" data-panel-czytnik aria-label="Treść wiadomości">
     <div class="czytnik-puste" data-czytnik-puste>
-      <svg class="puste-znaczek" viewBox="0 0 120 90" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" class="puste-znaczek" viewBox="0 0 120 90" aria-hidden="true">
         <rect x="4" y="4" width="112" height="82" rx="6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="1 7" stroke-linecap="round"/>
         <path d="M30 32h60v34H30zM30 34l30 20 30-20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
       </svg>
@@ -141,7 +142,7 @@
   <header class="kompozycja-pasek">
     <span data-kompozycja-tytul>Nowa wiadomość</span>
     <button class="ikona-btn" data-akcja="zamknij-kompozycje" aria-label="Zamknij">
-      <svg><use href="#i-close"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-close"/></svg>
     </button>
   </header>
   <form class="kompozycja-formularz" data-formularz-kompozycji>
@@ -193,36 +194,36 @@
       </select>
       <button type="button" class="narz-btn" data-narzedzie="kolor" title="Kolor tekstu" aria-label="Kolor tekstu"><span class="narz-kolor">A</span></button>
       <span class="narz-przerwa" aria-hidden="true"></span>
-      <button type="button" class="narz-btn" data-cmd="justifyLeft" title="Wyrównaj do lewej" aria-label="Wyrównaj do lewej"><svg><use href="#i-align-left"/></svg></button>
-      <button type="button" class="narz-btn" data-cmd="justifyCenter" title="Wyśrodkuj" aria-label="Wyśrodkuj"><svg><use href="#i-align-center"/></svg></button>
-      <button type="button" class="narz-btn" data-cmd="justifyRight" title="Wyrównaj do prawej" aria-label="Wyrównaj do prawej"><svg><use href="#i-align-right"/></svg></button>
+      <button type="button" class="narz-btn" data-cmd="justifyLeft" title="Wyrównaj do lewej" aria-label="Wyrównaj do lewej"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-align-left"/></svg></button>
+      <button type="button" class="narz-btn" data-cmd="justifyCenter" title="Wyśrodkuj" aria-label="Wyśrodkuj"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-align-center"/></svg></button>
+      <button type="button" class="narz-btn" data-cmd="justifyRight" title="Wyrównaj do prawej" aria-label="Wyrównaj do prawej"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-align-right"/></svg></button>
       <span class="narz-przerwa" aria-hidden="true"></span>
-      <button type="button" class="narz-btn" data-cmd="insertUnorderedList" title="Lista punktowana" aria-label="Lista punktowana"><svg><use href="#i-list"/></svg></button>
-      <button type="button" class="narz-btn" data-cmd="insertOrderedList" title="Lista numerowana" aria-label="Lista numerowana"><svg><use href="#i-list-ol"/></svg></button>
-      <button type="button" class="narz-btn" data-cmd="blockquote" title="Cytat" aria-label="Cytat"><svg><use href="#i-quote"/></svg></button>
+      <button type="button" class="narz-btn" data-cmd="insertUnorderedList" title="Lista punktowana" aria-label="Lista punktowana"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-list"/></svg></button>
+      <button type="button" class="narz-btn" data-cmd="insertOrderedList" title="Lista numerowana" aria-label="Lista numerowana"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-list-ol"/></svg></button>
+      <button type="button" class="narz-btn" data-cmd="blockquote" title="Cytat" aria-label="Cytat"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-quote"/></svg></button>
       <span class="narz-przerwa" aria-hidden="true"></span>
-      <button type="button" class="narz-btn" data-narzedzie="link" title="Wstaw odnośnik" aria-label="Wstaw odnośnik"><svg><use href="#i-link"/></svg></button>
-      <button type="button" class="narz-btn" data-narzedzie="obraz" title="Wstaw obrazek" aria-label="Wstaw obrazek"><svg><use href="#i-image"/></svg></button>
+      <button type="button" class="narz-btn" data-narzedzie="link" title="Wstaw odnośnik" aria-label="Wstaw odnośnik"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-link"/></svg></button>
+      <button type="button" class="narz-btn" data-narzedzie="obraz" title="Wstaw obrazek" aria-label="Wstaw obrazek"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-image"/></svg></button>
       <input type="file" data-obraz-input accept="image/*" hidden>
-      <button type="button" class="narz-btn" data-cmd="usunFormat" title="Usuń formatowanie" aria-label="Usuń formatowanie"><svg><use href="#i-clear"/></svg></button>
+      <button type="button" class="narz-btn" data-cmd="usunFormat" title="Usuń formatowanie" aria-label="Usuń formatowanie"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-clear"/></svg></button>
     </div>
     <div class="kompozycja-edytor" data-edytor contenteditable="true" data-placeholder="Napisz wiadomość…" aria-label="Treść wiadomości"></div>
     <ul class="kompozycja-zalaczniki" data-zalaczniki hidden></ul>
     <footer class="kompozycja-stopka">
       <button type="submit" class="btn-wyslij">
         Wyślij
-        <svg aria-hidden="true"><use href="#i-send"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><use href="#i-send"/></svg>
       </button>
       <button type="button" class="btn-pozniej" data-akcja="wyslij-pozniej" title="Zaplanuj wysyłkę" aria-label="Zaplanuj wysyłkę">
-        <svg aria-hidden="true"><use href="#i-clock"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><use href="#i-clock"/></svg>
       </button>
       <button type="button" class="ikona-btn" data-akcja="dodaj-zalacznik" title="Dodaj załącznik" aria-label="Dodaj załącznik">
-        <svg><use href="#i-attach"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-attach"/></svg>
       </button>
       <input type="file" data-plik-input multiple hidden>
       <span class="kompozycja-status" data-status-zapisu></span>
       <button type="button" class="ikona-btn kompozycja-odrzuc" data-akcja="odrzuc-robocza" title="Odrzuć wersję roboczą" aria-label="Odrzuć wersję roboczą">
-        <svg><use href="#i-trash"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-trash"/></svg>
       </button>
     </footer>
     <div class="nadaj-pozniej" data-nadaj-pozniej hidden>
@@ -234,7 +235,7 @@
       </div>
     </div>
   </form>
-  <svg class="kompozycja-stempel" data-stempel-wyslano viewBox="0 0 200 200" aria-hidden="true">
+  <svg xmlns="http://www.w3.org/2000/svg" class="kompozycja-stempel" data-stempel-wyslano viewBox="0 0 200 200" aria-hidden="true">
     <circle cx="100" cy="100" r="94" fill="none" stroke="currentColor" stroke-width="5"/>
     <circle cx="100" cy="100" r="78" fill="none" stroke="currentColor" stroke-width="2"/>
     <text x="100" y="94" text-anchor="middle" class="stempel-napis" data-stempel-napis>WYSŁANO</text>
@@ -245,7 +246,7 @@
 <!-- Paleta poleceń -->
 <dialog class="paleta" data-paleta>
   <div class="paleta-szukaj">
-    <svg aria-hidden="true"><use href="#i-search"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><use href="#i-search"/></svg>
     <input type="text" data-paleta-input placeholder="Wpisz polecenie albo nazwę folderu…" aria-label="Szukaj polecenia">
     <kbd>esc</kbd>
   </div>
@@ -256,7 +257,7 @@
 <dialog class="modal" data-pomoc>
   <header class="modal-naglowek">
     <h2>Skróty klawiszowe</h2>
-    <button class="ikona-btn" data-akcja="zamknij-modal" aria-label="Zamknij"><svg><use href="#i-close"/></svg></button>
+    <button class="ikona-btn" data-akcja="zamknij-modal" aria-label="Zamknij"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-close"/></svg></button>
   </header>
   <div class="pomoc-siatka">
     <dl>
@@ -284,7 +285,7 @@
 <dialog class="modal" data-ustawienia>
   <header class="modal-naglowek">
     <h2>Ustawienia</h2>
-    <button class="ikona-btn" data-akcja="zamknij-modal" aria-label="Zamknij"><svg><use href="#i-close"/></svg></button>
+    <button class="ikona-btn" data-akcja="zamknij-modal" aria-label="Zamknij"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-close"/></svg></button>
   </header>
   <form class="ustawienia-formularz" data-formularz-ustawien>
     <label class="pole">
@@ -366,7 +367,7 @@
 <dialog class="modal modal-waski" data-folder-okno>
   <header class="modal-naglowek">
     <h2 data-folder-tytul>Nowy folder</h2>
-    <button class="ikona-btn" data-akcja="zamknij-modal" aria-label="Zamknij"><svg><use href="#i-close"/></svg></button>
+    <button class="ikona-btn" data-akcja="zamknij-modal" aria-label="Zamknij"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-close"/></svg></button>
   </header>
   <form class="ustawienia-formularz" data-formularz-folderu>
     <label class="pole">
@@ -385,7 +386,7 @@
 <dialog class="modal modal-waski" data-przenies-okno>
   <header class="modal-naglowek">
     <h2>Przenieś do folderu</h2>
-    <button class="ikona-btn" data-akcja="zamknij-modal" aria-label="Zamknij"><svg><use href="#i-close"/></svg></button>
+    <button class="ikona-btn" data-akcja="zamknij-modal" aria-label="Zamknij"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-close"/></svg></button>
   </header>
   <div class="przenies-lista" data-przenies-lista></div>
 </dialog>

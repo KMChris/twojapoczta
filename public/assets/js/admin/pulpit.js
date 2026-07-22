@@ -34,6 +34,8 @@ function wykresRuchu(traffic) {
   const wys = 150;
   const dol = 128;
   const svg = svgEl('svg', {
+    // xmlns przeżywa serializację do `outerHTML` i dopiero tam jest potrzebny, patrz ui.js.
+    xmlns: SVG_NS,
     viewBox: `0 0 ${traffic.length * szer} ${wys}`,
     role: 'img',
     'aria-label': 'Ruch pocztowy z ostatnich 14 dni',

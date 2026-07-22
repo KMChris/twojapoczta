@@ -13,10 +13,15 @@ export function el(tag, atrybuty = {}, ...dzieci) {
   return wezel;
 }
 
+// xmlns jest w DOM zbędny (createElementNS ustawia przestrzeń nazw sam z siebie), ale zostaje
+// w `outerHTML`. Bez niego każdy, kto wyrwie ten znacznik poza stronę, do samodzielnego pliku
+// albo do `data:image/svg+xml`, dostaje dokument bez przestrzeni nazw, czyli już nie SVG.
+// Tak właśnie wykłada się Dark Reader, który serializuje nasze znaczniki i ładuje jako obrazek.
 export function ikona(nazwa) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
   use.setAttribute('href', `#i-${nazwa}`);
+  svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
   svg.setAttribute('aria-hidden', 'true');
   svg.append(use);
   return svg;
