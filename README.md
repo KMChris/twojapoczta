@@ -32,6 +32,9 @@ To wszystko. Bez `npm install`, bez Dockera, bez zewnętrznej bazy danych.
 - **Pisanie jak w dużych skrzynkach**: formatowanie treści (pogrubienie, kolory,
   listy, cytaty, odnośniki, obrazki), DW i UDW, nadawanie spod aliasu
   oraz wysyłka o zaplanowanej porze.
+- **Czytnik HTML**: poczta przychodząca z formatowaniem, obrazkami i układem;
+  zdalne obrazki domyślnie blokowane (belka „Pokaż obrazki"), cytaty zwijane
+  pod „•••", a kolory dopasowane do ciemnego motywu.
 - **Przesyłanie dalej**: cała nowa poczta leci automatycznie pod wskazany adres,
   z kopią w Odebranych albo bez, z ochroną przed zapętleniem.
 - **Doręczanie wewnętrzne**: wiadomości między kontami w Twojej domenie
@@ -46,7 +49,7 @@ To wszystko. Bez `npm install`, bez Dockera, bez zewnętrznej bazy danych.
   `s` gwiazdka, `#` kosz, `u` nieprzeczytane, `g i`/`g s` foldery, `?` ściąga.
 - **Paleta poleceń** `Ctrl+K`: foldery, akcje i ustawienia w jednym miejscu.
 - **Wyszukiwarka pełnotekstowa**: nadawca, temat, treść.
-- **Tryb ciemny „nocna sortownia"**: jasny, ciemny albo jak system.
+- **Tryb ciemny „nocna sortownia"**: jasny, ciemny albo jak system; ciemny obejmuje też treść otwartych listów.
 - **List powitalny** dla każdego nowego konta i gotowa skrzynka demo.
 - **Panel administratora** pod `/admin`: konta (role, blokady, hasła,
   limity miejsca, aliasy), klucze DKIM z panelu, żywa weryfikacja rekordów

@@ -514,3 +514,10 @@ udaje. Zmiana adresu na starcie jest nieporównanie tańsza.
 ## Znane ograniczenia
 
 - Brak IMAP: pocztę czytasz przez webmail (responsywny, działa na telefonie).
+- Starsze listy (sprzed tej wersji) pokazują się jako tekst, nie jako HTML.
+  Surowy MIME nie był przechowywany, więc nie ma z czego odtworzyć bogatej
+  treści. To nie błąd.
+- Osadzone SVG się nie wyświetli: `image/svg+xml` jest neutralizowany przy
+  odbiorze. Zamierzone · SVG bywa wektorem ataku.
+- Egzotyczne składnie kolorów (`oklch()`, `lab()` z CSS Color 4) nie są odwracane
+  w ciemnym motywie, więc taki list może zachować jasne tło. Rzadkie.

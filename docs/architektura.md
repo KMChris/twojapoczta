@@ -155,6 +155,10 @@ Bez frameworka i bez budowania. Cztery strony (strona główna `index.html`,
     bezpieczne wstawianie treści z linkami (zero `innerHTML` dla danych),
   - `kompozycja.js`: okno pisania, DW/UDW, nadawca z aliasu, autozapis i odrzucanie wersji roboczych, upload załączników, planowanie wysyłki, stempel,
   - `edytor.js`: pasek formatowania nad `contenteditable` i czyszczenie HTML po liście dozwolonych znaczników (przy zapisie i przy renderze),
+  - `tresc.js`: renderer poczty przychodzącej · sanitizer po stronie klienta (`DOMParser` + CSSOM), blokada zdalnych obrazków, zwijanie cytatów, inwersja kolorów w ciemnym motywie i fallback do czystego tekstu,
+  - `reguly.js`: czyste polityki renderera (bez DOM, testowalne w `node:test`): allowlisty tagów i atrybutów, ocena adresów obrazków, allowlista funkcji CSS i zakresowanie selektorów do listu,
+  - `kolor.js`: konwersje sRGB↔OKLCH i inwersja jasności pod ciemny motyw (czysty moduł),
+  - `spinacze.js`: wybór widocznych spinaczy załączników · chowa ten, którego obrazek renderer wstawił w treść przez `cid:`,
   - `skroty.js`: skróty klawiszowe i paleta poleceń,
   - `foldery.js`: panel boczny, okna folderu i przenoszenia,
   - `main.js`: rdzeń, czyli stan, foldery, lista, czytnik, ustawienia i spinanie całości.
@@ -212,9 +216,20 @@ Trasy panelu administratora (`/api/admin/*`) wymagają dodatkowo roli
 
 - Hasła: scrypt z solą, porównanie w czasie stałym.
 - Sesje: cookie `httpOnly`, `SameSite=Lax`, `Secure` za HTTPS; leniwe sprzątanie wygasłych.
-- Nagłówki: CSP `script-src 'self'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`.
-- Treść wiadomości renderowana wyłącznie jako tekst (klikalne linki budowane
-  z węzłów DOM, bez `innerHTML` dla danych użytkownika).
+- Nagłówki: CSP trzyma `script-src` i `default-src` na `'self'`; `img-src` dopuszcza
+  dodatkowo `data:` oraz `https:`/`http:` dla obrazków, które użytkownik świadomie
+  odblokował w liście. Do tego `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
+  `Permissions-Policy`.
+- Poczta HTML renderuje się po stronie klienta przez własny sanitizer (`tresc.js`,
+  polityki w `reguly.js`): `DOMParser` parsuje HTML, CSSOM czyści CSS, a treść ląduje
+  w DOM aplikacji przez allowlistę tagów i atrybutów, ze stylami zakresowanymi do
+  kontenera listu. Bez `iframe` i bez Shadow DOM. Drzewa nie serializujemy z powrotem
+  do stringa · to zamyka mXSS.
+- Zdalne obrazki są domyślnie blokowane: adres parkuje w atrybucie-schowku, a użytkownik
+  odblokowuje je świadomie belką „Pokaż obrazki". To ochrona prywatności · nadawca nie
+  pozna momentu otwarcia listu.
+- Starsze listy (sprzed tej zmiany) pokazują się jako tekst z klikalnymi linkami
+  budowanymi z węzłów DOM · to fallback, nie jedyna ścieżka.
 - SMTP przychodzący nie przyjmuje relayu; wychodzący domyślnie wyłączony.
 - STARTTLS na przychodzącym jest oportunistyczny, nigdy wymagany: MX odmawiający
   poczty nieszyfrowanej po prostu traci listy od starszych serwerów. Stan sprzed
@@ -256,7 +271,9 @@ gołe `node --test tests/` nie uruchamia żadnego testu, a wygląda na sukces.
 
 - **Nie dodawaj zależności runtime.** Jeśli czegoś brakuje w standardowej
   bibliotece Node, najpierw rozważ, czy naprawdę jest potrzebne.
-- **Dane użytkownika to tekst, nie HTML.** Buduj DOM z węzłów.
+- **Cudzego HTML nie wstawiaj przez `innerHTML`.** Dane budujesz z węzłów DOM;
+  pocztę przychodzącą renderuje własny sanitizer (`tresc.js`), który przenosi węzły
+  z `DOMParser` i nigdy nie serializuje drzewa z powrotem.
 - **Każde wejście ma limit.** Nowy endpoint = jawny limit rozmiaru i walidacja.
 - **Interfejs po polsku, komunikaty błędów też.** Pisane z perspektywy
   użytkownika, nie systemu.

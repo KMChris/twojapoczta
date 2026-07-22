@@ -87,6 +87,19 @@ Kliknij wiadomość, żeby ją otworzyć. Nad treścią masz przyciski:
 oznacz jako nieprzeczytane, do kosza, zgłoś spam, drukuj. Załączniki pobierasz
 klikając ich kafelki pod treścią.
 
+List otwiera się tak, jak złożył go nadawca: z formatowaniem, obrazkami i układem
+(newslettery w tabelach wyglądają jak u innych dostawców), a nie jako goły tekst.
+Trzy rzeczy dzieją się przy tym po Twojej stronie:
+
+- **Zdalne obrazki**: domyślnie zablokowane. Belka „Pokaż obrazki" nad listem
+  wczytuje je na żądanie i uprzedza, że wczytanie zdradzi nadawcy, że i kiedy
+  otworzyłeś list.
+- **Cytaty**: zwinięte. Odpowiedź widzisz od razu, a cytowany oryginał chowa się
+  pod „•••" (z linią „… napisał(a):"); kliknięcie rozwija go z powrotem.
+- **Ciemny motyw**: dopasowuje kolory listu, żeby nie świecił białym prostokątem.
+  Gdy w którymś liście inwersja nie wyjdzie, przycisk „Oryginalne kolory" pokazuje
+  go w barwach nadawcy.
+
 **Drukowanie** (ikona drukarki albo `Ctrl+P`) kładzie na papier samą otwartą
 wiadomość: temat, nadawcę, datę i treść. Bez folderów, listy i przycisków.
 
@@ -172,3 +185,7 @@ Twoja poczta mieszka na serwerze, którym zarządzasz Ty albo ktoś, komu ufasz.
 Nikt nie skanuje treści pod reklamy, nic nie wychodzi do zewnętrznych usług
 analitycznych, a cała skrzynka to jeden plik, który można w każdej chwili
 skopiować albo skasować.
+
+Zdalne obrazki w listach są domyślnie zablokowane, więc piksele śledzące nie
+zadziałają: nadawca nie dowie się, że i kiedy otworzyłeś wiadomość, dopóki sam
+nie klikniesz „Pokaż obrazki".
