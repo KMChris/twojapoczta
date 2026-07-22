@@ -71,8 +71,40 @@ const systemowyCiemny = matchMedia('(prefers-color-scheme: dark)');
 function zastosujMotyw() {
   const motyw = stan.user?.theme ?? 'system';
   const ciemny = motyw === 'dark' || (motyw === 'system' && systemowyCiemny.matches);
+  const bylCiemny = document.documentElement.dataset.theme === 'dark';
   if (ciemny) document.documentElement.dataset.theme = 'dark';
   else delete document.documentElement.dataset.theme;
+  if (ciemny !== bylCiemny) przerysujOtwartaPoMotywie();
+}
+
+// Cała reszta aplikacji chodzi na zmiennych CSS, więc przestawienie data-theme załatwia jej
+// motyw w całości. Treść listu przychodzącego NIE: renderer czyta motyw raz, w chwili renderu,
+// i wypala inwersję w stylach inline oraz w <style> listu (tresc.js/renderujHtml). Kolory
+// nadawcy są tam POLICZONE, nie odziedziczone, więc nie ma zmiennej, którą dałoby się podmienić.
+// Bez tego przerysowania otwarty list zostawał w barwach poprzedniego motywu, a furtka
+// „Oryginalne kolory" wisiała w pasku akcji, choć nie było już czego przywracać.
+// Zmierzone: po przełączeniu na jasny `.cz-body` trzymał id="list-1" (czyli render się nie
+// powtórzył) i odwróconą czerwień rgb(202, 62, 51), podczas gdy tło aplikacji było już jasne.
+//
+// Wołamy to WYŁĄCZNIE przy realnej zmianie jasności. zastosujMotyw biegnie po każdym zapisie
+// ustawień, także takim, który motywu nie rusza (imię, podpis), a przerysowanie bez powodu
+// cofałoby świadome „Pokaż obrazki" i zwijało rozwinięte cytaty.
+function przerysujOtwartaPoMotywie() {
+  if (!stan.otwarta) return;
+  // Zgodę na zdalne obrazki przenosimy przez render, dokładnie tak jak furtka „Oryginalne
+  // kolory": inaczej przełącznik motywu cofałby decyzję użytkownika i parkował obrazki z
+  // powrotem. Oba schowki bramki, nie samo `img[data-src]` — uzasadnienie przy furtce niżej.
+  const stary = czytnikEl.querySelector('.cz-body');
+  const obrazkiPokazane = Boolean(stary) && !stary.querySelector('[data-src], [data-background]');
+  // Przerysowujemy CAŁY czytnik, nie samą treść: pasek akcji i belka obrazków też zależą od
+  // wyniku renderu, więc przerysowanie połowy rozjechałoby je z treścią. Cena to zjazd na
+  // górę listu, do przyjęcia przy świadomym przełączeniu motywu.
+  renderujCzytnik();
+  if (!obrazkiPokazane) return;
+  const nowy = czytnikEl.querySelector('.cz-body');
+  if (!nowy) return;
+  pokazObrazki(nowy);
+  czytnikEl.querySelector('.cz-obrazki')?.remove();
 }
 
 systemowyCiemny.addEventListener('change', zastosujMotyw);
@@ -87,6 +119,18 @@ async function ustawMotyw(motyw, { zapisz = false } = {}) {
       /* motyw i tak działa lokalnie */
     }
   }
+}
+
+// Motyw zmienia się w chwili wyboru kafelka, a nie dopiero przy „Zapisz zmiany". Kafelek
+// z podglądem wygląda na przełącznik, nie na pole formularza, więc kliknięcie, które tylko
+// go zaznaczało i nie ruszało aplikacji, wyglądało po prostu na zepsuty motyw (zmierzone:
+// po kliknięciu „Nocnej sortowni" motyw.value szedł na 'dark', a data-theme zostawał pusty
+// aż do wysłania formularza schowanego niżej, poza widokiem). Tak samo natychmiastowo robi
+// to paleta poleceń, więc obie drogi zachowują się teraz tak samo, a zamknięcie okna
+// krzyżykiem nie ma już czego po cichu zgubić. Formularz i tak niesie `theme` przy zapisie,
+// więc wartość zostaje ta sama, którą właśnie zapisaliśmy — to samo pole, ta sama wartość.
+for (const kafelek of formularzUstawien.querySelectorAll('input[name="motyw"]')) {
+  kafelek.addEventListener('change', () => ustawMotyw(kafelek.value, { zapisz: true }));
 }
 
 // --- Foldery i lista --------------------------------------------------------------
@@ -420,25 +464,36 @@ function renderujCzytnik() {
 
   // Inwersja czasem chybi (logo w czarnej grafice na przezroczystym tle
   // zniknie), a wykryć się tego nie da: canvas nie odczyta zdalnego obrazka
-  // przez CORS. Zamiast udawać nieomylność, dajemy furtkę.
+  // przez CORS. Zamiast udawać nieomylność, dajemy furtkę — w OBIE strony.
+  // Jednokierunkowa kazała zamknąć i otworzyć list od nowa, żeby wrócić do wersji
+  // dopasowanej, a to jest przełącznik do porównywania: zobacz, jak nadał nadawca,
+  // wróć, jak czyta się lepiej. Stan trzyma zmienna, bo poza nią nie ma go gdzie
+  // przeczytać — `cz-body-kartka` siedzi na kontenerze tylko w ciemnym motywie.
   if (przerobioneKolory) {
+    let oryginalne = false;
     const furtka = ikonaAkcji('Oryginalne kolory', 'ustawienia', () => {
+      oryginalne = !oryginalne;
       // renderujTresc parkuje zdalne obrazki OD NOWA, więc bez zapamiętania decyzji
-      // furtka cofnęłaby świadome „Pokaż obrazki": obrazki wróciłyby zaparkowane, a
+      // przełącznik cofnąłby świadome „Pokaż obrazki": obrazki wróciłyby zaparkowane, a
       // belka (już usunięta po odblokowaniu) nie miałaby jak ich znów odsłonić.
       // Selektor obejmuje OBA schowki bramki (data-src ORAZ data-background), tak samo
       // jak pokazObrazki — węższe `img[data-src]` uznałoby list z pikselem tylko w
       // data-background za „odblokowany" i odsłoniłoby go bez zgody użytkownika.
       const obrazkiPokazane = !body.querySelector('[data-src], [data-background]');
-      renderujTresc(body, w, { cid: stan.cidOtwartej, oryginalneKolory: true });
+      renderujTresc(body, w, { cid: stan.cidOtwartej, oryginalneKolory: oryginalne });
       // Wyłącznie gdy użytkownik SAM je wcześniej pokazał — nigdy bez zgody.
       if (obrazkiPokazane) pokazObrazki(body);
       // Belka schodzi po FAKTYCZNYM stanie drzewa: tylko gdy nie ma już nic do odblokowania.
       if (!body.querySelector('[data-src], [data-background]')) {
         czytnikEl.querySelector('.cz-obrazki')?.remove();
       }
-      furtka.remove(); // droga w jedną stronę; ponowne otwarcie listu wraca do przeróbki
+      const tytul = oryginalne ? 'Wróć do kolorów motywu' : 'Oryginalne kolory';
+      furtka.classList.toggle('aktywna', oryginalne);
+      furtka.title = tytul;
+      furtka.setAttribute('aria-label', tytul);
+      furtka.setAttribute('aria-pressed', String(oryginalne));
     });
+    furtka.setAttribute('aria-pressed', 'false');
     akcje.append(furtka);
   }
 
