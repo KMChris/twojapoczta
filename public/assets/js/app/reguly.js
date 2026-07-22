@@ -271,6 +271,15 @@ export function rozstrzygnijMedia(warunek, ciemny) {
   const dopasowanie = tekst.match(/\(\s*prefers-color-scheme\s*:\s*(dark|light)\s*\)/i);
   if (!dopasowanie) return { decyzja: 'zostaw', warunek: tekst };
 
+  // `not` neguje CAŁE zapytanie (`not <media-query>`), a nie ten jeden człon, więc nie da
+  // się go wyjąć i rozstrzygnąć osobno: `not screen and (prefers-color-scheme: dark)` jest
+  // prawdziwe także wtedy, gdy motyw JEST ciemny. Bez tego warunku szło to dokładnie
+  // odwrotnie, niż powinno — `not (prefers-color-scheme: dark)`, czyli blok pisany „na
+  // jasno", wchodził bezwarunkowo w ciemnym motywie i wypadał w jasnym. Nie zgadujemy:
+  // takie zapytanie odrzucamy w całości. Kierunek awarii bezpieczny, jak w reszcie modułu —
+  // list wygląda skromniej, ale nigdy nie dostaje stylów pisanych pod przeciwny motyw.
+  if (/(?:^|\s)not\s/i.test(tekst)) return { decyzja: 'odrzuc' };
+
   const chceCiemny = dopasowanie[1].toLowerCase() === 'dark';
   if (chceCiemny !== ciemny) return { decyzja: 'odrzuc' };
 

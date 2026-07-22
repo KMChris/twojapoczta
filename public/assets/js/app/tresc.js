@@ -128,6 +128,10 @@ const MAX_TAGI = 16000;
 // który się nie mieści, kończy CSS całego listu (uzasadnienie przy `break` w przetworzStyle).
 const MAX_REGUL = 5000;
 
+// Staroszkolne atrybuty kolorów i ich odpowiedniki w stylu · przenosi je czyscAtrybuty.
+// Poza pętlą, bo biegnie ona przez KAŻDY element każdego listu.
+const KOLORY_Z_ATRYBUTU = [['bgcolor', 'backgroundColor'], ['color', 'color']];
+
 export function renderujTresc(kontener, wiadomosc, opcje = {}) {
   wyczyscKontener(kontener);
   // Normalny tekst zwija cytaty pod „•••”. Fallback niżej woła renderujTekst BEZ tej
@@ -279,12 +283,21 @@ function czyscAtrybuty(wezel, kontekst) {
     if (nazwa.startsWith('on') || !dozwolone.includes(nazwa)) wezel.removeAttribute(atrybut.name);
   }
 
-  // `bgcolor` to staroszkolny sposób na tło i newslettery wciąż go używają.
-  // Przenosimy go do stylu, żeby inwersja miała jedno miejsce do przepisania.
-  const bgcolor = wezel.getAttribute('bgcolor');
-  if (bgcolor) {
-    wezel.style.backgroundColor = bgcolor;
-    wezel.removeAttribute('bgcolor');
+  // `bgcolor` i `color` to staroszkolny sposób na tło i tekst, a newslettery wciąż ich
+  // używają. Przenosimy oba do stylu, żeby inwersja miała jedno miejsce do przepisania:
+  // przepiszKoloryDrzewa chodzi po `[style]`, więc kolor zostawiony w atrybucie jej umyka.
+  // Bez tego `<font color="#000">` zostawał czarnym tekstem na tle, które inwersja właśnie
+  // przyciemniła — czyli dokładnie ta nieczytelność, przed którą broni przeniesienie bgcolor.
+  // `color` stoi w allowliście wyłącznie przy FONT, więc hasAttribute zastępuje sprawdzanie
+  // tagu (tak samo jak przy `background` niżej).
+  //
+  // Nie nadpisujemy stylu inline, gdy już niesie tę własność: atrybut prezentacyjny przegrywa
+  // z `style` w kaskadzie, a przeniesienie go bez tego warunku odwróciłoby tę kolejność.
+  for (const [atrybut, wlasnosc] of KOLORY_Z_ATRYBUTU) {
+    const wartosc = wezel.getAttribute(atrybut);
+    if (!wartosc) continue;
+    if (!wezel.style[wlasnosc]) wezel.style[wlasnosc] = wartosc;
+    wezel.removeAttribute(atrybut);
   }
 
   if (wezel.hasAttribute('style')) czyscStylInline(wezel, kontekst);

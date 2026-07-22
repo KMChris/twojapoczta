@@ -239,6 +239,20 @@ test('rozstrzygnijMedia: reszta warunku zostaje po wycięciu prefers-color-schem
   );
 });
 
+// `not` neguje całe zapytanie, więc rozstrzygnięte po samym członie wychodziło odwrotnie:
+// blok pisany „na jasno" wchodził bezwarunkowo w ciemnym motywie. Odrzucamy zamiast zgadywać.
+test('rozstrzygnijMedia: zanegowany warunek odpada w obu motywach', () => {
+  assert.deepEqual(rozstrzygnijMedia('not (prefers-color-scheme: dark)', true), { decyzja: 'odrzuc' });
+  assert.deepEqual(rozstrzygnijMedia('not (prefers-color-scheme: dark)', false), { decyzja: 'odrzuc' });
+  assert.deepEqual(rozstrzygnijMedia('not screen and (prefers-color-scheme: light)', true), { decyzja: 'odrzuc' });
+});
+
+// `not` bez prefers-color-scheme nie jest naszą sprawą: takie zapytanie ma przejść dalej
+// w całości, bo rozstrzyga je przeglądarka, a nie my.
+test('rozstrzygnijMedia: „not" bez prefers-color-scheme przechodzi bez zmian', () => {
+  assert.deepEqual(rozstrzygnijMedia('not print', true), { decyzja: 'zostaw', warunek: 'not print' });
+});
+
 test('rozstrzygnijMedia: warunek bez prefers-color-scheme przechodzi bez zmian', () => {
   assert.deepEqual(rozstrzygnijMedia('(max-width: 480px)', true), { decyzja: 'zostaw', warunek: '(max-width: 480px)' });
 });

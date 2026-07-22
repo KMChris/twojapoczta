@@ -123,16 +123,25 @@ export function initSkroty(app, kompozycja) {
       cel instanceof HTMLSelectElement ||
       cel.isContentEditable;
 
-    // Przycisk i odnośnik same obsługują Enter i spację — przeglądarka zamienia je na
-    // kliknięcie. Skrót globalny zdublowałby więc jedno naciśnięcie na dwie akcje i to
-    // on wygrywa: `Enter` → otworzZaznaczona() przerenderowuje czytnik i kasuje efekt
-    // kliknięcia (belka „Pokaż obrazki" odparkowywała obrazki i natychmiast parkowała
-    // je z powrotem). Osobny warunek, a nie poszerzenie `wPolu`, bo `wPolu` steruje też
-    // gałęzią `Escape` (cel.blur()), a przycisk nie jest polem tekstowym i nie ma się
-    // rozmywać. `Escape` celowo zostaje poza tym wyjątkiem — jest obsłużone niżej, ale
-    // PRZED wczesnym powrotem, więc zamykanie czytnika i okien nadal działa wszędzie,
-    // także na zafokusowanym przycisku.
-    const naPrzycisku = cel instanceof HTMLButtonElement || cel instanceof HTMLAnchorElement;
+    // Przycisk i odnośnik same obsługują Enter (przycisk także spację) — przeglądarka
+    // zamienia je na kliknięcie. Skrót globalny zdublowałby więc jedno naciśnięcie na dwie
+    // akcje i to on wygrywa: `Enter` → otworzZaznaczona() przerenderowuje czytnik i kasuje
+    // efekt kliknięcia (belka „Pokaż obrazki" odparkowywała obrazki i natychmiast parkowała
+    // je z powrotem).
+    //
+    // Wyjątek obejmuje WYŁĄCZNIE te dwa klawisze i to jest jego sedno. Zwykły klik zostawia
+    // przycisk zafokusowany (zmierzone: po kliknięciu folderu `document.activeElement` to
+    // `BUTTON.folder`, a wiersz listy też jest `<button>`), więc warunek postawiony na samym
+    // celu zdarzenia gasił po każdym kliknięciu WSZYSTKIE skróty — `j`, `k`, `c`, `e`, `s`,
+    // `u`, `#`, `/`, `?` i sekwencje `g …` — aż do rozmycia fokusu. Zmierzone: `j` z fokusem
+    // na folderze nie zaznaczał nic, ten sam `j` po `blur()` zaznaczał normalnie.
+    //
+    // Osobny warunek, a nie poszerzenie `wPolu`, bo `wPolu` steruje też gałęzią `Escape`
+    // (cel.blur()), a przycisk nie jest polem tekstowym i nie ma się rozmywać. `Escape` jest
+    // obsłużone wyżej, więc zamykanie czytnika i okien działa wszędzie, także na przycisku.
+    const klawiszKlikajacy = e.key === 'Enter' || e.key === ' ';
+    const naPrzycisku =
+      klawiszKlikajacy && (cel instanceof HTMLButtonElement || cel instanceof HTMLAnchorElement);
 
     if (e.key === 'Escape') {
       if (document.querySelector('dialog[open]')) return; // dialog zamyka się sam
