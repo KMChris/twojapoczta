@@ -226,7 +226,7 @@ export function registerApiRoutes(router, db) {
       updateMessage(db, user.id, msg.id, { is_read: true });
       msg.is_read = 1;
     }
-    const wszystkie = msg.attachments_count ? listAttachments(db, user.id, msg.id) : [];
+    const attachments = msg.attachments_count ? listAttachments(db, user.id, msg.id) : [];
     // Serwer nie zgaduje już, co jest osadzone: oddaje WSZYSTKIE załączniki pod listem i mapuje
     // KAŻDY Content-ID. Który spinacz schować, rozstrzyga KLIENT — tylko on parsuje treść (DOM)
     // i wie, który obrazek naprawdę wstawił. Fałszywy negatyw kosztuje wtedy złamany obrazek OBOK
@@ -235,10 +235,9 @@ export function registerApiRoutes(router, db) {
     // też tylko ten jeden spinacz — duplikaty zostają pod listem i żadna kopia nie ginie.
     // Mapa bez prototypu, bo klucz daje nadawca · na zwykłym `{}` `Content-ID: <__proto__>`
     // poszedłby w setter prototypu i wpis by zniknął, więc mapa nie oddałaby obrazka.
+    // Lista jedzie w całości, bez przesiewania · mapujemy tylko Content-ID.
     const cid = Object.create(null);
-    const attachments = [];
-    for (const z of wszystkie) {
-      attachments.push(z); // wszystkie zostają pod listem; o ukryciu spinacza decyduje klient
+    for (const z of attachments) {
       // Klucz jest jeden, więc przy zderzeniu Content-ID bierze go pierwszy · drugi i tak jest
       // osiągalny pod listem zwykłą trasą załącznika.
       if (z.content_id && !Object.hasOwn(cid, z.content_id)) {

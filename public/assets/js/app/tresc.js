@@ -133,6 +133,7 @@ const MAX_REGUL = 5000;
 const KOLORY_Z_ATRYBUTU = [['bgcolor', 'backgroundColor'], ['color', 'color']];
 
 export function renderujTresc(kontener, wiadomosc, opcje = {}) {
+  pamiecKolorow.clear(); // pamięć jest na jeden list, nie na sesję
   wyczyscKontener(kontener);
   // Normalny tekst zwija cytaty pod „•••”. Fallback niżej woła renderujTekst BEZ tej
   // flagi: jak render HTML padł, dajemy goły tekst i nie kombinujemy dalej.
@@ -597,7 +598,22 @@ const LITERAL_KOLORU = /#[0-9a-f]{3,8}\b|\brgba?\([^)]*\)|\bhsla?\([^)]*\)/gi;
 // motywie, czyli dokładnie ta skarga, dla której cała funkcja powstaje. Próbka MUSI
 // wisieć w dokumencie: getComputedStyle na odczepionym elemencie oddaje "" dla wszystkiego.
 const probka = document.createElement('span');
+// Poza układem, bo `body.app` jest kontenerem flex (app.css) i wisząca w nim próbka byłaby
+// jego elementem. Dziś nic z tego nie wynika (pusty span ma zerową wysokość), ale to pułapka
+// na przyszłość, a `position` nie ma wpływu na to, po co ta próbka istnieje — na rozwiązanie
+// koloru. Element MUSI zostać w dokumencie: getComputedStyle na odczepionym oddaje "".
+probka.style.position = 'absolute';
 document.body.append(probka);
+
+// Ta sama wartość wraca w liście setki razy (`#ffffff`, `rgb(0, 0, 0)`, `white`), a każde
+// pytanie to zapis do DOM plus getComputedStyle, czyli wymuszone przeliczenie stylu — to
+// właśnie z tego rosną liczby z komentarza przy MAX_REGUL (5449 ms w ciemnym). Zapamiętujemy
+// wynik po surowym łańcuchu, bo normalizujKolor jest funkcją czystą względem wejścia: ścieżki
+// zależne od kontekstu (`inherit`, `currentcolor`) kończą się `null` PRZED odczytem computed,
+// więc nie ma czego zapamiętać źle. Wynik zamrażamy — nikt go dziś nie mutuje, a zamrożenie
+// pilnuje, żeby przyszła mutacja wysypała się głośno zamiast zatruć pamięć. Czyścimy przy
+// każdym renderze listu, żeby mapa nie rosła przez całą sesję.
+const pamiecKolorow = new Map();
 
 // Słowa kluczowe CSS przechodzą bramę inline (nie są ""), a getComputedStyle rozwiązałby
 // je do koloru RODZICA — czyli do podwójnej inwersji, bo przepiszKoloryDrzewa idzie po
@@ -607,8 +623,16 @@ document.body.append(probka);
 const SLOWA_KLUCZOWE_KOLORU = new Set(['inherit', 'initial', 'unset', 'revert', 'currentcolor']);
 
 function normalizujKolor(wartosc) {
+  const klucz = String(wartosc ?? '');
+  if (pamiecKolorow.has(klucz)) return pamiecKolorow.get(klucz);
+  const wynik = policzKolor(klucz);
+  pamiecKolorow.set(klucz, wynik && Object.freeze(wynik));
+  return wynik;
+}
+
+function policzKolor(wartosc) {
   probka.style.color = '';
-  probka.style.color = String(wartosc ?? '').trim();
+  probka.style.color = wartosc.trim();
   // Brama na inline setterze: CSSOM odrzuca nie-kolory do "" (`12px`, `garbage`, `inherit`
   // jest niepuste — stąd osobny warunek niżej). Bez tej bramy getComputedStyle oddałby dla
   // śmiecia odziedziczony kolor domyślny i odwrócilibyśmy nie-kolor.

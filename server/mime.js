@@ -67,9 +67,11 @@ export function parseContentId(value) {
 // stronę, która nie psuje pospolitego HTML-a.
 const PRZEDLUZENIE_CONTENT_ID = /[\w!#$%&*+\-/=?^`{|}~.@]/;
 
-// Czy ten HTML naprawdę cytuje ten `cid:`. Pytają o to obie strony: wysyłka (co schować
-// do `related`) i odbiór (co przenieść do mapy `cid`) · w obu wypadkach załącznik z
-// martwym Content-ID ma zostać zwykłym, widocznym załącznikiem.
+// Czy ten HTML naprawdę cytuje ten `cid:`. Pyta o to WYSYŁKA: co schować do `related`, a co
+// zostawić zwykłym załącznikiem w `mixed` · załącznik z martwym Content-ID ma zostać zwykłym,
+// widocznym załącznikiem. Odbiór tego NIE pyta i nie ma pytać: serwer mapuje każdy Content-ID,
+// a który spinacz schować, rozstrzyga klient po tym, co renderer naprawdę wstawił w treść
+// (opcja B — zob. `GET /api/messages/:id` w api.js i widoczneSpinacze w app/spinacze.js).
 export function htmlCytujeCid(html, contentId) {
   if (!html || !contentId) return false;
   const wzorzec = contentId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
