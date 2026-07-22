@@ -230,7 +230,9 @@ export function registerApiRoutes(router, db) {
     // Serwer nie zgaduje już, co jest osadzone: oddaje WSZYSTKIE załączniki pod listem i mapuje
     // KAŻDY Content-ID. Który spinacz schować, rozstrzyga KLIENT — tylko on parsuje treść (DOM)
     // i wie, który obrazek naprawdę wstawił. Fałszywy negatyw kosztuje wtedy złamany obrazek OBOK
-    // widocznego spinacza, a nie zgubiony plik (nie ma go ani w treści, ani pod listem).
+    // widocznego spinacza, a nie zgubiony plik (nie ma go ani w treści, ani pod listem). Przy
+    // zderzeniu Content-ID trasa `cid:` serwuje w treść tylko pierwszy wiersz, więc klient chowa
+    // też tylko ten jeden spinacz — duplikaty zostają pod listem i żadna kopia nie ginie.
     // Mapa bez prototypu, bo klucz daje nadawca · na zwykłym `{}` `Content-ID: <__proto__>`
     // poszedłby w setter prototypu i wpis by zniknął, więc mapa nie oddałaby obrazka.
     const cid = Object.create(null);

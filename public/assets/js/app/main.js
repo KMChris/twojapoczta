@@ -6,6 +6,7 @@ import {
 } from './ui.js';
 import { initKompozycja, zbudujOdpowiedz, zbudujPrzekazanie } from './kompozycja.js';
 import { renderujTresc, pokazObrazki } from './tresc.js';
+import { widoczneSpinacze } from './spinacze.js';
 import { initSkroty } from './skroty.js';
 import { initFoldery } from './foldery.js';
 
@@ -409,10 +410,13 @@ function renderujCzytnik() {
 
   // Opcja B: serwer oddaje wszystkie załączniki, a spinacze chowamy tylko dla tych, których
   // obrazek renderer NAPRAWDĘ wstawił w treść (uzyteCid). Bez content_id spinacz nie znika
-  // nigdy; z content_id, którego treść nie wchłonęła, ZOSTAJE (to sedno opcji B). Liczymy raz,
-  // z pierwszego renderu: rozwiązanie cid nie zależy od „Oryginalnych kolorów" ani od obrazków,
-  // a re-render przy furtce nie przerysowuje tej sekcji.
-  const spinacze = stan.zalacznikiOtwartej.filter((z) => !z.content_id || !uzyteCid.has(z.content_id));
+  // nigdy; z content_id, którego treść nie wchłonęła, ZOSTAJE (to sedno opcji B). Przy kilku
+  // załącznikach o TYM SAMYM Content-ID chowamy tylko JEDEN spinacz — ten pierwszy, który trasa
+  // `cid:` serwuje w treść (dedup po wartości siedzi w widoczneSpinacze); duplikaty zostają pod
+  // listem, inaczej druga kopia znikłaby z aplikacji. Liczymy raz, z pierwszego renderu:
+  // rozwiązanie cid nie zależy od „Oryginalnych kolorów" ani od obrazków, a re-render przy furtce
+  // nie przerysowuje tej sekcji.
+  const spinacze = widoczneSpinacze(stan.zalacznikiOtwartej, uzyteCid);
 
   // Inwersja czasem chybi (logo w czarnej grafice na przezroczystym tle
   // zniknie), a wykryć się tego nie da: canvas nie odczyta zdalnego obrazka

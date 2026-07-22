@@ -239,7 +239,10 @@ function bramkujObrazek(wezel, kontekst, { atrybut, schowek, poOdrzuceniu }) {
     const url = Object.hasOwn(kontekst.cid, ocena.cid) ? kontekst.cid[ocena.cid] : null;
     if (url) {
       wezel.setAttribute(atrybut, url);
-      // Faktycznie wstawiliśmy ten obrazek w treść, więc jego spinacz można schować pod listem.
+      // Faktycznie wstawiliśmy ten obrazek w treść, więc jego spinacz można schować pod listem —
+      // dokładnie jeden: gdy kilka załączników dzieli ten Content-ID, dedup po stronie main.js
+      // (widoczneSpinacze) chowa tylko pierwszy, ten, który trasa `cid:` serwuje, a duplikaty
+      // zostawia widocznymi spinaczami.
       // Porównanie po CAŁYM kluczu (Object.hasOwn wyżej) · klucz obcięty nie dopasuje się do
       // pełnego odwołania, więc taki załącznik NIE trafi tu i zostanie widocznym spinaczem.
       kontekst.uzyteCid.add(ocena.cid);
