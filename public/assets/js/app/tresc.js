@@ -514,27 +514,53 @@ function zwinCytaty(kontener) {
     .filter((wezel) => !wezel.parentElement.closest(SELEKTORY_CYTATU));
   if (!cytaty.length) return;
 
-  // Nasz własny cytat ma nad sobą linię atrybucji („… napisał(a):”), a `•••`
-  // ma chować także ją, więc bierzemy ją do grupy razem z blockquote.
-  for (const cytat of cytaty) {
-    const grupa = [cytat];
-    let poprzedni = cytat.previousSibling;
-    while (poprzedni && poprzedni.nodeType === Node.TEXT_NODE && !poprzedni.textContent.trim()) {
-      poprzedni = poprzedni.previousSibling;
-    }
-    // Kandydatem jest WYŁĄCZNIE goły węzeł tekstowy: nasza atrybucja z kompozytora
-    // (kompozycja.js:427, „…napisał(a):”) renderuje się jako czysty tekst tuż przed
-    // <blockquote>. Element-rodzeństwo do grupy NIE wchodzi — w ścieżce tekstowej całą treść
-    // „przed” trzyma <div>, którego textContent też bywa zakończony „napisał(a):”; wciągnięcie
-    // go schowałoby widoczną odpowiedź razem z cytatem (zmierzone w przeglądarce: bottom-post
-    // gubił treść odpowiedzi, top-post nie zwijał cytatu wcale). Węziej niż plan, celowo:
-    // heurystyka ma łapać naszą własną atrybucję, nie zgadywać cudzej.
-    if (poprzedni && poprzedni.nodeType === Node.TEXT_NODE
-        && /napisał\(a\):\s*$|wrote:\s*$/i.test(poprzedni.textContent ?? '')) {
-      grupa.unshift(poprzedni);
-    }
-    schowajGrupe(kontener, grupa);
+  // Każdy cytat wraz z jego linią atrybucji (jeśli ją rozpoznajemy) to jedna grupa
+  // chowana pod wspólnym „•••”. Grupy budujemy zanim cokolwiek zwiniemy, bo strażnik
+  // niżej patrzy na nie zbiorczo.
+  const grupy = cytaty.map(zbudujGrupeCytatu);
+
+  // Strażnik zbiorczy: zwijamy tylko wtedy, gdy po schowaniu WSZYSTKICH cytatów zostaje
+  // jeszcze coś widocznego. Liczony per-grupę (jak wcześniej) daje pustą kartkę przy
+  // dwóch rozłącznych cytatach top-level bez innej treści: każda grupa widzi tekst
+  // drugiej jako „resztę listu” i chowa się, zostają dwa „•••” nad niczym. To ta sama
+  // zasada co zostajeCosWidocznego w ścieżce tekstowej. Mierzymy tekstem, nie węzłami:
+  // cytat bywa zagnieżdżony w <div>, więc porównanie dzieci najwyższego poziomu myli.
+  const cale = dlugoscTresci(kontener);
+  const cytowane = grupy.reduce((suma, grupa) => suma + dlugoscWezlow(grupa), 0);
+  if (cale - cytowane < 1) return;
+
+  for (const grupa of grupy) schowajGrupe(grupa);
+}
+
+// Cytat plus poprzedzająca go linia atrybucji, o ile to NASZA atrybucja. Kandydatem
+// jest WYŁĄCZNIE goły węzeł tekstowy: nasza atrybucja z kompozytora (kompozycja.js:427)
+// renderuje się jako czysty tekst tuż przed <blockquote>. Element-rodzeństwo do grupy
+// NIE wchodzi — w ścieżce tekstowej całą treść „przed” trzyma <div>, którego textContent
+// też bywa zakończony „napisał(a):”; wciągnięcie go schowałoby widoczną odpowiedź razem
+// z cytatem (zmierzone: bottom-post gubił odpowiedź, top-post nie zwijał cytatu wcale).
+function zbudujGrupeCytatu(cytat) {
+  const grupa = [cytat];
+  let poprzedni = cytat.previousSibling;
+  while (poprzedni && poprzedni.nodeType === Node.TEXT_NODE && !poprzedni.textContent.trim()) {
+    poprzedni = poprzedni.previousSibling;
   }
+  if (poprzedni && poprzedni.nodeType === Node.TEXT_NODE && czyLiniaAtrybucji(poprzedni.textContent)) {
+    grupa.unshift(poprzedni);
+  }
+  return grupa;
+}
+
+// Odróżnia linię atrybucji od prozy zakończonej „…napisał(a):”. Dwa warunki naraz:
+// (1) tekst kończy się suffiksem atrybucji, (2) niesie cyfrę. Nasza atrybucja zawsze
+// zaczyna się datą („21 lipca 2026, 14:30, Jan napisał(a):”), więc cyfrę ma; proza
+// odpowiedzi tuż przed cytatem zwykle nie („Dzięki wielkie za pomoc! Jan napisał(a):”).
+// Bez warunku (2) obcy klient, który sklei odpowiedź i atrybucję w jeden goły węzeł
+// tekstowy, schowałby odpowiedź pod „•••”. Kierunek awarii bezpieczny: brak cyfry → NIE
+// dokładamy węzła (atrybucja zostaje widoczna nad cytatem, sam cytat i tak się zwija),
+// a nasza atrybucja nigdy nie jest bezcyfrowa, więc to zawężenie jej nie rusza.
+function czyLiniaAtrybucji(tekst) {
+  const t = String(tekst ?? '');
+  return /(?:napisał\(a\):|wrote:)\s*$/i.test(t) && /\d/.test(t);
 }
 
 // Długość tekstu listu z pominięciem <style>, którego CSS też jest textContent,
@@ -548,14 +574,15 @@ function dlugoscTresci(kontener) {
   return suma;
 }
 
-function schowajGrupe(kontener, grupa) {
-  // List przekazany bywa w całości cytatem. Zwinięcie go dałoby pustą kartkę.
-  // Mierzymy tekstem, nie węzłami: cytat bywa zagnieżdżony w <div>, więc
-  // porównanie dzieci najwyższego poziomu dałoby zły wynik.
-  const cale = dlugoscTresci(kontener);
-  const cytat = grupa.reduce((suma, wezel) => suma + (wezel.textContent ?? '').trim().length, 0);
-  if (cale - cytat < 1) return;
+// Suma długości tekstu (po trim) węzłów jednej grupy cytatu — cytat i ewentualna
+// linia atrybucji. Ten sam trim co dlugoscTresci, żeby odejmowanie się zgadzało.
+function dlugoscWezlow(wezly) {
+  return wezly.reduce((suma, wezel) => suma + (wezel.textContent ?? '').trim().length, 0);
+}
 
+// Strażnik „pustej kartki” siedzi teraz zbiorczo w zwinCytaty (bo dwa rozłączne cytaty
+// muszą być ważone razem), więc tu już tylko przenosimy grupę pod „•••”.
+function schowajGrupe(grupa) {
   const opakowanie = document.createElement('div');
   opakowanie.className = 'cz-cytat';
   grupa[0].before(opakowanie);
