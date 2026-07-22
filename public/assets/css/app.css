@@ -1067,6 +1067,30 @@ a.boczny-link {
   color: var(--atrament-2);
 }
 
+/* Cytat zwinięty pod „•••”, jak w Gmailu: chowa też linię atrybucji. */
+.cz-cytat { margin: 12px 0; }
+
+.cz-cytat-przycisk {
+  padding: 2px 10px;
+  border: 1px solid var(--linia-2);
+  border-radius: var(--r-s);
+  background: var(--papier-2);
+  color: var(--stempel);
+  font: inherit;
+  line-height: 1.1;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.cz-cytat-przycisk:hover { background: var(--papier-3); }
+
+.cz-cytat-tresc {
+  margin-top: 8px;
+  padding-left: 12px;
+  border-left: 2px solid var(--linia-2);
+  color: var(--atrament-2);
+}
+
 .kompozycja-edytor ul, .kompozycja-edytor ol,
 .cz-body ul, .cz-body ol {
   margin: 0.4em 0;

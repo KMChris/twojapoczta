@@ -31,6 +31,7 @@ import { wstawTrescZLinkami } from './ui.js';
 import {
   DOZWOLONE_TAGI, WYTNIJ_W_CALOSCI, dozwoloneAtrybuty, bezpiecznyLink,
   ocenUrlObrazka, czyOdrzucicDeklaracje, zakresujSelektor, rozstrzygnijMedia,
+  znajdzCytatyWTekscie, zostajeCosWidocznego,
 } from './reguly.js';
 import { rgbNaOklch, odwrocJasnosc, parsujRgb, zapiszRgb } from './kolor.js';
 
@@ -53,7 +54,9 @@ const PRZODKOWIE_WYCINANYCH = [...WYTNIJ_W_CALOSCI]
 
 export function renderujTresc(kontener, wiadomosc, opcje = {}) {
   wyczyscKontener(kontener);
-  if (!wiadomosc.body_html) return renderujTekst(kontener, wiadomosc);
+  // Normalny tekst zwija cytaty pod „•••”. Fallback niżej woła renderujTekst BEZ tej
+  // flagi: jak render HTML padł, dajemy goły tekst i nie kombinujemy dalej.
+  if (!wiadomosc.body_html) return renderujTekst(kontener, wiadomosc, { zwijajCytaty: true });
   try {
     return renderujHtml(kontener, wiadomosc, opcje);
   } catch (err) {
@@ -74,12 +77,19 @@ function wyczyscKontener(kontener) {
   kontener.removeAttribute('id');
 }
 
-function renderujTekst(kontener, wiadomosc) {
+function renderujTekst(kontener, wiadomosc, { zwijajCytaty = false } = {}) {
   wyczyscKontener(kontener);
-  // `?? ''`, bo list bywa sam HTML-em bez części tekstowej, a wstawTrescZLinkami robi
-  // String(tekst) — bez tego użytkownik dostałby wypisane słowo „undefined".
-  wstawTrescZLinkami(kontener, wiadomosc.body ?? '');
-  return { zdalne: 0 };
+  // `?? ''`, bo list bywa sam HTML-em bez części tekstowej, a wstaw* robią String(tekst)
+  // — bez tego użytkownik dostałby wypisane słowo „undefined".
+  //
+  // Dwa wywołania, różne potrzeby: normalna ścieżka tekstowa (renderujTresc) chowa cytaty,
+  // fallback po wyjątku w renderze HTML woła nas bez flagi i ma dać goły tekst.
+  if (zwijajCytaty) wstawTekstZCytatami(kontener, wiadomosc.body ?? '');
+  else wstawTrescZLinkami(kontener, wiadomosc.body ?? '');
+  // Pełny kształt jak renderujHtml: tekst nie ma kolorów do odwrócenia, więc `false`
+  // na sztywno. Jawne pole zamiast `undefined` to porządek — `if (przerobioneKolory)`
+  // w main.js dalej fałszywe, furtka „Oryginalne kolory” się nie pojawia.
+  return { zdalne: 0, przerobioneKolory: false };
 }
 
 function renderujHtml(kontener, wiadomosc, { cid = {}, obrazki = false, oryginalneKolory = false }) {
@@ -121,6 +131,10 @@ function renderujHtml(kontener, wiadomosc, { cid = {}, obrazki = false, oryginal
     kontener.append(styl);
   }
   kontener.append(...doc.body.childNodes);
+  // Zwijanie idzie NA KOŃCU, po dwóch rzeczach: po przepiszKoloryDrzewa (kolory odwracamy
+  // na treści w drzewie, zanim zwinięcie poprzenosi węzły do opakowania) i po wstawieniu
+  // treści do kontenera (zwinCytaty szuka blockquote w kontenerze, nie w oderwanym doc).
+  zwinCytaty(kontener);
   return { zdalne: kontekst.zdalne, przerobioneKolory: Boolean(pasmo) };
 }
 
@@ -482,4 +496,118 @@ function przepiszRegulyArkusza(reguly, pasmo) {
     if (regula instanceof CSSStyleRule) przepiszDeklaracje(regula.style, pasmo);
     else if (regula.cssRules) przepiszRegulyArkusza(regula.cssRules, pasmo);
   }
+}
+
+// --- Cytaty ---------------------------------------------------------------------
+
+// Selektory cytatu w liście HTML. Uwaga na sanitizer: czyscAtrybuty ZDEJMUJE `id`
+// (DOM clobbering) oraz `type` z blockquote (spoza allowlisty), więc do zwinCytaty
+// docierają realnie tylko `blockquote` (łapie też Apple Mail `blockquote[type=cite]`)
+// i `.gmail_quote` (class przeżywa). `#divRplyFwdMsg` (Outlook) i `blockquote[type=cite]`
+// zostają jako zapis intencji — pierwszy jest dziś martwy (id ścięte), drugi zbędny
+// (podzbiór `blockquote`). Zob. raport Task 9.
+const SELEKTORY_CYTATU = 'blockquote, .gmail_quote, #divRplyFwdMsg, blockquote[type="cite"]';
+
+function zwinCytaty(kontener) {
+  // Tylko najbardziej zewnętrzne: zagnieżdżone chowają się razem z rodzicem.
+  const cytaty = [...kontener.querySelectorAll(SELEKTORY_CYTATU)]
+    .filter((wezel) => !wezel.parentElement.closest(SELEKTORY_CYTATU));
+  if (!cytaty.length) return;
+
+  // Nasz własny cytat ma nad sobą linię atrybucji („… napisał(a):”), a `•••`
+  // ma chować także ją, więc bierzemy ją do grupy razem z blockquote.
+  for (const cytat of cytaty) {
+    const grupa = [cytat];
+    let poprzedni = cytat.previousSibling;
+    while (poprzedni && poprzedni.nodeType === Node.TEXT_NODE && !poprzedni.textContent.trim()) {
+      poprzedni = poprzedni.previousSibling;
+    }
+    // Kandydatem jest WYŁĄCZNIE goły węzeł tekstowy: nasza atrybucja z kompozytora
+    // (kompozycja.js:427, „…napisał(a):”) renderuje się jako czysty tekst tuż przed
+    // <blockquote>. Element-rodzeństwo do grupy NIE wchodzi — w ścieżce tekstowej całą treść
+    // „przed” trzyma <div>, którego textContent też bywa zakończony „napisał(a):”; wciągnięcie
+    // go schowałoby widoczną odpowiedź razem z cytatem (zmierzone w przeglądarce: bottom-post
+    // gubił treść odpowiedzi, top-post nie zwijał cytatu wcale). Węziej niż plan, celowo:
+    // heurystyka ma łapać naszą własną atrybucję, nie zgadywać cudzej.
+    if (poprzedni && poprzedni.nodeType === Node.TEXT_NODE
+        && /napisał\(a\):\s*$|wrote:\s*$/i.test(poprzedni.textContent ?? '')) {
+      grupa.unshift(poprzedni);
+    }
+    schowajGrupe(kontener, grupa);
+  }
+}
+
+// Długość tekstu listu z pominięciem <style>, którego CSS też jest textContent,
+// a treścią nie jest.
+function dlugoscTresci(kontener) {
+  let suma = 0;
+  for (const wezel of kontener.childNodes) {
+    if (wezel.tagName === 'STYLE') continue;
+    suma += (wezel.textContent ?? '').trim().length;
+  }
+  return suma;
+}
+
+function schowajGrupe(kontener, grupa) {
+  // List przekazany bywa w całości cytatem. Zwinięcie go dałoby pustą kartkę.
+  // Mierzymy tekstem, nie węzłami: cytat bywa zagnieżdżony w <div>, więc
+  // porównanie dzieci najwyższego poziomu dałoby zły wynik.
+  const cale = dlugoscTresci(kontener);
+  const cytat = grupa.reduce((suma, wezel) => suma + (wezel.textContent ?? '').trim().length, 0);
+  if (cale - cytat < 1) return;
+
+  const opakowanie = document.createElement('div');
+  opakowanie.className = 'cz-cytat';
+  grupa[0].before(opakowanie);
+
+  const przycisk = document.createElement('button');
+  przycisk.type = 'button';
+  przycisk.className = 'cz-cytat-przycisk';
+  przycisk.setAttribute('aria-expanded', 'false');
+  przycisk.setAttribute('aria-label', 'Pokaż cytowaną treść');
+  przycisk.textContent = '•••';
+
+  const tresc = document.createElement('div');
+  tresc.className = 'cz-cytat-tresc';
+  tresc.hidden = true;
+  tresc.append(...grupa);
+
+  przycisk.addEventListener('click', () => {
+    tresc.hidden = !tresc.hidden;
+    przycisk.setAttribute('aria-expanded', String(!tresc.hidden));
+    przycisk.setAttribute('aria-label', tresc.hidden ? 'Pokaż cytowaną treść' : 'Ukryj cytowaną treść');
+  });
+
+  opakowanie.append(przycisk, tresc);
+}
+
+// Ścieżka tekstowa: ciągłe bloki linii od „>”. Atrybucji nad nimi nie
+// zgadujemy, bo heurystyka po samym tekście potrafi schować treść, która
+// cytatem nie jest.
+function wstawTekstZCytatami(kontener, tekst) {
+  const linie = String(tekst ?? '').split('\n');
+  const zakresy = znajdzCytatyWTekscie(tekst);
+  if (!zakresy.length || !zostajeCosWidocznego(linie, zakresy)) {
+    wstawTrescZLinkami(kontener, tekst);
+    return;
+  }
+
+  let kursor = 0;
+  for (const zakres of zakresy) {
+    if (zakres.start > kursor) {
+      const przed = document.createElement('div');
+      wstawTrescZLinkami(przed, linie.slice(kursor, zakres.start).join('\n'));
+      kontener.append(przed);
+    }
+    const cytat = document.createElement('blockquote');
+    wstawTrescZLinkami(cytat, linie.slice(zakres.start, zakres.end + 1).join('\n'));
+    kontener.append(cytat);
+    kursor = zakres.end + 1;
+  }
+  if (kursor < linie.length) {
+    const po = document.createElement('div');
+    wstawTrescZLinkami(po, linie.slice(kursor).join('\n'));
+    kontener.append(po);
+  }
+  zwinCytaty(kontener);
 }
