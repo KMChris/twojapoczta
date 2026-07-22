@@ -52,18 +52,27 @@ const PRZODKOWIE_WYCINANYCH = [...WYTNIJ_W_CALOSCI]
   .map((tag) => tag.toLowerCase())
   .join(', ');
 
-// Limit głębokości rekurencji czyscDrzewo to DEFENSE-IN-DEPTH, nie fix zmierzonego
-// zawieszenia. Realny DoS renderu siedzi w PARSERZE, nie tutaj: DOMParser.parseFromString
-// zjada praktycznie cały czas renderu (zmierzone: dla 30 tys. „<" parser ~807 ms ≈ cały
-// renderujTresc ~774 ms, czyscDrzewo w granicach szumu) i to jego bramkuje strażnik liczby
-// tagów niżej (zob. MAX_TAGI). W Blink parser sam ogranicza głębokość drzewa do ~511
-// (zmierzone: 60 tys. zagnieżdżonych <div> daje drzewo głębokie na 511, resztę spłaszcza),
-// więc czyscDrzewo chodzące po body i tak nie rekuruje głębiej. Limit zostaje jako druga
-// warstwa: (1) deterministycznie ogranicza głębokość renderu, (2) broni na wypadek silnika
-// BEZ takiego capu głębokości, gdzie dowolnie głęboka rekurencja to CPU i ryzyko
-// przepełnienia stosu. 256 z ogromnym zapasem nad uczciwą pocztą (nawet gęsto zagnieżdżone
-// tabele newsletterów to ~20-50 poziomów). Za limitem czyscDrzewo ucina całe poddrzewo —
-// bez zmiany wyniku dla żadnego realnego listu.
+// Limit głębokości rekurencji czyscDrzewo jest REALNĄ obroną także w Blinku — i to jest trzecia
+// wersja tego komentarza, bo dwie poprzednie kłamały w przeciwne strony. Nie jest prawdą, że
+// „chroni wydajność" (zmierzony DoS renderu siedzi w PARSERZE, nie tutaj: parseFromString zjada
+// praktycznie cały czas renderu i to jego bramkuje MAX_TAGI niżej). Ale nie jest też prawdą, że
+// „Blink i tak capuje głębokość drzewa na ~511, więc limit jest tylko na wypadek innego silnika".
+// Cap 511 obejmuje WYŁĄCZNIE część elementów. Zmierzone (maks. głębokość po CAŁYM drzewie, nie
+// po firstElementChild — poprzedni pomiar mylił się właśnie przez tamtą metodę):
+//   <div> ×8000        -> 511    (capowane)     <table><tr><td> ×2000 -> 2383  (NIE capowane)
+//   <blockquote> ×8000 -> 511    (capowane)     <a><div> ×4000        -> 4000  (NIE capowane)
+//   <ul><li> ×4000     -> 511    (capowane)     <span> ×8000          -> 511   (capowane)
+// Co gorsza te struktury są osiągalne POD progiem MAX_TAGI, bo dają dwa-trzy tagi na poziom:
+// `<a><div>` ×8000 to dokładnie 16 000 „<" i drzewo głębokie na 8000, a `<table><tr><td>` ×5333
+// to 15 999 „<" i głębokość 5716 (zmierzone). Bez tego limitu czyscDrzewo rekurowałoby więc
+// tysiące poziomów na ładunku, który strażnik tagów przepuszcza.
+// Czy to sięga stosu: rekurencja o kształcie czyscDrzewo przeszła 8000 poziomów na sparsowanym
+// drzewie (5/5 prób), ale na drzewie zbudowanym przez DOM API rzucała RangeError już przy 8000 —
+// czyli te głębokości leżą DOKŁADNIE na granicy stosu V8 i po której stronie wypadną, zależy od
+// szczegółów, na które nie mamy wpływu. Limit zdejmuje to pytanie: głębokość renderu jest
+// deterministyczna, a RangeError złapany przez renderujTresc zrzucałby list do gołego tekstu.
+// 256 z dużym zapasem nad uczciwą pocztą (nawet gęsto zagnieżdżone tabele newsletterów idą rzędu
+// kilkudziesięciu poziomów). Za limitem czyscDrzewo ucina całe poddrzewo.
 const MAX_GLEBOKOSC = 256;
 
 // Twardy limit liczby tagów (znaków „<") w body_html, sprawdzany PRZED parsowaniem — tu, nie
@@ -72,9 +81,14 @@ const MAX_GLEBOKOSC = 256;
 // na ~13 s. Bajtowy limit serwera (2 MB, server/mail.js) tego nie łapie — taki ładunek to
 // tylko ~645 KB. Więc bramkujemy gęstość tagów: powyżej progu w ogóle nie parsujemy, dajemy
 // tekst. 16000 dobrane pomiarem z dwóch stron naraz:
-// · Od góry (koszt AT progu): parse NAJGORSZEJ struktury, głęboko zagnieżdżonej, przy 16 tys.
-//   „<" to ~205 ms (15k→178 ms, 17k→229 ms). Trzymamy to pod ~250 ms, żeby list tuż pod
-//   progiem nie dawał własnego mini-zawieszenia.
+// · Od góry (koszt AT progu): przy DOKŁADNIE 16 tys. „<" najgorsze struktury kosztują znacznie
+//   więcej, niż stało tu wcześniej („~205 ms", „trzymamy pod ~250 ms" — obie liczby były
+//   nieprawdziwe). Zmierzone renderujTresc: `<b>x` ×16000 → 540-553 ms, niedomknięte `<div>`
+//   ×16000 → ~571 ms, `<a><div>` ×8000 → ~397 ms, domknięte zagnieżdżone `<div>` ×8000 →
+//   ~211 ms, płaskie `<p>x</p>` ×8000 → ~28 ms. Uczciwie więc: strażnik NIE trzyma najgorszego
+//   przypadku pod ~250 ms, tylko sprowadza go poniżej sekundy (~0,55-0,6 s) — zamiast ~13 s,
+//   które daje ten sam ładunek bez strażnika. Tyle wystarczy, żeby karta nie wyglądała na
+//   zawieszoną, a niżej progu nie schodzimy, bo zaczyna gubić realną pocztę (poniżej).
 // · Od dołu (uczciwa poczta): realny newsletter ~2400 tagów parsuje się ~2 ms, a bardzo
 //   złożony sięga ~6-8 tys.; 16000 to ~2× tego sufitu, z zapasem nad prawdziwą pocztą.
 // Liczymy „<", więc próg celuje w najgorszy przypadek (zagnieżdżenie); płaska poczta o tej
@@ -83,6 +97,36 @@ const MAX_GLEBOKOSC = 256;
 // degraduje się czytelnie, a podniesienie progu wpuściłoby zagnieżdżony ładunek 20-30 tys.
 // tagów wiszący 300-700 ms. Licznik: liczbaTagow w reguly.js.
 const MAX_TAGI = 16000;
+
+// Twardy limit liczby reguł CSS przemielanych z JEDNEGO listu. MAX_TAGI go nie zastąpi i to
+// jest sedno: cały arkusz mieści się w jednym <style>, czyli w 2-6 znakach „<", więc strażnik
+// gęstości tagów przepuszcza go bez mrugnięcia (zmierzone: 160 tys. reguł `aN{color:red}` to
+// 2,64 MB i DOKŁADNIE 4 tagi). Koszt nie siedzi przy tym w przeglądarce, tylko w naszym kodzie:
+// samo `replaceSync` na tych 160 tys. reguł to 166 ms, a cały renderujTresc 1771 ms w jasnym
+// i 5449 ms w ciemnym — reszta to przetworzRegule per reguła (oczyscDeklaracje + zakresujSelektor,
+// a w ciemnym jeszcze przepiszArkusz/przepiszDeklaracje). Budżet jest ZBIORCZY na cały list, nie
+// per arkusz, bo rozbicie ładunku na 50 arkuszy po 5000 reguł kosztuje 7875 ms (zmierzone) i
+// limit liczony osobno dla każdego arkusza przepuściłby je wszystkie.
+// 5000 dobrane pomiarem z dwóch stron naraz:
+// · Od góry (koszt AT progu): samo przetworzenie 5000 reguł to 139 ms w ciemnym i 50 ms w jasnym
+//   (dla porównania 3000 → 79 ms, 8000 → 240 ms). Ale liczy się koszt CAŁEGO renderu przy
+//   wyczerpanym limicie bajtowym body_html (2 MB, server/mail.js), bo do policzenia reguł trzeba
+//   je najpierw sparsować. Zmierzone renderujTresc w ciemnym dla ładunku 2 MB, zależnie od tego,
+//   na ile <style> jest rozbity: 1 arkusz → 198 ms, ten sam w jednym @media → 211 ms,
+//   50 arkuszy → 266 ms, 500 → 278 ms, 5000 → 326 ms. Czyli sufit to ~0,33 s — ten sam rząd co
+//   najgorszy przypadek MAX_TAGI (~0,6 s), zamiast 5,4 s bez tego limitu.
+// · Od dołu (uczciwa poczta): typowy list ma dziesiątki-setki reguł, a bardzo złożony newsletter
+//   rzadko przekracza 1000-2000. Zapas widać najlepiej w bajtach: wygenerowany newsletter o 2199
+//   policzonych regułach (klasy, @media, kolory, tła) to już 132 KB samego CSS, a próg 5000
+//   wypada dopiero przy ~300 KB — wielokrotność tego, co niesie realna poczta.
+//   Uwaga przy strojeniu progu: liczymy REKURENCYJNIE, więc @media dokłada siebie i swoje
+//   wnętrze. Newsletter z zapytaniami medialnymi wychodzi ~10% wyżej, niż sugeruje sama liczba
+//   reguł najwyższego poziomu (zmierzone: 1801 top-level → 2199 policzonych).
+// Za progiem pomijamy CAŁE arkusze, nigdy pół arkusza: użytkownik traci wtedy samo stylowanie,
+// a treść listu renderuje się dalej — łagodniej niż zejście do gołego tekstu, a przy okazji bez
+// arkusza sklejonego z połowy reguł, który wyglądałby gorzej niż jego brak. Pierwszy arkusz,
+// który się nie mieści, kończy CSS całego listu (uzasadnienie przy `break` w przetworzStyle).
+const MAX_REGUL = 5000;
 
 export function renderujTresc(kontener, wiadomosc, opcje = {}) {
   wyczyscKontener(kontener);
@@ -429,15 +473,64 @@ function oczyscDeklaracje(deklaracje) {
 
 // --- CSSOM ---------------------------------------------------------------------
 
+// Liczy reguły arkusza tak, jak realnie chodzi po nich przetworzRegule, czyli RAZEM z wnętrzem
+// @media. Samo `arkusz.cssRules.length` nie wystarczy i nie jest to teoretyczne: te same 160 tys.
+// reguł opakowane w jedno `@media screen{…}` dają cssRules.length === 1 (zmierzone), a render
+// i tak stoi 4681 ms — licznik po wierzchu przepuściłby cały ładunek, wystarczyłoby dopisać
+// jedną linijkę wokół niego.
+//
+// Schodzimy też w reguły, w które przetworzRegule NIE schodzi (@supports, @keyframes,
+// zagnieżdżenia CSS). To świadome zawyżenie: mylimy się w stronę pominięcia arkusza, nigdy
+// w stronę niedoszacowania pracy, którą mamy do wykonania.
+//
+// Iteracyjnie, nie rekurencyjnie: rekurencja po dowolnie głęboko zagnieżdżonym CSS dokładałaby
+// nowe ryzyko przepełnienia stosu, a chodzi o strażnika kosztu, nie o kolejny sposób na wywrotkę.
+// Przerwanie po przekroczeniu `limit` trzyma koszt zliczania na O(limit) na arkusz zamiast
+// O(reguł w arkuszu) — i tak samo ogranicza pamięć, bo każde odłożenie na stos odpowiada
+// jednej policzonej regule.
+function policzReguly(reguly, limit) {
+  let liczba = 0;
+  const stos = [reguly];
+  while (stos.length) {
+    for (const regula of stos.pop()) {
+      liczba += 1;
+      if (liczba > limit) return liczba;
+      if (regula.cssRules && regula.cssRules.length) stos.push(regula.cssRules);
+    }
+  }
+  return liczba;
+}
+
 function przetworzStyle(zrodla, kontekst) {
   const czesci = [];
+  // Budżet zbiorczy na CAŁY list, nie na pojedynczy arkusz: praca po naszej stronie zostaje
+  // przez to ograniczona do MAX_REGUL reguł niezależnie od tego, na ile <style> nadawca ją
+  // rozbije. Kolejne arkusze konsumują go po kolei, aż do wyczerpania (patrz MAX_REGUL).
+  let budzet = MAX_REGUL;
   for (const zrodlo of zrodla) {
+    if (budzet <= 0) break;
     const arkusz = new CSSStyleSheet();
     try {
       arkusz.replaceSync(zrodlo);
     } catch {
       continue; // zepsuty arkusz pomijamy w całości
     }
+    // Zliczamy PO replaceSync (samo parsowanie jednego arkusza jest tanie), ale PRZED
+    // przetworzRegule — inaczej strażnik biegłby za tym, przed czym ma bronić.
+    //
+    // Pierwszy arkusz, który się w budżecie nie mieści, KOŃCZY CSS całego listu (break), a nie
+    // tylko wypada sam (continue). Powód jest zmierzony: przy `continue` budżet zatrzymuje się
+    // tuż nad zerem i nigdy go nie osiąga (ładunek z 5000 arkuszy po ~24 reguły zjada 4992 z
+    // 5000, a każdy kolejny arkusz jest za duży na resztę), więc pętla i tak parsowała
+    // replaceSync CAŁE 2 MB — 720 ms zamiast ~180 ms. Dla uczciwej poczty ta różnica nie
+    // istnieje: żeby w ogóle dojść do pominięcia, list musi nieść ponad MAX_REGUL reguł, czyli
+    // wielokrotność tego, co niesie realny newsletter.
+    const ile = policzReguly(arkusz.cssRules, budzet);
+    if (ile > budzet) {
+      console.warn('[tresc] arkusz ma zbyt wiele reguł, pomijam stylowanie od tego miejsca');
+      break;
+    }
+    budzet -= ile;
     for (const regula of arkusz.cssRules) {
       const tekst = przetworzRegule(regula, kontekst);
       if (tekst) czesci.push(tekst);
