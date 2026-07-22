@@ -130,6 +130,117 @@ img, svg {
   color: #191c24;
 }
 
+/* --- Lista wysuwana selecta ---------------------------------------------- */
+
+/* Natywną listę opcji rysuje przeglądarka i nasze zmienne jej nie sięgają. Sam
+   `color-scheme` tu nie wystarcza: pola w aplikacji mają `background: none`, a Chrome
+   bierze tło listy z tła kontrolki, więc przezroczyste zostawiało jasną płachtę także
+   w nocnej sortowni — biała lista pod kremowym tekstem. Jawne kolory na `option` to
+   minimum, które działa w każdym silniku i niczego nowego nie wymaga. */
+option {
+  background-color: var(--papier);
+  color: var(--atrament);
+}
+
+/* Chrome i Edge od 135 wpuszczają nas do środka kontrolki, więc lista przestaje być
+   rysunkiem systemu i staje się zwykłym elementem: te same zmienne, ten sam promień
+   i cień co reszta interfejsu, i motyw z niej wreszcie schodzi razem z aplikacją.
+   Całość stoi w @supports, bo tam, gdzie `appearance: base-select` nie istnieje,
+   select ma zostać w pełni natywny (z kolorami z reguły wyżej), a nie przerobiony
+   do połowy. Lista trafia do warstwy wierzchniej, więc nie ma z czym kolidować
+   z-indeksem i nie potrzebuje własnego kontekstu układania. */
+@supports (appearance: base-select) {
+  select,
+  select::picker(select) {
+    appearance: base-select;
+  }
+
+  /* base-select przestaje dobierać szerokość do NAJDŁUŻSZEJ opcji i zaczyna do ZAZNACZONEJ,
+     więc długa wartość rozpychała kontener albo łamała się na dwa wiersze. Zmierzone na
+     „Dopisz konto…" z długim adresem: 284 px w pudełku szerokim na 220 px, a po samym
+     ograniczeniu szerokości pole rosło z 42 na 65 px. Te trzy własności trzymają kontrolkę
+     w kontenerze i w jednym wierszu; przycięciem samego tekstu zajmuje się już przeglądarka.
+     Węższe ograniczenia z app.css (np. `.narz-select`) wygrywają i tak, bo mają wyższą siłę. */
+  select {
+    max-width: 100%;
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  select::picker(select) {
+    padding: 4px;
+    color: var(--atrament);
+    background: var(--papier);
+    border: 1px solid var(--linia-2);
+    border-radius: var(--r-m);
+    box-shadow: var(--cien-2);
+    /* Długa lista (kroje pisma, typy zdarzeń) ma się przewijać, a nie wychodzić poza ekran. */
+    max-height: min(60vh, 320px);
+    overflow-y: auto;
+  }
+
+  /* Strzałka jest częścią kontrolki, więc bierze jej kolor tekstu, a nie systemowy. */
+  select::picker-icon {
+    color: var(--stempel);
+    transition: rotate var(--przejscie);
+  }
+
+  select:open::picker-icon {
+    rotate: 180deg;
+  }
+
+  option {
+    display: flex;
+    gap: 0.4em;
+    align-items: center;
+    padding: 0.4em 0.6em;
+    background: none; /* tło niesie już ::picker */
+    border-radius: var(--r-s);
+    cursor: pointer;
+  }
+
+  /* `:hover` dla myszy, `:checked` dla stanu · obie drogi tym samym papierem, żeby
+     wskazanie klawiaturą wyglądało tak samo jak kursorem. */
+  option:hover,
+  option:focus {
+    background: var(--papier-3);
+  }
+
+  option:checked {
+    font-weight: 620;
+    color: var(--priorytet);
+  }
+
+  option::checkmark {
+    color: var(--priorytet);
+  }
+
+  /* Lista wjeżdża zamiast wyskakiwać. `allow-discrete` bierze do przejścia `display`
+     i `overlay`, bez których element znika w pierwszej klatce zamykania. Blok
+     prefers-reduced-motion na dole pliku gasi to razem z resztą ruchu. */
+  select::picker(select) {
+    opacity: 0;
+    translate: 0 -4px;
+    transition:
+      opacity var(--przejscie),
+      translate var(--przejscie),
+      display var(--przejscie) allow-discrete,
+      overlay var(--przejscie) allow-discrete;
+  }
+
+  select:open::picker(select) {
+    opacity: 1;
+    translate: 0;
+  }
+
+  @starting-style {
+    select:open::picker(select) {
+      opacity: 0;
+      translate: 0 -4px;
+    }
+  }
+}
+
 /* --- Wspólne drobiazgi -------------------------------------------------- */
 
 .eyebrow {
