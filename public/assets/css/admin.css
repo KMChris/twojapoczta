@@ -475,6 +475,28 @@ body.panel-admina {
 
 /* --- Formularze panelu (na bazie .ustawienia-formularz) -------------------------------------- */
 
+/* Wygląd pola jest w panelu jeden, ale pola powstają w wielu miejscach z JS i część z nich nie
+   trafia do żadnego kontenera ze stylem: zakładanie zespołu i edytor konta zostawały z domyślnym
+   wyglądem przeglądarki, czyli białym prostokątem na ciemnym tle. Ta reguła jest podłogą dla
+   wszystkich pól panelu. Selektor stoi w :where(), więc ma zerową siłę i każda dotychczasowa
+   reguła kontenera (.pole-obok, .filtr-dziennika, .formularz-admina, .alias-dodawanie) nadal
+   wygrywa. Kolejne pole dopisane w panelu dostanie ten wygląd samo, bez pamiętania o klasie.
+   Pominięte są pola, których natywny wygląd jest zamierzony: checkbox, radio i wybór pliku. */
+.panel-admina :where(input:not([type='checkbox'], [type='radio'], [type='file']), select, textarea) {
+  padding: 0.55em 0.8em;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--atrament);
+  background: var(--papier-2);
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-m);
+}
+
+.panel-admina :where(input:not([type='checkbox'], [type='radio'], [type='file']), select, textarea):focus {
+  outline: none;
+  border-color: var(--priorytet);
+}
+
 .formularz-admina input[type='number'] {
   width: 110px;
   padding: 0.55em 0.7em;
