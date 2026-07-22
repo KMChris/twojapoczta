@@ -66,7 +66,7 @@
 
   <div class="szukaj">
     <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><use href="#i-search"/></svg>
-    <input type="search" data-szukaj placeholder="Szukaj w poczcie…   ( / )" aria-label="Szukaj w poczcie">
+    <input type="search" name="szukaj" data-szukaj placeholder="Szukaj w poczcie…   ( / )" aria-label="Szukaj w poczcie">
     <button class="szukaj-wyczysc" data-akcja="wyczysc-szukanie" aria-label="Wyczyść wyszukiwanie" hidden>
       <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-close"/></svg>
     </button>
@@ -176,12 +176,12 @@
       <button type="button" class="narz-btn" data-cmd="underline" title="Podkreślenie (Ctrl+U)" aria-label="Podkreślenie"><u>U</u></button>
       <button type="button" class="narz-btn" data-cmd="strikeThrough" title="Przekreślenie" aria-label="Przekreślenie"><s>S</s></button>
       <span class="narz-przerwa" aria-hidden="true"></span>
-      <select class="narz-select" data-czcionka title="Krój pisma" aria-label="Krój pisma">
+      <select class="narz-select" name="czcionka" data-czcionka title="Krój pisma" aria-label="Krój pisma">
         <option value="Arial">Bezszeryfowy</option>
         <option value="Georgia">Szeryfowy</option>
         <option value="Courier New">Maszynowy</option>
       </select>
-      <select class="narz-select narz-rozmiar" data-rozmiar title="Rozmiar pisma (w punktach)" aria-label="Rozmiar pisma w punktach">
+      <select class="narz-select narz-rozmiar" name="rozmiar" data-rozmiar title="Rozmiar pisma (w punktach)" aria-label="Rozmiar pisma w punktach">
         <option value="8">8</option>
         <option value="9">9</option>
         <option value="10" selected>10</option>
@@ -204,7 +204,7 @@
       <span class="narz-przerwa" aria-hidden="true"></span>
       <button type="button" class="narz-btn" data-narzedzie="link" title="Wstaw odnośnik" aria-label="Wstaw odnośnik"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-link"/></svg></button>
       <button type="button" class="narz-btn" data-narzedzie="obraz" title="Wstaw obrazek" aria-label="Wstaw obrazek"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-image"/></svg></button>
-      <input type="file" data-obraz-input accept="image/*" hidden>
+      <input type="file" name="obraz" data-obraz-input accept="image/*" hidden>
       <button type="button" class="narz-btn" data-cmd="usunFormat" title="Usuń formatowanie" aria-label="Usuń formatowanie"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-clear"/></svg></button>
     </div>
     <div class="kompozycja-edytor" data-edytor contenteditable="true" data-placeholder="Napisz wiadomość…" aria-label="Treść wiadomości"></div>
@@ -220,7 +220,7 @@
       <button type="button" class="ikona-btn" data-akcja="dodaj-zalacznik" title="Dodaj załącznik" aria-label="Dodaj załącznik">
         <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-attach"/></svg>
       </button>
-      <input type="file" data-plik-input multiple hidden>
+      <input type="file" name="plik" data-plik-input multiple hidden>
       <span class="kompozycja-status" data-status-zapisu></span>
       <button type="button" class="ikona-btn kompozycja-odrzuc" data-akcja="odrzuc-robocza" title="Odrzuć wersję roboczą" aria-label="Odrzuć wersję roboczą">
         <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-trash"/></svg>
@@ -230,7 +230,7 @@
       <p class="eyebrow">Nadaj później</p>
       <div class="nadaj-presety" data-nadaj-presety></div>
       <div class="nadaj-wlasny">
-        <input type="datetime-local" data-nadaj-kiedy aria-label="Własny termin wysyłki">
+        <input type="datetime-local" name="nadaj_kiedy" data-nadaj-kiedy aria-label="Własny termin wysyłki">
         <button type="button" class="nadaj-zatwierdz" data-akcja="zaplanuj">Zaplanuj</button>
       </div>
     </div>
@@ -247,7 +247,7 @@
 <dialog class="paleta" data-paleta>
   <div class="paleta-szukaj">
     <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><use href="#i-search"/></svg>
-    <input type="text" data-paleta-input placeholder="Wpisz polecenie albo nazwę folderu…" aria-label="Szukaj polecenia">
+    <input type="text" name="paleta" data-paleta-input placeholder="Wpisz polecenie albo nazwę folderu…" aria-label="Szukaj polecenia">
     <kbd>esc</kbd>
   </div>
   <ul class="paleta-lista" data-paleta-lista role="listbox"></ul>
@@ -329,7 +329,7 @@
       <legend>Aliasy adresu</legend>
       <ul class="aliasy" data-aliasy></ul>
       <div class="alias-dodawanie" data-alias-dodawanie>
-        <input type="text" data-alias-input placeholder="np. biuro" autocomplete="off"
+        <input type="text" name="alias" data-alias-input placeholder="np. biuro" autocomplete="off"
                autocapitalize="none" spellcheck="false" maxlength="30" aria-label="Nowy alias">
         <span aria-hidden="true" data-domena>@twojapoczta.com</span>
         <button type="button" class="alias-dodaj" data-akcja="dodaj-alias">Dodaj</button>

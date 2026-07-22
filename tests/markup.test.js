@@ -31,6 +31,16 @@ test('każdy <svg> w stronach deklaruje xmlns', () => {
   }
 });
 
+// Pole bez `id` i bez `name` psuje autouzupełnianie i menedżery haseł, a przeglądarka
+// zgłasza je tylko w panelu Issues, więc w konsoli tego nie widać. Test patrzy na znaczniki
+// w stronach; pola tworzone z JS (panel administratora) trzeba pilnować osobno.
+test('każde pole formularza ma id albo name', () => {
+  for (const nazwa of strony) {
+    const bez = [...wczytaj(nazwa).matchAll(/<(?:input|select|textarea)(?![^>]*\s(?:id|name)=)[^>]*>/g)];
+    assert.deepEqual(bez.map((m) => m[0]), [], `${nazwa}: pole bez id i name`);
+  }
+});
+
 test('każda strona deklaruje color-scheme', () => {
   for (const nazwa of strony) {
     assert.match(wczytaj(nazwa), /<meta name="color-scheme"/, `${nazwa}: brak meta color-scheme`);
