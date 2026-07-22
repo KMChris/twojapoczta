@@ -424,14 +424,22 @@ export function initKompozycja(app) {
 // Cytowanie przy odpowiedzi: oryginał wjeżdża jako blockquote (HTML, gdy jest).
 export function zbudujOdpowiedz(wiadomosc, uzytkownik) {
   const temat = wiadomosc.subject.startsWith('Re:') ? wiadomosc.subject : `Re: ${wiadomosc.subject}`;
+  // Format Gmaila: krótka data, adres w nawiasach kątowych. Czytnik chowa tę
+  // linię pod „•••” razem z cytatem, więc ma nieść komplet: kto i kiedy.
   const data = new Date(wiadomosc.sent_at).toLocaleString('pl-PL', {
+    weekday: 'short',
     day: 'numeric',
-    month: 'long',
+    month: 'short',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   });
-  const naglowek = `${data}, ${wiadomosc.from_name || wiadomosc.from_addr} napisał(a):`;
+  const kto = wiadomosc.from_name
+    ? `${wiadomosc.from_name} <${wiadomosc.from_addr}>`
+    : wiadomosc.from_addr;
+  // toLocaleString daje „pt., 17 lip 2026, 09:24”. Przecinek przed godziną
+  // zamieniamy na „o”, żeby wyszło „pt., 17 lip 2026 o 09:24”.
+  const naglowek = `${data.replace(/(\d{4}),/, '$1 o')} ${kto} napisał(a):`;
   const cytat = wiadomosc.body_html ? sanitizeHtml(wiadomosc.body_html) : tekstNaHtml(wiadomosc.body);
   const podpis = uzytkownik.signature ? `<br><br>${tekstNaHtml(uzytkownik.signature)}` : '';
   return {
