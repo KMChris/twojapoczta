@@ -31,7 +31,7 @@ import { wstawTrescZLinkami } from './ui.js';
 import {
   DOZWOLONE_TAGI, WYTNIJ_W_CALOSCI, dozwoloneAtrybuty, bezpiecznyLink,
   ocenUrlObrazka, czyOdrzucicDeklaracje, zakresujSelektor, rozstrzygnijMedia,
-  znajdzCytatyWTekscie, zostajeCosWidocznego,
+  znajdzCytatyWTekscie, zostajeCosWidocznego, liczbaTagow,
 } from './reguly.js';
 import { rgbNaOklch, odwrocJasnosc, parsujRgb, zapiszRgb } from './kolor.js';
 
@@ -52,21 +52,52 @@ const PRZODKOWIE_WYCINANYCH = [...WYTNIJ_W_CALOSCI]
   .map((tag) => tag.toLowerCase())
   .join(', ');
 
-// Twardy limit głębokości rekurencji czyscDrzewo. Bez niego list z bardzo głęboko
-// zagnieżdżonym HTML (osiągalny w limicie 2 MB treści od obcego nadawcy) wiesza kartę
-// czytnika: zmierzone 12 tys. poziomów zjada ~466 ms na głównym wątku, a rzędy dziesiątek
-// tysięcy — sekundy albo przepełnienie stosu. 256 dobieramy z dwóch stron naraz: z góry
-// z ogromnym zapasem nad uczciwą pocztą (nawet gęsto zagnieżdżone tabele newsletterów to
-// ~20-50 poziomów), z dołu daleko pod progiem, przy którym render zaczyna gryźć (tysiące).
-// 256 rekurencji jest natychmiastowe. Za limitem czyscDrzewo ucina całe poddrzewo, więc
-// limit chroni wydajność, nie zmieniając wyniku dla żadnego realnego listu.
+// Limit głębokości rekurencji czyscDrzewo to DEFENSE-IN-DEPTH, nie fix zmierzonego
+// zawieszenia. Realny DoS renderu siedzi w PARSERZE, nie tutaj: DOMParser.parseFromString
+// zjada praktycznie cały czas renderu (zmierzone: dla 30 tys. „<" parser ~807 ms ≈ cały
+// renderujTresc ~774 ms, czyscDrzewo w granicach szumu) i to jego bramkuje strażnik liczby
+// tagów niżej (zob. MAX_TAGI). W Blink parser sam ogranicza głębokość drzewa do ~511
+// (zmierzone: 60 tys. zagnieżdżonych <div> daje drzewo głębokie na 511, resztę spłaszcza),
+// więc czyscDrzewo chodzące po body i tak nie rekuruje głębiej. Limit zostaje jako druga
+// warstwa: (1) deterministycznie ogranicza głębokość renderu, (2) broni na wypadek silnika
+// BEZ takiego capu głębokości, gdzie dowolnie głęboka rekurencja to CPU i ryzyko
+// przepełnienia stosu. 256 z ogromnym zapasem nad uczciwą pocztą (nawet gęsto zagnieżdżone
+// tabele newsletterów to ~20-50 poziomów). Za limitem czyscDrzewo ucina całe poddrzewo —
+// bez zmiany wyniku dla żadnego realnego listu.
 const MAX_GLEBOKOSC = 256;
+
+// Twardy limit liczby tagów (znaków „<") w body_html, sprawdzany PRZED parsowaniem — tu, nie
+// w czyscDrzewo, siedzi zmierzony DoS. parseFromString to ~cały czas renderu, a jego koszt
+// rośnie kwadratowo z zagnieżdżeniem: 120 tys. „<" (60 tys. zagnieżdżonych <div>) wiesza kartę
+// na ~13 s. Bajtowy limit serwera (2 MB, server/mail.js) tego nie łapie — taki ładunek to
+// tylko ~645 KB. Więc bramkujemy gęstość tagów: powyżej progu w ogóle nie parsujemy, dajemy
+// tekst. 16000 dobrane pomiarem z dwóch stron naraz:
+// · Od góry (koszt AT progu): parse NAJGORSZEJ struktury, głęboko zagnieżdżonej, przy 16 tys.
+//   „<" to ~205 ms (15k→178 ms, 17k→229 ms). Trzymamy to pod ~250 ms, żeby list tuż pod
+//   progiem nie dawał własnego mini-zawieszenia.
+// · Od dołu (uczciwa poczta): realny newsletter ~2400 tagów parsuje się ~2 ms, a bardzo
+//   złożony sięga ~6-8 tys.; 16000 to ~2× tego sufitu, z zapasem nad prawdziwą pocztą.
+// Liczymy „<", więc próg celuje w najgorszy przypadek (zagnieżdżenie); płaska poczta o tej
+// samej liczbie tagów parsuje się liniowo i tanio. Cena proxy: bardzo duży PŁASKI list
+// (>16 tys. tagów, np. 1000-wierszowy newsletter ~18 tys.) też zejdzie do tekstu — rzadkie i
+// degraduje się czytelnie, a podniesienie progu wpuściłoby zagnieżdżony ładunek 20-30 tys.
+// tagów wiszący 300-700 ms. Licznik: liczbaTagow w reguly.js.
+const MAX_TAGI = 16000;
 
 export function renderujTresc(kontener, wiadomosc, opcje = {}) {
   wyczyscKontener(kontener);
   // Normalny tekst zwija cytaty pod „•••”. Fallback niżej woła renderujTekst BEZ tej
   // flagi: jak render HTML padł, dajemy goły tekst i nie kombinujemy dalej.
   if (!wiadomosc.body_html) return renderujTekst(kontener, wiadomosc, { zwijajCytaty: true });
+  // Strażnik gęstości tagów PRZED parserem: patologicznie tagogęsty HTML wiesza kartę już
+  // w parseFromString (zob. MAX_TAGI), więc go w ogóle nie parsujemy — pokazujemy tekst tą
+  // samą ścieżką co zwykły list bez HTML. To cichy fallback: użytkownik dostaje czytelną
+  // treść (wiadomosc.body), nie białą plamę ani surowe źródło. console.warn tylko dla
+  // diagnostyki, nie dla użytkownika.
+  if (liczbaTagow(wiadomosc.body_html) > MAX_TAGI) {
+    console.warn('[tresc] list zbyt gęsty w tagi, pomijam render HTML i pokazuję tekst');
+    return renderujTekst(kontener, wiadomosc, { zwijajCytaty: true });
+  }
   try {
     return renderujHtml(kontener, wiadomosc, opcje);
   } catch (err) {

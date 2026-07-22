@@ -75,6 +75,24 @@ export function ocenUrlObrazka(surowy) {
   return { rodzaj: 'odrzuc' };
 }
 
+// Liczba znaków „<" w źródle HTML: tani proxy liczby tagów, liczony PRZED parsowaniem.
+// tresc.js bramkuje nim DOMParser.parseFromString, bo to tam siedzi realny DoS renderu —
+// koszt parsera rośnie kwadratowo z zagnieżdżeniem, a patologicznie gęsty list trzeba
+// odsiać, zanim w ogóle dotknie parsera (zob. MAX_TAGI w tresc.js). Liczymy „<", nie
+// elementy: każdy tag otwierający i zamykający niesie swoje „<", więc to wierny proxy pracy
+// parsera, a wielki tekst BEZ tagów parsuje się tanio i nie ma go po co łapać. Skan jest
+// liniowy i tani — body_html wchodzi ograniczone do 2 MB (server/mail.js odrzuca większe do
+// tekstu), więc to najwyżej przelot po ~2 M znaków. Bez DOM (sam charCodeAt), stąd tutaj,
+// w module czystym, gdzie da się to przetestować w node — nie w tresc.js.
+export function liczbaTagow(html) {
+  const tekst = String(html ?? '');
+  let liczba = 0;
+  for (let i = 0; i < tekst.length; i += 1) {
+    if (tekst.charCodeAt(i) === 60) liczba += 1; // 60 === '<'
+  }
+  return liczba;
+}
+
 // Funkcje CSS, o których wiemy, że po zasób nie sięgają. Allowlista, nie blocklista:
 // szukanie URL-i w wartości jest omijalne (`url(http\3a //…)` w custom property omija
 // każdy regex na `https?:`, bo custom properties NIE są normalizowane i sekwencja

@@ -6,7 +6,7 @@ import {
   DOZWOLONE_TAGI, WYTNIJ_W_CALOSCI, dozwoloneAtrybuty, bezpiecznyLink, ocenUrlObrazka,
   czyWartoscSiegaPoZasob, czyDeklaracjaZakazana, czyOdrzucicDeklaracje,
   podzielSelektory, zakresujSelektor,
-  rozstrzygnijMedia, znajdzCytatyWTekscie, zostajeCosWidocznego,
+  rozstrzygnijMedia, znajdzCytatyWTekscie, zostajeCosWidocznego, liczbaTagow,
 } from '../public/assets/js/app/reguly.js';
 
 test('DOZWOLONE_TAGI: tabele przechodzą, bo na nich stoi layout newsletterów', () => {
@@ -271,4 +271,23 @@ test('zostajeCosWidocznego: puste linie poza cytatem nie liczą się jako treś�
 test('zostajeCosWidocznego: prawdziwa treść poza cytatem kwalifikuje', () => {
   const linie = ['Dzięki', '> a'];
   assert.equal(zostajeCosWidocznego(linie, [{ start: 1, end: 1 }]), true);
+});
+
+test('liczbaTagow: liczy każde „<", też tagi zamykające', () => {
+  assert.equal(liczbaTagow('<a><b></b></a>'), 4);
+  assert.equal(liczbaTagow('<div>'.repeat(1000) + '</div>'.repeat(1000)), 2000);
+});
+
+test('liczbaTagow: puste i beztagowe wejście daje 0', () => {
+  assert.equal(liczbaTagow(''), 0);
+  assert.equal(liczbaTagow('bez żadnych nawiasów kątowych'), 0);
+});
+
+test('liczbaTagow: nie-string nie wywraca licznika, „<" w treści też się liczy', () => {
+  assert.equal(liczbaTagow(null), 0);
+  assert.equal(liczbaTagow(undefined), 0);
+  // Literalne „<" w prozie/atrybucie liczymy tak samo — celowo konserwatywnie: więcej „<"
+  // to potencjalnie więcej pracy parsera, więc proxy myli się w stronę bezpieczną (tekst).
+  assert.equal(liczbaTagow('3 < 4'), 1);
+  assert.equal(liczbaTagow('<p title="a < b">x</p>'), 3);
 });
