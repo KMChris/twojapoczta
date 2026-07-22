@@ -407,6 +407,36 @@ test('parseMessage: część osadzona bez nazwy pliku dostaje nazwę syntetyczn�
   assert.equal(wynik.attachments[0].filename, 'osadzony-x_y.png');
 });
 
+test('parseMessage: osadzony obrazek z pustym filename* dostaje nazwę syntetyczną i zostaje załącznikiem', () => {
+  // filename*=UTF-8'' po RFC 2231 dekoduje się do pustego stringa, nie null.
+  // `||` (a nie `??`) łapie ten pusty string i schodzi do nazwy syntetycznej,
+  // więc osadzony obrazek nie przepada, a treść nie zostaje z wiszącym `cid:`.
+  const raw = buf([
+    'From: a@b.pl',
+    'Subject: Obrazek z pustym filename*',
+    'Content-Type: multipart/related; boundary="gr"',
+    '',
+    '--gr',
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    '<p><img src="cid:pusta@nazwa"></p>',
+    '--gr',
+    'Content-Type: image/png',
+    'Content-ID: <pusta@nazwa>',
+    "Content-Disposition: inline; filename*=UTF-8''",
+    '',
+    'bajty-obrazka',
+    '--gr--',
+    '',
+  ].join('\r\n'));
+  const wynik = parseMessage(raw);
+  assert.equal(wynik.attachments.length, 1);
+  assert.equal(wynik.attachments[0].filename, 'osadzony-pusta_nazwa.png');
+  assert.ok(wynik.attachments[0].filename.length > 0);
+  assert.equal(wynik.attachments[0].contentId, 'pusta@nazwa');
+  assert.equal(wynik.attachments[0].mime, 'image/png');
+});
+
 test('parseMessage: część tekstowa oznaczona jako załącznik bez nazwy zostaje treścią listu', () => {
   const raw = buf([
     'From: a@b.pl',

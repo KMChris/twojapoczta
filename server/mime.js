@@ -269,10 +269,13 @@ function walkPart(buffer, wynik, depth) {
     (contentId && !ct.value.startsWith('text/'));
 
   if (jestZalacznikiem) {
-    const nazwa = filename ?? syntetycznaNazwa(contentId, ct.value);
-    // Bez nazwy nie ma czego zapisać, więc spadamy do gałęzi tekstowych, tak jak
-    // przed dołożeniem cid: część text/* oznaczona jako załącznik, ale bez nazwy,
-    // ma dalej zostać treścią listu, a nie zniknąć.
+    const nazwa = filename || syntetycznaNazwa(contentId, ct.value);
+    // `||`, nie `??`: pusta nazwa (`filename*=UTF-8''` dekoduje się do '') też
+    // ma zejść do nazwy syntetycznej, inaczej osadzony obrazek z pustym filename*
+    // przepada, a w treści zostaje wiszący `cid:` bez kotwicy. Gdy i tak nie ma
+    // żadnej nazwy (null — np. część text/* nie dostaje syntetycznej), spadamy do
+    // gałęzi tekstowych, tak jak przed dołożeniem cid: część text/* oznaczona jako
+    // załącznik, ale bez nazwy, ma dalej zostać treścią listu, a nie zniknąć.
     if (nazwa) {
       if (wynik.attachments.length >= MAX_FILES_PER_MESSAGE) return;
       if (dane.length === 0 || dane.length > MAX_FILE_BYTES) return;
