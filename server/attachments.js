@@ -7,6 +7,12 @@ import { hasRoom } from './quota.js';
 
 export const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB na plik
 export const MAX_FILES_PER_MESSAGE = 10;
+// Osadzone obrazki (`cid:`) liczą się osobno od załączników, bo to nie są pliki, które
+// ktoś dołączył, tylko części szablonu · ikony, logo i przyciski. Wspólny licznik dawał im
+// pierwszeństwo nad prawdziwym plikiem tylko dlatego, że w multipart/mixed treść stoi przed
+// załącznikami. 25 z zapasem nad brandowanym newsletterem; sufit miejsca trzyma i tak limit
+// całego listu (MAX_MESSAGE_BYTES w smtp.js), a nie ten licznik.
+export const MAX_EMBEDDED_PER_MESSAGE = 25;
 export const MAX_CONTENT_ID_CHARS = 200; // nasze ograniczenie danych od nadawcy, kolumna jest zwykłym TEXT
 const UPLOAD_TTL_MS = 24 * 3600_000;
 

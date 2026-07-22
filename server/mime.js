@@ -2,7 +2,7 @@
 // Obsługuje: encoded-words (RFC 2047), quoted-printable, base64,
 // multipart (rekurencyjnie), text/html jako zapas, załączniki z limitami.
 
-import { MAX_FILE_BYTES, MAX_FILES_PER_MESSAGE } from './attachments.js';
+import { MAX_FILE_BYTES, MAX_FILES_PER_MESSAGE, MAX_EMBEDDED_PER_MESSAGE } from './attachments.js';
 
 const MAX_DEPTH = 5;
 
@@ -279,8 +279,24 @@ function walkPart(buffer, wynik, depth) {
     // gałęzi tekstowych, tak jak przed dołożeniem cid: część text/* oznaczona jako
     // załącznik, ale bez nazwy, ma dalej zostać treścią listu, a nie zniknąć.
     if (nazwa) {
-      if (wynik.attachments.length >= MAX_FILES_PER_MESSAGE) return;
+      // Osadzone mają WŁASNY budżet. Wspólny rozstrzygał o tym, co przeżyje, po kolejności
+      // części, a ta jest ustawiona najgorzej jak można: w multipart/mixed treść z całym
+      // poddrzewem `related` idzie PRZED załącznikami, więc ikony z brandowanego szablonu
+      // wyczerpywały limit i faktura dołączona pod nimi nie zapisywała się wcale — nie było
+      // jej ani w treści, ani pod listem, a użytkownik nie miał jak się o tym dowiedzieć.
+      // Rozdzielenie liczników nie podnosi przy tym sufitu miejsca: cały list wchodzi
+      // ograniczony do MAX_MESSAGE_BYTES (10 MB, smtp.js), a base64 puchnie o jedną trzecią,
+      // więc to tamten limit, a nie ten licznik, trzyma zajętość skrzynki.
+      //
+      // O przynależności decyduje `Content-ID` bez `disposition: attachment`, a nie brak
+      // nazwy pliku: uczciwy newsletter nadaje ikonom także nazwy, a mimo to są częścią
+      // szablonu, nie plikiem do pobrania.
+      const osadzony = Boolean(contentId) && !attachmentDisposition;
+      if (osadzony && wynik.osadzone >= MAX_EMBEDDED_PER_MESSAGE) return;
+      if (!osadzony && wynik.zwykle >= MAX_FILES_PER_MESSAGE) return;
       if (dane.length === 0 || dane.length > MAX_FILE_BYTES) return;
+      if (osadzony) wynik.osadzone += 1;
+      else wynik.zwykle += 1;
       wynik.attachments.push({ filename: nazwa, mime: ct.value, data: dane, contentId });
       return;
     }
@@ -302,7 +318,9 @@ function walkPart(buffer, wynik, depth) {
 export function parseMessage(raw) {
   const { head, body } = splitHeadBody(raw);
   const headers = parseHeaders(head);
-  const wynik = { attachments: [], body: null, html: null };
+  // `osadzone` i `zwykle` to dwa budżety załączników, liczone osobno · uzasadnienie przy
+  // ich sprawdzeniu w walkPart. Zostają wewnątrz parsera, na zewnątrz idzie sama lista.
+  const wynik = { attachments: [], body: null, html: null, osadzone: 0, zwykle: 0 };
 
   const ct = parseParams(headers['content-type'] ?? 'text/plain');
   if (ct.value.startsWith('multipart/') || ct.value.startsWith('text/')) {

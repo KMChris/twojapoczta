@@ -6,7 +6,7 @@ import {
   parseHeaders, parseParams, decodeCharset, decodeQuotedPrintable,
   decodeEncodedWords, parseAddress, htmlToText, parseMessage, parseContentId, htmlCytujeCid,
 } from '../server/mime.js';
-import { MAX_FILE_BYTES } from '../server/attachments.js';
+import { MAX_FILE_BYTES, MAX_EMBEDDED_PER_MESSAGE } from '../server/attachments.js';
 
 const buf = (s) => Buffer.from(s, 'utf8');
 
@@ -435,6 +435,82 @@ test('parseMessage: osadzony obrazek z pustym filename* dostaje nazwę syntetycz
   assert.ok(wynik.attachments[0].filename.length > 0);
   assert.equal(wynik.attachments[0].contentId, 'pusta@nazwa');
   assert.equal(wynik.attachments[0].mime, 'image/png');
+});
+
+// W multipart/mixed treść z całym poddrzewem `related` idzie PRZED załącznikami, więc przy
+// wspólnym budżecie ikony z szablonu wyczerpywały limit i prawdziwy załącznik nie zapisywał
+// się wcale: nie było go ani w treści, ani pod listem. To najgorsza możliwa awaria tej
+// ścieżki, bo cicha — użytkownik nie ma jak się dowiedzieć, że plik przyszedł.
+test('parseMessage: osadzone obrazki nie wypychają prawdziwego załącznika', () => {
+  const osadzone = [];
+  for (let i = 0; i < 12; i++) {
+    osadzone.push(
+      '--wew',
+      'Content-Type: image/png',
+      `Content-ID: <ikona${i}@szablon>`,
+      'Content-Disposition: inline',
+      '',
+      `bajty-ikony-${i}`
+    );
+  }
+  const raw = buf([
+    'From: a@b.pl',
+    'Subject: Faktura w brandowanym szablonie',
+    'Content-Type: multipart/mixed; boundary="zew"',
+    '',
+    '--zew',
+    'Content-Type: multipart/related; boundary="wew"',
+    '',
+    '--wew',
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    '<p>Faktura w załączniku</p>',
+    ...osadzone,
+    '--wew--',
+    '--zew',
+    'Content-Type: application/pdf',
+    'Content-Disposition: attachment; filename="faktura.pdf"',
+    '',
+    'bajty-faktury',
+    '--zew--',
+    '',
+  ].join('\r\n'));
+
+  const wynik = parseMessage(raw);
+  const nazwy = wynik.attachments.map((z) => z.filename);
+  assert.ok(nazwy.includes('faktura.pdf'), `faktura zgubiona, zapisano: ${nazwy.join(', ')}`);
+  assert.equal(wynik.attachments.filter((z) => z.contentId).length, 12);
+});
+
+// Własny budżet nie znaczy „bez budżetu": po jego wyczerpaniu osadzone też przestają wchodzić,
+// a limit zwykłych załączników zostaje przy tym nietknięty.
+test('parseMessage: osadzone mają własny sufit, niezależny od zwykłych załączników', () => {
+  const czesci = [];
+  for (let i = 0; i < MAX_EMBEDDED_PER_MESSAGE + 5; i++) {
+    czesci.push(
+      '--gr',
+      'Content-Type: image/png',
+      `Content-ID: <i${i}@x>`,
+      'Content-Disposition: inline',
+      '',
+      `bajty-${i}`
+    );
+  }
+  const raw = buf([
+    'From: a@b.pl',
+    'Content-Type: multipart/related; boundary="gr"',
+    '',
+    '--gr',
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    '<p>dużo ikon</p>',
+    ...czesci,
+    '--gr--',
+    '',
+  ].join('\r\n'));
+
+  const wynik = parseMessage(raw);
+  assert.equal(wynik.attachments.length, MAX_EMBEDDED_PER_MESSAGE);
 });
 
 test('parseMessage: część tekstowa oznaczona jako załącznik bez nazwy zostaje treścią listu', () => {
