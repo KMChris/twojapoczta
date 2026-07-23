@@ -50,6 +50,11 @@
     <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6.5h6l2 2.5h10v9.5H3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
     <symbol id="i-wiecej" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></symbol>
     <symbol id="i-filtr" viewBox="0 0 24 24"><path d="M4 5.5h16l-6.2 7.3v5.4l-3.6 1.9v-7.3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-zaznacz-puste" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+    <symbol id="i-zaznacz-czesc" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 12h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-zaznacz-pelne" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7.5 12.2l3 3 6-6.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-strzalka-dol" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   </defs>
 </svg>
 
@@ -122,6 +127,41 @@
   <div class="zaslona" data-zaslona hidden></div>
 
   <section class="lista" data-panel-lista aria-label="Lista wiadomości">
+    <div class="pasek-zaznaczenia" data-pasek-zaznaczenia role="toolbar"
+         aria-label="Działania na zaznaczonych wiadomościach" hidden>
+      <span class="zaznacz-wybor">
+        <button class="ikona-btn" data-akcja="zaznacz-wszystko" role="checkbox"
+                aria-checked="mixed" aria-label="Zaznacz wszystkie" data-dymek="Zaznacz wszystkie">
+          <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-zaznacz-czesc" data-zaznacz-ikona/></svg>
+        </button>
+        <button class="ikona-btn zaznacz-menu" data-akcja="zaznacz-menu"
+                popovertarget="menu-zaznaczania" aria-label="Więcej opcji zaznaczania"
+                data-dymek="Więcej opcji zaznaczania">
+          <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-strzalka-dol"/></svg>
+        </button>
+      </span>
+      <span class="zaznaczenie-licznik" data-zaznaczenie-licznik aria-live="polite"></span>
+      <span class="zaznaczenie-akcje">
+        <button class="ikona-btn" data-zaznacz-akcja="archiwum" data-dymek="Archiwizuj" aria-label="Archiwizuj zaznaczone"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-archive"/></svg></button>
+        <button class="ikona-btn" data-zaznacz-akcja="folder" data-dymek="Przenieś do folderu" aria-label="Przenieś zaznaczone do folderu"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-folder"/></svg></button>
+        <button class="ikona-btn" data-zaznacz-akcja="gwiazdka" data-dymek="Gwiazdka / zdejmij gwiazdkę" aria-label="Przełącz gwiazdkę zaznaczonych"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-star"/></svg></button>
+        <button class="ikona-btn" data-zaznacz-akcja="nieprzeczytane" data-dymek="Oznacz jako nieprzeczytane" aria-label="Oznacz zaznaczone jako nieprzeczytane"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-unread"/></svg></button>
+        <button class="ikona-btn" data-zaznacz-akcja="kosz" data-dymek="Usuń" aria-label="Usuń zaznaczone"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-trash"/></svg></button>
+        <button class="ikona-btn" data-zaznacz-akcja="spam" data-dymek="Zgłoś spam" aria-label="Zgłoś zaznaczone jako spam"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-spam"/></svg></button>
+      </span>
+    </div>
+
+    <!-- Menu zakresów zaznaczania: popover (top layer, Esc i klik obok gratis),
+         pozycję pod przyciskiem nadaje zaznaczanie.js w zdarzeniu toggle. -->
+    <div class="menu-zaznaczania" id="menu-zaznaczania" data-menu-zaznaczania popover>
+      <button type="button" data-zaznacz-zakres="wszystkie">Wszystkie</button>
+      <button type="button" data-zaznacz-zakres="zadne">Żadne</button>
+      <button type="button" data-zaznacz-zakres="przeczytane">Przeczytane</button>
+      <button type="button" data-zaznacz-zakres="nieprzeczytane">Nieprzeczytane</button>
+      <button type="button" data-zaznacz-zakres="gwiazdka">Oznaczone gwiazdką</button>
+      <button type="button" data-zaznacz-zakres="bez-gwiazdki">Nieoznaczone gwiazdką</button>
+    </div>
+
     <header class="lista-naglowek">
       <h1 data-tytul-folderu>Odebrane</h1>
       <button class="ikona-btn" data-akcja="odswiez" data-dymek="Odśwież" aria-label="Odśwież">

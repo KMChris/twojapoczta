@@ -454,6 +454,78 @@ a.boczny-link {
   border-right: 1px solid var(--linia);
 }
 
+/* Pasek zaznaczenia: nad nagłówkiem listy, widoczny tylko przy zaznaczeniu. */
+.pasek-zaznaczenia {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  padding: 0.45rem 0.6rem 0;
+}
+
+/* Para jak w Gmailu: checkbox „wszystko/nic" + wąska strzałka z menu zakresów. */
+.zaznacz-wybor {
+  display: inline-flex;
+  align-items: center;
+}
+
+.zaznacz-menu {
+  width: 22px;
+}
+
+.zaznacz-menu svg {
+  width: 15px;
+  height: 15px;
+}
+
+.zaznaczenie-licznik {
+  margin: 0 auto 0 0.35rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--stempel);
+  white-space: nowrap;
+}
+
+.zaznaczenie-akcje {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* Menu zakresów: popover, pozycję nadaje zaznaczanie.js. Reset stylów UA
+   (inset/border/background) jak przy .panel-filtrow. */
+.menu-zaznaczania {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0.3rem;
+  min-width: 13rem;
+  color: var(--atrament);
+  background: var(--papier);
+  border: 1px solid var(--linia-2);
+  border-radius: var(--r-m);
+  box-shadow: var(--cien-3);
+}
+
+.menu-zaznaczania:popover-open {
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-zaznaczania button {
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-zaznaczania button:hover {
+  background: var(--papier-2);
+}
+
 .lista-naglowek {
   display: flex;
   align-items: center;
@@ -501,6 +573,12 @@ a.boczny-link {
   box-shadow: inset 3px 0 0 var(--polecony);
 }
 
+/* Tło jak przy .wybrana, ale bez czerwonej belki — ta zostaje znakiem
+   wiadomości otwartej w czytniku. */
+.wiadomosc.zaznaczona {
+  background: var(--koperta-tlo);
+}
+
 .aw {
   grid-row: span 2;
   display: grid;
@@ -512,6 +590,23 @@ a.boczny-link {
   color: #fff;
   border-radius: 50%;
   align-self: center;
+}
+
+/* Awatar na liście to przełącznik zaznaczenia (w czytniku .cz-meta .aw nie). */
+.wiadomosc .aw {
+  cursor: pointer;
+  transition: box-shadow var(--przejscie);
+}
+
+.wiadomosc .aw:hover,
+.wiadomosc .aw:focus-visible {
+  box-shadow: 0 0 0 2px var(--papier), 0 0 0 4px var(--polecony);
+  outline: none;
+}
+
+.aw.zaznaczony svg {
+  width: 17px;
+  height: 17px;
 }
 
 .w-gora {

@@ -155,6 +155,8 @@ export function initSkroty(app, kompozycja) {
         kompozycja.zamknij();
         return;
       }
+      // Zaznaczenie schodzi pierwsze: to najświeższy „tryb", z którego się wychodzi.
+      if (app.wyczyscZaznaczenie()) return;
       app.zamknijCzytnik();
       return;
     }

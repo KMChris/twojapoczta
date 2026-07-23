@@ -10,6 +10,7 @@ import { renderujTresc, pokazObrazki } from './tresc.js';
 import { widoczneSpinacze } from './spinacze.js';
 import { initSkroty } from './skroty.js';
 import { initFoldery } from './foldery.js';
+import { initZaznaczanie } from './zaznaczanie.js';
 import { initDymki } from './dymek.js';
 import { initFiltry } from './filtry.js';
 import { initReguly } from './reguly.js';
@@ -157,6 +158,7 @@ function przejdzDoFolderu(folder, { folderId = null, zHash = false } = {}) {
   szukajWyczysc.hidden = true;
   stan.wybranaId = null;
   stan.otwarta = null;
+  zaznaczanie.wyczysc();
   if (!zHash) {
     // Folder własny adresujemy po id, nie po nazwie: zmiana nazwy nie psuje zakładki.
     history.replaceState(null, '', `#${folder === 'custom' ? `f-${folderId}` : SLUG_FOLDERU[folder]}`);
@@ -223,6 +225,9 @@ function renderujLiczniki() {
 
 function renderujListe() {
   listaEl.replaceChildren();
+  // Najpierw przycinamy zaznaczenie do świeżej listy: wiersze budują się już
+  // z właściwym stanem awatara, a pasek znika, gdy nic nie przetrwało.
+  zaznaczanie.przytnij();
 
   if (!stan.wiadomosci.length) {
     const tekst = stan.kryteria
@@ -264,17 +269,49 @@ function zbudujWiersz(w) {
     ikona('star')
   );
 
+  // Awatar jest zarazem przełącznikiem zaznaczenia (jak w Gmailu): klik nie
+  // otwiera wiadomości, tylko zaznacza. Inicjały i kolor jadą w dataset, żeby
+  // zaznaczanie.js umiało je przywrócić bez przerysowania listy.
+  const zaznaczona = zaznaczanie.ma(w.id);
+  const inicjalyW = inicjaly(kto.replace(/^Do: /, ''), kolorAdres);
+  const awatar = el(
+    'span',
+    {
+      class: `aw${zaznaczona ? ' zaznaczony' : ''}`,
+      style: `background:${zaznaczona ? 'var(--polecony)' : kolorAwatara(kolorAdres)}`,
+      role: 'checkbox',
+      tabindex: '0',
+      'aria-checked': String(zaznaczona),
+      'aria-label': zaznaczona ? 'Odznacz wiadomość' : 'Zaznacz wiadomość',
+      dataset: { inicjaly: inicjalyW, kolor: kolorAwatara(kolorAdres) },
+      onclick: (e) => {
+        e.stopPropagation();
+        zaznaczanie.przelacz(w.id);
+      },
+      // stopPropagation, bo globalny Enter (skroty.js) otwierałby wiadomość
+      // tym samym naciśnięciem, którym zaznaczono.
+      onkeydown: (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        e.stopPropagation();
+        zaznaczanie.przelacz(w.id);
+      },
+    },
+    zaznaczona ? ikona('check') : inicjalyW
+  );
+
   const wiersz = el(
     'button',
     {
       class:
         'wiadomosc' +
         (!w.is_read && !wysylkowy ? ' nieprzeczytana' : '') +
-        (w.id === stan.wybranaId ? ' wybrana' : ''),
+        (w.id === stan.wybranaId ? ' wybrana' : '') +
+        (zaznaczona ? ' zaznaczona' : ''),
       dataset: { id: w.id },
       onclick: () => otworzWiadomosc(w.id),
     },
-    el('span', { class: 'aw', style: `background:${kolorAwatara(kolorAdres)}` }, inicjaly(kto.replace(/^Do: /, ''), kolorAdres)),
+    awatar,
     el(
       'span',
       { class: 'w-gora' },
@@ -780,6 +817,7 @@ function szukajKryteriami(kryteria) {
   szukajWyczysc.hidden = true;
   stan.wybranaId = null;
   stan.otwarta = null;
+  zaznaczanie.wyczysc();
   pokazPustyCzytnik();
   odswiezTytul();
   odswiezListe();
@@ -1028,10 +1066,12 @@ const app = {
   gwiazdkaOtwarta,
   doKoszaOtwarta,
   nieprzeczytanaOtwarta,
+  wyczyscZaznaczenie: () => zaznaczanie.wyczysc(),
 };
 
 const kompozycja = initKompozycja(app);
 const foldery = initFoldery(app);
+const zaznaczanie = initZaznaczanie(app);
 const filtry = initFiltry(app, foldery);
 const reguly = initReguly(app, foldery, filtry);
 initSkroty(app, kompozycja);
@@ -1099,7 +1139,10 @@ async function start() {
   setInterval(() => {
     if (document.hidden) return;
     odswiezLiczniki();
-    if (stan.folder === 'inbox' && !stan.q && !stan.kryteria && !kompozycja.otwarte() && listaEl.scrollTop === 0) {
+    // Aktywne zaznaczenie wstrzymuje cichą podmianę listy: wiersze nie mają
+    // się przesuwać pod ręką w trakcie klikania. Liczniki dalej się odświeżają.
+    if (stan.folder === 'inbox' && !stan.q && !stan.kryteria && !kompozycja.otwarte()
+        && !zaznaczanie.aktywne() && listaEl.scrollTop === 0) {
       odswiezListe({ cicho: true });
     }
   }, 30_000);
