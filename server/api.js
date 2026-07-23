@@ -11,6 +11,7 @@ import {
 } from './mail.js';
 import { listFolders, createFolder, renameFolder, deleteFolder } from './folders.js';
 import { normalizujKryteria } from './kryteria.js';
+import { listRules, createRule, updateRule, deleteRule, moveRule, applyRuleToExisting } from './reguly.js';
 import { WELCOME_SUBJECT, WELCOME_BODY } from './seed.js';
 import {
   saveUpload, listAttachments, getAttachment, getAttachmentByCid, MAX_FILE_BYTES,
@@ -381,7 +382,54 @@ export function registerApiRoutes(router, db) {
   route('DELETE', '/api/folders/:id', async (req, res, { user, params }) => {
     const wynik = deleteFolder(db, user.id, Number(params.id));
     if (wynik.error) return json(res, 404, { error: wynik.error });
-    json(res, 200, { folders: listFolders(db, user.id), moved: wynik.moved, name: wynik.name });
+    json(res, 200, {
+      folders: listFolders(db, user.id),
+      moved: wynik.moved,
+      name: wynik.name,
+      rulesDisabled: wynik.rulesDisabled,
+    });
+  });
+
+  // --- Reguły ------------------------------------------------------------------
+
+  route('GET', '/api/rules', async (req, res, { user }) => {
+    json(res, 200, { rules: listRules(db, user.id) });
+  });
+
+  route('POST', '/api/rules', async (req, res, { user }) => {
+    const body = await readBody(req);
+    const wynik = createRule(db, user, { name: body.name, criteria: body.criteria, actions: body.actions });
+    if (wynik.error) return json(res, 400, { error: wynik.error });
+    let applied;
+    if (body.applyExisting) {
+      const wsad = applyRuleToExisting(db, user, wynik.rule.id);
+      applied = wsad.applied ?? 0;
+    }
+    json(res, 201, { rules: listRules(db, user.id), rule: wynik.rule, applied });
+  });
+
+  route('PATCH', '/api/rules/:id', async (req, res, { user, params }) => {
+    const body = await readBody(req);
+    if (body.move === 'up' || body.move === 'down') {
+      const wynik = moveRule(db, user.id, Number(params.id), body.move);
+      if (wynik.error) return json(res, wynik.notFound ? 404 : 400, { error: wynik.error });
+      return json(res, 200, { rules: wynik.rules });
+    }
+    const wynik = updateRule(db, user, Number(params.id), body);
+    if (wynik.error) return json(res, wynik.notFound ? 404 : 400, { error: wynik.error });
+    json(res, 200, { rules: listRules(db, user.id) });
+  });
+
+  route('DELETE', '/api/rules/:id', async (req, res, { user, params }) => {
+    const wynik = deleteRule(db, user.id, Number(params.id));
+    if (wynik.error) return json(res, 404, { error: wynik.error });
+    json(res, 200, { rules: listRules(db, user.id) });
+  });
+
+  route('POST', '/api/rules/:id/apply', async (req, res, { user, params }) => {
+    const wynik = applyRuleToExisting(db, user, Number(params.id));
+    if (wynik.error) return json(res, wynik.notFound ? 404 : 400, { error: wynik.error });
+    json(res, 200, { applied: wynik.applied });
   });
 
   // --- Aliasy ------------------------------------------------------------------

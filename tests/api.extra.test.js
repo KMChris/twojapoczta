@@ -577,3 +577,77 @@ test('filtry: cudza poczta jest niewidoczna niezależnie od kryteriów', async (
   assert.equal((await bob('GET', '/api/messages?subject=sekretny')).data.messages.length, 0);
   assert.equal((await ala('GET', '/api/messages?subject=sekretny')).data.messages.length, 1);
 });
+
+// --- Reguly ------------------------------------------------------------------
+
+test('reguly: pelny obieg tras', async () => {
+  const ala = client();
+  await ala('POST', '/api/register', { login: 'regulowa', name: 'Ala', password: 'haslo1234' });
+  const mojeId = db.prepare('SELECT id FROM users WHERE login = ?').get('regulowa').id;
+  wiadomoscOd(mojeId, { from_addr: 'faktury@firma.com', subject: 'Faktura 1' });
+  wiadomoscOd(mojeId, { from_addr: 'inni@firma.com', subject: 'Nie faktura' });
+
+  assert.deepEqual((await ala('GET', '/api/rules')).data.rules, []);
+
+  const zla = await ala('POST', '/api/rules', { criteria: {}, actions: { archive: true } });
+  assert.equal(zla.status, 400);
+
+  const utworzona = await ala('POST', '/api/rules', {
+    name: 'Faktury na bok',
+    criteria: { from: 'faktury@' },
+    actions: { markRead: true },
+    applyExisting: true,
+  });
+  assert.equal(utworzona.status, 201);
+  assert.equal(utworzona.data.applied, 1, 'zastosowano do istniejacej poczty');
+  const id = utworzona.data.rule.id;
+
+  const zmieniona = await ala('PATCH', `/api/rules/${id}`, { is_active: 0 });
+  assert.equal(zmieniona.status, 200);
+  assert.equal(zmieniona.data.rules[0].is_active, 0);
+
+  const wsadNaWylaczonej = await ala('POST', `/api/rules/${id}/apply`);
+  assert.equal(wsadNaWylaczonej.status, 400);
+
+  await ala('PATCH', `/api/rules/${id}`, { is_active: 1 });
+  const wsad = await ala('POST', `/api/rules/${id}/apply`);
+  assert.equal(wsad.status, 200);
+  assert.equal(wsad.data.applied, 1);
+
+  const skasowana = await ala('DELETE', `/api/rules/${id}`);
+  assert.equal(skasowana.status, 200);
+  assert.deepEqual(skasowana.data.rules, []);
+});
+
+test('reguly: cudze sa niewidoczne i nietykalne', async () => {
+  const ala = client();
+  await ala('POST', '/api/register', { login: 'wlascicielka3', name: 'Ala', password: 'haslo1234' });
+  const utworzona = await ala('POST', '/api/rules', { criteria: { from: 'x@' }, actions: { archive: true } });
+  const id = utworzona.data.rule.id;
+
+  const bob = client();
+  await bob('POST', '/api/register', { login: 'obcy3', name: 'Bob', password: 'haslo1234' });
+  assert.deepEqual((await bob('GET', '/api/rules')).data.rules, []);
+  assert.equal((await bob('PATCH', `/api/rules/${id}`, { name: 'Moja' })).status, 404);
+  assert.equal((await bob('DELETE', `/api/rules/${id}`)).status, 404);
+  assert.equal((await bob('POST', `/api/rules/${id}/apply`)).status, 404);
+});
+
+test('reguly: move przestawia kolejnosc', async () => {
+  const ala = client();
+  await ala('POST', '/api/register', { login: 'kolejnosc', name: 'Ala', password: 'haslo1234' });
+  await ala('POST', '/api/rules', { name: 'A', criteria: { from: 'a' }, actions: { archive: true } });
+  const b = (await ala('POST', '/api/rules', { name: 'B', criteria: { from: 'b' }, actions: { archive: true } })).data.rule;
+  const poRuchu = await ala('PATCH', `/api/rules/${b.id}`, { move: 'up' });
+  assert.deepEqual(poRuchu.data.rules.map((r) => r.name), ['B', 'A']);
+});
+
+test('foldery: usuniecie zglasza wylaczone reguly', async () => {
+  const ala = client();
+  await ala('POST', '/api/register', { login: 'sprzatajaca', name: 'Ala', password: 'haslo1234' });
+  const folder = (await ala('POST', '/api/folders', { name: 'Faktury' })).data.folder;
+  await ala('POST', '/api/rules', { criteria: { from: 'faktury@' }, actions: { moveTo: folder.id } });
+  const wynik = await ala('DELETE', `/api/folders/${folder.id}`);
+  assert.equal(wynik.data.rulesDisabled, 1);
+  assert.equal((await ala('GET', '/api/rules')).data.rules[0].is_active, 0);
+});
