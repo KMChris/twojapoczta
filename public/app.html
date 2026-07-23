@@ -48,6 +48,7 @@
     <symbol id="i-clear" viewBox="0 0 24 24"><path d="M5 5h10M10 5l-3.2 14M6 19h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15.5 13.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
     <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6.5h6l2 2.5h10v9.5H3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
     <symbol id="i-wiecej" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></symbol>
+    <symbol id="i-filtr" viewBox="0 0 24 24"><path d="M4 5.5h16l-6.2 7.3v5.4l-3.6 1.9v-7.3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
   </defs>
 </svg>
 
@@ -69,6 +70,10 @@
     <input type="search" name="szukaj" data-szukaj placeholder="Szukaj w poczcie…   ( / )" aria-label="Szukaj w poczcie">
     <button class="szukaj-wyczysc" data-akcja="wyczysc-szukanie" aria-label="Wyczyść wyszukiwanie" hidden>
       <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-close"/></svg>
+    </button>
+    <button class="szukaj-filtry" data-akcja="filtry" popovertarget="panel-filtrow"
+            title="Filtry wyszukiwania" aria-label="Filtry wyszukiwania">
+      <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-filtr"/></svg>
     </button>
   </div>
 
@@ -390,6 +395,37 @@
   </header>
   <div class="przenies-lista" data-przenies-lista></div>
 </dialog>
+
+<!-- Panel filtrów: popover pod polem szukania, nie modal — filtry ustawia się
+     patrząc na listę. Pozycję pod polem nadaje filtry.js; style trzymają go
+     na środku, dopóki moduł się nie wepnie (i gdyby JS poległ). -->
+<form class="panel-filtrow" id="panel-filtrow" data-panel-filtrow popover>
+  <div class="filtry-siatka">
+    <label class="pole"><span>Od</span>
+      <input name="od" type="text" maxlength="200" autocomplete="off" autofocus></label>
+    <label class="pole"><span>Do</span>
+      <input name="do" type="text" maxlength="200" autocomplete="off"></label>
+    <label class="pole filtry-szeroki"><span>Temat</span>
+      <input name="temat" type="text" maxlength="200" autocomplete="off"></label>
+    <label class="pole"><span>Zawiera słowa</span>
+      <input name="zawiera" type="text" maxlength="200" autocomplete="off"></label>
+    <label class="pole"><span>Nie zawiera</span>
+      <input name="nie_zawiera" type="text" maxlength="200" autocomplete="off"></label>
+    <label class="pole"><span>Data od</span>
+      <input name="data_od" type="date"></label>
+    <label class="pole"><span>Data do</span>
+      <input name="data_do" type="date"></label>
+    <label class="pole filtry-szeroki"><span>Folder</span>
+      <select name="folder" data-filtry-folder>
+        <option value="">Wszędzie (poza Koszem i Spamem)</option>
+      </select></label>
+    <label class="filtry-zalacznik"><input type="checkbox" name="zalacznik"> Ma załącznik</label>
+  </div>
+  <footer class="filtry-stopka">
+    <button type="button" class="filtry-wyczysc" data-akcja="wyczysc-filtry">Wyczyść</button>
+    <button type="submit" class="btn-zapisz">Szukaj</button>
+  </footer>
+</form>
 
 <div class="toast-strefa" data-toasty aria-live="polite" popover="manual"></div>
 

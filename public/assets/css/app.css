@@ -84,7 +84,7 @@ body.app {
 
 .szukaj input {
   width: 100%;
-  padding: 0.6em 2.6em 0.6em 2.6em;
+  padding: 0.6em 4.6em 0.6em 2.6em;
   font: inherit;
   font-size: 0.92rem;
   color: var(--atrament);
@@ -106,7 +106,7 @@ body.app {
 
 .szukaj-wyczysc {
   position: absolute;
-  right: 0.4rem;
+  right: 2.1rem;
   display: inline-flex;
   width: 28px;
   height: 28px;
@@ -127,6 +127,47 @@ body.app {
 .szukaj-wyczysc:hover {
   background: var(--papier-3);
   color: var(--atrament);
+}
+
+.szukaj-filtry {
+  position: absolute;
+  right: 0.4rem;
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: var(--stempel);
+  cursor: pointer;
+}
+
+.szukaj-filtry:hover {
+  background: var(--papier-3);
+  color: var(--atrament);
+}
+
+.szukaj-filtry svg {
+  width: 16px;
+  height: 16px;
+}
+
+.szukaj-filtry.aktywny {
+  color: var(--priorytet);
+}
+
+.szukaj-filtry.aktywny::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--priorytet);
+  border: 1.5px solid var(--papier);
 }
 
 .pasek-akcje {
@@ -2275,6 +2316,116 @@ a.boczny-link {
     flex-basis: 100%;
     padding-left: calc(40px + 0.8rem);
     text-align: left;
+  }
+}
+
+/* --- Panel filtrów ---------------------------------------------------------- */
+
+.panel-filtrow {
+  /* Zapas na czas bez JS: środek, pod paskiem. filtry.js nadpisuje inline'em. */
+  position: fixed;
+  inset: auto;
+  top: 66px;
+  left: 50%;
+  translate: -50%;
+  width: min(560px, calc(100vw - 16px));
+  margin: 0;
+  padding: 0;
+  color: var(--atrament);
+  background: var(--papier);
+  border: 1px solid var(--linia-2);
+  border-radius: var(--r-l);
+  box-shadow: var(--cien-3);
+}
+
+/* Pozycja z filtry.js wchodzi inline'owym top/left/width — wyłącz wtedy translate. */
+.panel-filtrow[style] {
+  translate: none;
+}
+
+.filtry-siatka {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem 1rem;
+  padding: 1.1rem 1.25rem 0.35rem;
+}
+
+.filtry-szeroki {
+  grid-column: 1 / -1;
+}
+
+.filtry-siatka .pole > span {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--stempel);
+}
+
+.filtry-siatka input,
+.filtry-siatka select {
+  width: 100%;
+  padding: 0.55em 0.85em;
+  font: inherit;
+  font-size: 0.92rem;
+  color: var(--atrament);
+  background: var(--papier-2);
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-m);
+}
+
+.filtry-siatka input:focus,
+.filtry-siatka select:focus {
+  outline: none;
+  border-color: var(--priorytet);
+}
+
+.filtry-zalacznik {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.filtry-zalacznik input {
+  width: auto;
+  accent-color: var(--polecony);
+}
+
+.filtry-stopka {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding: 0.9rem 1.25rem 1.1rem;
+  border-top: 1px solid var(--linia);
+}
+
+.filtry-wyczysc {
+  padding: 0.4em 0.6em;
+  background: none;
+  border: none;
+  border-radius: var(--r-m);
+  color: var(--stempel);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.filtry-wyczysc:hover {
+  background: var(--papier-2);
+  color: var(--atrament);
+}
+
+@media (max-width: 480px) {
+  .filtry-siatka {
+    grid-template-columns: 1fr;
   }
 }
 
