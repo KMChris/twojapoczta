@@ -158,3 +158,135 @@ test('deleteRule kasuje tylko swoje', () => {
   assert.equal(listRules(db, ala.id).length, 0);
   db.close();
 });
+
+// --- Silnik ---------------------------------------------------------------------
+
+import { applyRules } from '../server/reguly.js';
+
+function wiadomoscW(db, ownerId, nadpisy = {}) {
+  const w = {
+    folder: 'inbox', folder_id: null, from_name: '', from_addr: 'kto@example.com',
+    to_addr: '', cc_addr: '', subject: 'Temat', body: 'Tresc',
+    is_read: 0, is_starred: 0, is_priority: 0, attachments_count: 0, sent_at: now(),
+    ...nadpisy,
+  };
+  return Number(db.prepare(
+    `INSERT INTO messages (owner_id, folder, folder_id, from_name, from_addr, to_addr, cc_addr,
+                           subject, body, is_read, is_starred, is_priority, attachments_count, sent_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(ownerId, w.folder, w.folder_id, w.from_name, w.from_addr, w.to_addr, w.cc_addr,
+        w.subject, w.body, w.is_read, w.is_starred, w.is_priority, w.attachments_count, w.sent_at).lastInsertRowid);
+}
+
+function poId(db, id) {
+  return db.prepare('SELECT * FROM messages WHERE id = ?').get(id);
+}
+
+test('silnik: dopasowanie i akcje jednej reguly', () => {
+  const db = openMemoryDb();
+  const u = uzytkownik(db, 'ala');
+  createRule(db, u, { criteria: { from: 'faktury@' }, actions: { markRead: true, star: true } });
+  const trafiona = wiadomoscW(db, u.id, { from_addr: 'faktury@firma.com' });
+  const obok = wiadomoscW(db, u.id, { from_addr: 'inny@firma.com' });
+  assert.equal(applyRules(db, u.id, trafiona).matched, 1);
+  assert.equal(applyRules(db, u.id, obok).matched, 0);
+  assert.deepEqual([poId(db, trafiona).is_read, poId(db, trafiona).is_starred], [1, 1]);
+  assert.deepEqual([poId(db, obok).is_read, poId(db, obok).is_starred], [0, 0]);
+  db.close();
+});
+
+test('silnik: nieaktywna regula nie dziala', () => {
+  const db = openMemoryDb();
+  const u = uzytkownik(db, 'ala');
+  const { rule } = createRule(db, u, { criteria: { from: 'x@' }, actions: { archive: true } });
+  updateRule(db, u, rule.id, { is_active: 0 });
+  const id = wiadomoscW(db, u.id, { from_addr: 'x@example.com' });
+  assert.equal(applyRules(db, u.id, id).matched, 0);
+  assert.equal(poId(db, id).folder, 'inbox');
+  db.close();
+});
+
+test('silnik: precedencja celu, kolejnosc regul bez znaczenia', () => {
+  const db = openMemoryDb();
+  const u = uzytkownik(db, 'ala');
+  db.prepare('INSERT INTO folders (user_id, name, position, created_at) VALUES (?, ?, 1, ?)').run(u.id, 'Faktury', now());
+  const folderId = db.prepare('SELECT id FROM folders WHERE user_id = ?').get(u.id).id;
+
+  createRule(db, u, { criteria: { from: 'a@' }, actions: { delete: true } });
+  createRule(db, u, { criteria: { from: 'a@' }, actions: { moveTo: folderId } });
+  const skasowana = wiadomoscW(db, u.id, { from_addr: 'a@example.com' });
+  applyRules(db, u.id, skasowana);
+  assert.deepEqual([poId(db, skasowana).folder, poId(db, skasowana).folder_id], ['trash', null]);
+
+  createRule(db, u, { criteria: { from: 'b@' }, actions: { archive: true } });
+  createRule(db, u, { criteria: { from: 'b@' }, actions: { moveTo: folderId } });
+  const przeniesiona = wiadomoscW(db, u.id, { from_addr: 'b@example.com' });
+  applyRules(db, u.id, przeniesiona);
+  assert.deepEqual([poId(db, przeniesiona).folder, poId(db, przeniesiona).folder_id], ['custom', folderId]);
+  db.close();
+});
+
+test('silnik: sprzeczny priorytet rozstrzyga wyzsza pozycja', () => {
+  const db = openMemoryDb();
+  const u = uzytkownik(db, 'ala');
+  createRule(db, u, { criteria: { from: 'vip@' }, actions: { priority: 'always' } });
+  createRule(db, u, { criteria: { subject: 'spamik' }, actions: { priority: 'never' } });
+  const obie = wiadomoscW(db, u.id, { from_addr: 'vip@example.com', subject: 'spamik w temacie' });
+  applyRules(db, u.id, obie);
+  assert.equal(poId(db, obie).is_priority, 0, 'pozniej zdefiniowana regula (wyzsza pozycja) wygrywa');
+  db.close();
+});
+
+test('silnik: zepsuta regula jest pomijana i nie blokuje pozostalych', () => {
+  const db = openMemoryDb();
+  const u = uzytkownik(db, 'ala');
+  const zepsuta = createRule(db, u, { criteria: { from: 'x@' }, actions: { archive: true } }).rule;
+  db.prepare(`UPDATE rules SET criteria = '{"folder":"nieistnieje"}' WHERE id = ?`).run(zepsuta.id);
+  createRule(db, u, { criteria: { from: 'x@' }, actions: { star: true } });
+  const id = wiadomoscW(db, u.id, { from_addr: 'x@example.com' });
+  assert.equal(applyRules(db, u.id, id).matched, 1);
+  assert.equal(poId(db, id).is_starred, 1);
+  assert.equal(poId(db, id).folder, 'inbox');
+  db.close();
+});
+
+test('silnik: forwardTo kopiuje do lokalnej skrzynki i zostawia oryginal', () => {
+  const db = openMemoryDb();
+  const ala = uzytkownik(db, 'ala');
+  const bob = uzytkownik(db, 'bob');
+  createRule(db, ala, { criteria: { subject: 'kopia' }, actions: { forwardTo: 'bob@twojapoczta.com' } });
+  const id = wiadomoscW(db, ala.id, { subject: 'kopia dla boba', body: 'tresc' });
+  applyRules(db, ala.id, id);
+  assert.equal(poId(db, id).folder, 'inbox', 'oryginal zostaje');
+  const uBoba = db.prepare('SELECT * FROM messages WHERE owner_id = ?').all(bob.id);
+  assert.equal(uBoba.length, 1);
+  assert.equal(uBoba[0].subject, 'kopia dla boba');
+  assert.equal(uBoba[0].folder, 'inbox');
+  db.close();
+});
+
+test('silnik: reguly nie odpalaja sie na kopii z przekazania, petla A-B-A gasnie', () => {
+  const db = openMemoryDb();
+  const ala = uzytkownik(db, 'ala');
+  const bob = uzytkownik(db, 'bob');
+  createRule(db, ala, { criteria: { subject: 'ping' }, actions: { forwardTo: 'bob@twojapoczta.com' } });
+  createRule(db, bob, { criteria: { subject: 'ping' }, actions: { forwardTo: 'ala@twojapoczta.com' } });
+  const id = wiadomoscW(db, ala.id, { subject: 'ping' });
+  applyRules(db, ala.id, id);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM messages WHERE owner_id = ?').get(bob.id).n, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM messages WHERE owner_id = ?').get(ala.id).n, 1, 'nic nie wrocilo do Ali');
+  db.close();
+});
+
+test('silnik: skipForward zbiera przekazania, ale ich nie wykonuje', () => {
+  const db = openMemoryDb();
+  const ala = uzytkownik(db, 'ala');
+  const bob = uzytkownik(db, 'bob');
+  createRule(db, ala, { criteria: { subject: 'wsad' }, actions: { forwardTo: 'bob@twojapoczta.com', star: true } });
+  const id = wiadomoscW(db, ala.id, { subject: 'wsad' });
+  const wynik = applyRules(db, ala.id, id, { skipForward: true });
+  assert.equal(wynik.skippedForward, 1);
+  assert.equal(poId(db, id).is_starred, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM messages WHERE owner_id = ?').get(bob.id).n, 0);
+  db.close();
+});

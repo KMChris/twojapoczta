@@ -699,41 +699,25 @@ function kopiujZalaczniki(db, zId, doId) {
   db.prepare('UPDATE messages SET attachments_count = ? WHERE id = ?').run(zalaczniki.length, doId);
 }
 
-// Przesyła świeżo doręczoną wiadomość dalej, jeśli właściciel skrzynki tak ustawił.
-// Wołać PO zatwierdzeniu transakcji doręczenia. Zwraca adres celu albo null.
+// Kopiuje doręczoną wiadomość pod wskazany adres (lokalny albo zewnętrzny).
+// Wspólna maszyneria przekierowania skrzynki i akcji „przekaż dalej" w regułach;
+// oryginału nie dotyka. Kopia u lokalnego odbiorcy ciągnie dalej łańcuch USTAWIEŃ
+// jego skrzynki (forwardDelivered z hops+1) — reguł odbiorcy świadomie nie odpala:
+// reguły działają tylko na doręczeniu wprost, inaczej dwie reguły „przekaż"
+// odbijałyby list w nieskończoność.
 //
-// Pętle: łańcuch A→B→A ucina zbiór odwiedzonych skrzynek, a długość ogranicza MAX_FORWARD_HOPS.
-// Wiadomości systemowe (powitanie, zwroty) nie idą dalej, żeby zwrot z przekierowania
-// nie wracał w kółko.
-export function forwardDelivered(db, ownerId, messageId, { hops = 0, odwiedzeni = new Set() } = {}) {
+// Pętle: łańcuch A→B→A ucina zbiór odwiedzonych skrzynek, a długość ogranicza
+// MAX_FORWARD_HOPS.
+export function forwardCopyTo(db, ownerId, msg, cel, { hops = 0, odwiedzeni = new Set() } = {}) {
   if (hops >= MAX_FORWARD_HOPS || odwiedzeni.has(ownerId)) return null;
-
-  const wlasciciel = db
-    .prepare('SELECT id, login, name, forward_to, forward_keep FROM users WHERE id = ?')
-    .get(ownerId);
-  if (!wlasciciel?.forward_to) return null;
-
-  const msg = db.prepare('SELECT * FROM messages WHERE id = ? AND owner_id = ?').get(messageId, ownerId);
-  if (!msg || msg.folder !== 'inbox') return null;
-
   odwiedzeni.add(ownerId);
-  const cel = wlasciciel.forward_to;
   const at = cel.lastIndexOf('@');
   const domena = cel.slice(at + 1);
 
-  const odlozOryginal = () => {
-    // Bez „zostaw kopię" oryginał idzie do Archiwum; nie kasujemy poczty za plecami.
-    if (!wlasciciel.forward_keep) {
-      db.prepare(
-        "UPDATE messages SET folder = 'archive', folder_id = NULL WHERE id = ? AND owner_id = ?"
-      ).run(messageId, ownerId);
-    }
-  };
-
   if (domena === DOMAIN) {
     const odbiorca = findMailbox(db, cel.slice(0, at));
-    if (!odbiorca) return null; // skrzynka celu zniknęła, przekierowanie milczy
-    // Pełna skrzynka celu: pomijamy przekierowanie, oryginał zostaje na miejscu.
+    if (!odbiorca) return null; // skrzynka celu zniknęła, przekazanie milczy
+    // Pełna skrzynka celu: pomijamy przekazanie, oryginał zostaje na miejscu.
     const przybywa =
       Buffer.byteLength(msg.body ?? '', 'utf8') +
       Buffer.byteLength(msg.body_html ?? '', 'utf8') +
@@ -757,7 +741,6 @@ export function forwardDelivered(db, ownerId, messageId, { hops = 0, odwiedzeni 
         sent_at: msg.sent_at,
       });
       kopiujZalaczniki(db, msg.id, nowyId);
-      odlozOryginal();
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
@@ -778,6 +761,7 @@ export function forwardDelivered(db, ownerId, messageId, { hops = 0, odwiedzeni 
        JOIN blobs b ON b.hash = a.blob_hash WHERE a.message_id = ?`
     )
     .all(msg.id);
+  const wlasciciel = db.prepare('SELECT login FROM users WHERE id = ?').get(ownerId);
   // Na zewnątrz nadajemy z własnego adresu, żeby SPF i DKIM się zgadzały; oryginalny
   // nadawca zostaje w nazwie i w Reply-To, więc odpowiedź trafia tam, gdzie trzeba.
   dispatchExternal(db, ownerId, {
@@ -791,8 +775,35 @@ export function forwardDelivered(db, ownerId, messageId, { hops = 0, odwiedzeni 
     html: msg.body_html,
     zalaczniki,
   });
-  odlozOryginal();
   return cel;
+}
+
+// Przesyła świeżo doręczoną wiadomość dalej, jeśli właściciel skrzynki tak ustawił.
+// Wołać PO zatwierdzeniu transakcji doręczenia. Zwraca adres celu albo null.
+//
+// Wiadomości systemowe (powitanie, zwroty) nie idą dalej, żeby zwrot z przekierowania
+// nie wracał w kółko.
+export function forwardDelivered(db, ownerId, messageId, { hops = 0, odwiedzeni = new Set() } = {}) {
+  if (hops >= MAX_FORWARD_HOPS || odwiedzeni.has(ownerId)) return null;
+
+  const wlasciciel = db
+    .prepare('SELECT id, login, name, forward_to, forward_keep FROM users WHERE id = ?')
+    .get(ownerId);
+  if (!wlasciciel?.forward_to) return null;
+
+  const msg = db.prepare('SELECT * FROM messages WHERE id = ? AND owner_id = ?').get(messageId, ownerId);
+  if (!msg || msg.folder !== 'inbox') return null;
+
+  const wyslano = forwardCopyTo(db, ownerId, msg, wlasciciel.forward_to, { hops, odwiedzeni });
+  // Bez „zostaw kopię" oryginał idzie do Archiwum; nie kasujemy poczty za plecami.
+  // Odłożenie dzieje się po udanym przekazaniu, poza jego transakcją — celowo:
+  // awaria pomiędzy zostawia co najwyżej duplikat, nigdy nie gubi listu.
+  if (wyslano && !wlasciciel.forward_keep) {
+    db.prepare(
+      "UPDATE messages SET folder = 'archive', folder_id = NULL WHERE id = ? AND owner_id = ?"
+    ).run(messageId, ownerId);
+  }
+  return wyslano;
 }
 
 // Wysyłka na zewnątrz dzieje się po odpowiedzi HTTP; porażka wraca jako „Zwrot do nadawcy".
