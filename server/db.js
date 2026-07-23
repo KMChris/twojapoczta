@@ -108,6 +108,18 @@ CREATE TABLE IF NOT EXISTS folders (
 );
 CREATE INDEX IF NOT EXISTS idx_folders_user ON folders(user_id, position);
 
+CREATE TABLE IF NOT EXISTS rules (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL DEFAULT '',
+  criteria TEXT NOT NULL,
+  actions TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_rules_user ON rules(user_id, position);
+
 CREATE TABLE IF NOT EXISTS teams (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   local_part TEXT NOT NULL UNIQUE,
