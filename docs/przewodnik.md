@@ -149,6 +149,19 @@ spójnikiem „i", a bez wskazanego folderu przeszukują całą pocztę poza Kos
 i Spamem. Aktywne filtry sygnalizuje kropka na lejku; zdejmiesz je przyciskiem
 „Wyczyść", przejściem do folderu albo zwykłym wpisem w polu szukania.
 
+**Reguły.** Przycisk „Utwórz regułę" w panelu filtrów zamienia ustawione
+kryteria w automat: archiwizuj, oznacz, przenieś do folderu, przekaż dalej,
+usuń albo ustaw priorytet. Reguły działają na pocztę przychodzącą (także
+wysłaną wewnątrz serwera), składają się po kolei, a przy sprzecznych celach
+wygrywa mocniejszy: usunięcie nad przeniesieniem, przeniesienie nad archiwum.
+Wiadomości systemowe (powitanie, zwroty) są poza ich zasięgiem.
+
+Listą zarządzasz w Ustawieniach: włączanie, kolejność strzałkami, usuwanie.
+„Zastosuj także do już istniejących wiadomości" przy tworzeniu obrabia od ręki
+starą pocztę · przekazywanie dalej jest wtedy pomijane. Usunięcie folderu, do
+którego reguła przenosi, wyłącza ją i czyści jej cel — nic nie dzieje się
+po cichu.
+
 ## Ustawienia
 
 Kliknij swój awatar w prawym górnym rogu:

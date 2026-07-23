@@ -40,7 +40,8 @@ budowania. `node server/index.js` to całe wdrożenie.
 | `auth.js`       | scrypt + sól, `timingSafeEqual`, sesje w cookie `httpOnly`/`SameSite=Lax`, limit prób logowania (5 / 15 min na parę IP+login). |
 | `mail.js`       | Logika domenowa: foldery, doręczanie wewnętrzne, wyszukiwanie, wersje robocze, zaplanowana wysyłka (`fireScheduled`), przesyłanie dalej (`forwardDelivered`), cykl życia wiadomości, doręczanie przychodzące (`deliverInbound`) i zlecanie wysyłki na zewnątrz. |
 | `folders.js`    | Logika folderów własnych: CRUD, walidacja nazw, usuwanie z przeniesieniem do Archiwum. |
-| `kryteria.js`   | Kryteria wyszukiwania: normalizacja, walidacja i kompilacja do jednego fragmentu SQL. Dziś napędza wyszukiwarkę; w fazie reguł ten sam fragment z dopiskiem `AND id = ?` będzie silnikiem dopasowania. |
+| `kryteria.js`   | Kryteria wyszukiwania: normalizacja, walidacja i kompilacja do jednego fragmentu SQL. Napędza wyszukiwarkę i silnik reguł — to ta sama ścieżka kodu. |
+| `reguly.js`     | Reguły wiadomości: walidacja akcji (cel przekazania tą samą ścieżką co przekierowanie skrzynki), CRUD z kolejnością, silnik składający akcje pasujących reguł po `position` (precedencja celu: usuń > przenieś > archiwizuj; sprzeczny priorytet rozstrzyga wyższa pozycja) i przebieg wsadowy bez przekazywania dalej. Dopasowanie = fragment z `kryteria.js` + `AND id = ?`. |
 | `api.js`        | Handlery HTTP: walidacja wejścia, strażnik sesji, warstwa JSON, odczyt ciała z limitami. |
 | `seed.js`       | Konta i wiadomości demonstracyjne (pomijane przy `TP_SEED=0`), treść listu powitalnego. |
 | `attachments.js`| Załączniki: bloby adresowane sha256 (deduplikacja treści), tokeny uploadu (jednorazowe, 24 h), odśmiecanie osieroconych blobów. |
@@ -76,6 +77,8 @@ messages(id, owner_id→users, folder, folder_id→folders·NULL, from_name,
          snippet, is_read, is_starred, is_priority, attachments_count,
          sent_at, scheduled_at)
 folders(id, user_id→users, name, position, created_at)
+rules(id, user_id→users, name, criteria·JSON, actions·JSON, is_active,
+      position, created_at)
 aliases(id, user_id→users, alias·UNIQUE, created_at)
 teams(id, local_part·UNIQUE, name, created_at)
 team_members(team_id→teams, user_id→users, can_send, created_at, PK(team_id,user_id))
@@ -133,6 +136,14 @@ z `index.js`, nadaje wszystko, czego termin minął, i kasuje wiersz
 reszta dostaje list. Wyjście z folderu (`PATCH … folder`) zeruje `scheduled_at`,
 więc anulowanie wysyłki nie zostawia uzbrojonego terminu.
 
+**Reguły** (`applyRules`): wołane po zatwierdzeniu każdego doręczenia do
+`inbox`, **przed** przesyłaniem dalej — reguła, która list zarchiwizowała,
+wycisza przekierowanie, bo `forwardDelivered` sprawdza folder w bazie.
+Kolejność: `COMMIT → applyRules → forwardDelivered`. Kopie w Wysłanych,
+wiadomości systemowe i kopie z przekazań nie przechodzą przez reguły
+(ostatnie ucina pętle dwóch reguł „przekaż dalej" z konstrukcji).
+`criteria` i `actions` to JSON-y walidowane przy zapisie i odczycie.
+
 **Przesyłanie dalej** (`forwardDelivered`): wołane **po** zatwierdzeniu każdego
 doręczenia do `inbox` (wysyłka wewnętrzna, nadanie zaplanowanego, odbiór z SMTP).
 Kopia wewnątrz domeny zachowuje oryginalnego nadawcę; na zewnątrz nadajemy
@@ -163,6 +174,7 @@ Bez frameworka i bez budowania. Cztery strony (strona główna `index.html`,
   - `skroty.js`: skróty klawiszowe i paleta poleceń,
   - `foldery.js`: panel boczny, okna folderu i przenoszenia,
   - `filtry.js`: panel filtrów pod polem wyszukiwania (popover pozycjonowany w JS, bo anchor positioning nie jest jeszcze Baseline), zbieranie kryteriów, znacznik aktywnych filtrów,
+  - `reguly.js`: kreator reguły (drugi krok panelu filtrów) i sekcja „Reguły" w Ustawieniach z polskim podsumowaniem (`podsumowaniePL`), przełącznikiem, strzałkami kolejności i usuwaniem,
   - `main.js`: rdzeń, czyli stan, foldery, lista, czytnik, ustawienia i spinanie całości.
 - `assets/js/admin/`: panel administratora (osobna strona, hash-routing jak
   w apce, reuse `ui.js` i tokenów): `main.js` (strażnik roli, nawigacja),
@@ -191,7 +203,10 @@ każdy endpoint wymaga sesji.
 | `DELETE /api/messages/:id`               | do kosza, a z kosza trwale |
 | `GET /api/counts`                        | nieprzeczytane per folder |
 | `GET` / `POST /api/folders`              | lista folderów własnych · utwórz folder |
-| `PATCH` / `DELETE /api/folders/:id`      | zmień nazwę · usuń (poczta trafia do Archiwum) |
+| `PATCH` / `DELETE /api/folders/:id`      | zmień nazwę · usuń (poczta do Archiwum, reguły z tym celem gasną — `rulesDisabled` w odpowiedzi) |
+| `GET` / `POST /api/rules`                | lista reguł · utwórz (`applyExisting: true` stosuje od ręki do starej poczty, bez przekazywania) |
+| `PATCH` / `DELETE /api/rules/:id`        | zmiana pól, `is_active`, `move: 'up'\|'down'` · usuń |
+| `POST /api/rules/:id/apply`              | przebieg wsadowy na żądanie → `{applied}` |
 | `GET` / `POST /api/aliases` · `DELETE …/:id` | aliasy |
 | `GET` / `PUT /api/forwarding`            | przesyłanie dalej (`to`, `keepCopy`) |
 | `POST /api/uploads`                      | wgraj załącznik (surowe ciało + nagłówki) |

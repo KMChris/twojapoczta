@@ -392,3 +392,26 @@ test('ta sama sciezka: werdykt wsadowy rowna sie werdyktowi wyszukiwarki', () =>
   assert.ok(!zSilnika.has(wSpamie), 'spam poza domyslnym zasiegiem obu');
   db.close();
 });
+
+test('updateRule podmienia akcje z pelna walidacja', () => {
+  const db = openMemoryDb();
+  const u = uzytkownik(db, 'ala');
+  const { rule } = createRule(db, u, { criteria: { from: 'x' }, actions: { archive: true } });
+  const po = updateRule(db, u, rule.id, { actions: { star: true, markRead: true } });
+  assert.deepEqual(po.rule.actions, { star: true, markRead: true });
+  assert.match(updateRule(db, u, rule.id, { actions: {} }).error, /akcj/);
+  assert.deepEqual(listRules(db, u.id)[0].actions, { star: true, markRead: true }, 'bledny patch niczego nie zmienil');
+  db.close();
+});
+
+test('silnik: regula z niepoprawnym JSON-em jest pomijana', () => {
+  const db = openMemoryDb();
+  const u = uzytkownik(db, 'ala');
+  const zepsuta = createRule(db, u, { criteria: { from: 'x@' }, actions: { archive: true } }).rule;
+  db.prepare(`UPDATE rules SET criteria = 'to nie jest json' WHERE id = ?`).run(zepsuta.id);
+  createRule(db, u, { criteria: { from: 'x@' }, actions: { star: true } });
+  const id = wiadomoscW(db, u.id, { from_addr: 'x@example.com' });
+  assert.equal(applyRules(db, u.id, id).matched, 1);
+  assert.equal(poId(db, id).is_starred, 1);
+  db.close();
+});
