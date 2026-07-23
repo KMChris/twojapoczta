@@ -861,7 +861,7 @@ function renderujAliasy(aliasy, limit) {
   const dodawanie = document.querySelector('[data-alias-dodawanie]');
 
   if (limit === 0) opis.textContent = 'Administrator wyłączył aliasy na tym koncie.';
-  else opis.textContent = limit == null ? '' : `Najwyżej ${limit}.`;
+  else opis.textContent = limit == null ? '' : `Możesz utworzyć maksymalnie ${limit}.`;
   opis.hidden = !opis.textContent;
   dodawanie.hidden = limit != null && aliasy.length >= limit;
 
