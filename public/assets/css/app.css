@@ -2336,16 +2336,17 @@ input[type='radio']:disabled {
   }
 }
 
-/* Przycisk (i) przy legendach: sama ikona, dymek niesie treść. */
+/* Przycisk (i) przy legendach: sama ikona, dymek niesie treść. Rozmiar w em, bo legenda
+   zmniejsza font: ikona ma się kurczyć razem z tekstem, a nie sterczeć nad linijką. */
 .info-dymek {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.15em;
+  height: 1.15em;
   padding: 0;
   margin-left: 0.3rem;
-  vertical-align: -0.22em;
+  vertical-align: middle;
   color: var(--stempel);
   background: none;
   border: 0;

@@ -55,7 +55,10 @@ export function initDymki() {
     const t = e.target.closest?.('[data-dymek]');
     if (!t || t === cel) return;
     clearTimeout(zegar);
-    zegar = setTimeout(() => pokaz(t), ZWLOKA);
+    // Przycisk (i) to jawna prośba o wyjaśnienie, więc odpowiada od razu; pozostałe
+    // cele czekają, żeby dymki nie migały przy przelocie kursora nad rzędem ikon.
+    if (t.classList.contains('info-dymek')) pokaz(t);
+    else zegar = setTimeout(() => pokaz(t), ZWLOKA);
   });
 
   document.addEventListener('pointerout', (e) => {
