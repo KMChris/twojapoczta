@@ -224,6 +224,32 @@ export function applyRules(db, ownerId, messageId, { skipForward = false } = {})
   return { matched, skippedForward: 0 };
 }
 
+// „Zastosuj do istniejących": ta sama reguła, ta sama kompilacja, tylko lista
+// id z zapytania wyszukiwarki zamiast pojedynczego doręczenia. Wiadomość ma po
+// przebiegu wyglądać tak, jakby WSZYSTKIE aktywne reguły zadziałały przy
+// doręczeniu — wskazana reguła wyznacza wyłącznie listę celów. Przekazywanie
+// dalej celowo pominięte: retroaktywna wysyłka setek listów jest dla serwera
+// odbiorcy nieodróżnialna od ataku.
+export function applyRuleToExisting(db, user, ruleId) {
+  const regula = wiersz(db, user.id, ruleId);
+  if (!regula) return { error: 'Nie znaleziono reguły.', notFound: true };
+  if (!regula.is_active) {
+    return { error: 'Reguła jest wyłączona. Włącz ją, zanim zastosujesz do istniejących.' };
+  }
+  const kryteria = normalizujKryteria(JSON.parse(regula.criteria));
+  if (kryteria.error) return { error: kryteria.error };
+  const { sql, params } = kompilujKryteria(kryteria.kryteria);
+  const cele = db
+    .prepare(`SELECT id FROM messages WHERE owner_id = ? AND ${sql}`)
+    .all(user.id, ...params)
+    .map((r) => r.id);
+  let applied = 0;
+  for (const id of cele) {
+    if (applyRules(db, user.id, id, { skipForward: true }).matched) applied += 1;
+  }
+  return { applied };
+}
+
 // Zamiana miejscami z sąsiadem; na krańcu listy nic się nie dzieje.
 export function moveRule(db, userId, id, kierunek) {
   const regula = wiersz(db, userId, id);

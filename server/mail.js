@@ -7,6 +7,7 @@ import { buildRawMessage, deliverExternal } from './smtp-out.js';
 import { signMessage } from './dkim.js';
 import { findTeam, teamMailboxes, canSendAs } from './teams.js';
 import { kompilujKryteria } from './kryteria.js';
+import { applyRules } from './reguly.js';
 
 export const DOMAIN = process.env.TP_DOMAIN || 'twojapoczta.com';
 // Dozwolone wartości messages.folder. 'custom' to wartownik: mówi „folder własny",
@@ -364,6 +365,20 @@ function deliverCopies(db, ownerId, base, resolved, { bccAddr = '' } = {}) {
   return kopie;
 }
 
+// Reguły odbiorców na świeżych kopiach w Odebranych; kopia nadawcy w Wysłanych
+// zostaje w spokoju (objęcie Wysłanych groziłoby regułą „usuń" kasującą własną
+// kopię). Błąd reguł nie może zatrzymać doręczenia ani przekierowań.
+function zastosujRegulyDoKopii(db, kopie) {
+  for (const kopia of kopie) {
+    if (kopia.folder !== 'inbox') continue;
+    try {
+      applyRules(db, kopia.ownerId, kopia.id);
+    } catch (err) {
+      console.error('[reguly] nie udało się zastosować reguł', kopia.id, err);
+    }
+  }
+}
+
 // Po zatwierdzeniu doręczenia: przesyła dalej każdą świeżą kopię w Odebranych.
 function forwardInboxCopies(db, kopie) {
   for (const kopia of kopie) {
@@ -479,6 +494,9 @@ export function sendMessage(db, user, { to, cc, bcc, from, subject, body, bodyHt
     throw err;
   }
 
+  // Reguły PRZED przekierowaniami: reguła, która list zarchiwizowała, wycisza
+  // przekierowanie (forwardDelivered sprawdza folder w bazie).
+  zastosujRegulyDoKopii(db, kopie);
   forwardInboxCopies(db, kopie);
 
   if (adresaci.zewnetrzni.length) {
@@ -614,6 +632,7 @@ function wyslijZaplanowana(db, msg) {
     throw err;
   }
 
+  zastosujRegulyDoKopii(db, kopie);
   forwardInboxCopies(db, kopie);
 
   if (zewnetrzni.length) {
@@ -882,6 +901,12 @@ export function deliverInbound(db, mailboxUserId, parsed, { toAddr }) {
     throw err;
   }
 
+  // Reguły po COMMIT, przed przekierowaniem — patrz zastosujRegulyDoKopii.
+  try {
+    applyRules(db, mailboxUserId, id);
+  } catch (err) {
+    console.error('[reguly] nie udało się zastosować reguł', id, err);
+  }
   try {
     forwardDelivered(db, mailboxUserId, id);
   } catch (err) {

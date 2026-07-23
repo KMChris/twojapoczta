@@ -290,3 +290,105 @@ test('silnik: skipForward zbiera przekazania, ale ich nie wykonuje', () => {
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM messages WHERE owner_id = ?').get(bob.id).n, 0);
   db.close();
 });
+
+// --- Wpiecie w doreczanie i przebieg wsadowy ------------------------------------
+
+import { applyRuleToExisting } from '../server/reguly.js';
+import { deliverInbound, sendMessage, deliverSystemMessage, listMessages } from '../server/mail.js';
+
+test('doreczenie z SMTP przechodzi przez reguly, a przekierowanie skrzynki milknie po archiwizacji', () => {
+  const db = openMemoryDb();
+  const ala = uzytkownik(db, 'ala');
+  const bob = uzytkownik(db, 'bob');
+  setForwarding(db, ala, { to: 'bob@twojapoczta.com', keepCopy: true });
+  createRule(db, ala, { criteria: { from: 'newsletter@' }, actions: { archive: true, markRead: true } });
+
+  const id = deliverInbound(db, ala.id, {
+    from: { name: 'Gazetka', addr: 'newsletter@example.com' },
+    subject: 'Wydanie 7', body: 'tresc', html: '', attachments: [],
+  }, { toAddr: 'ala@twojapoczta.com' });
+
+  const list = db.prepare('SELECT * FROM messages WHERE id = ?').get(id);
+  assert.equal(list.folder, 'archive');
+  assert.equal(list.is_read, 1);
+  // forwardDelivered sprawdza folder w bazie: zarchiwizowany list nie jedzie do Boba.
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM messages WHERE owner_id = ?').get(bob.id).n, 0);
+  db.close();
+});
+
+test('wysylka wewnetrzna: reguly dzialaja u odbiorcy, nie u nadawcy', () => {
+  const db = openMemoryDb();
+  const ala = uzytkownik(db, 'ala');
+  const bob = uzytkownik(db, 'bob');
+  createRule(db, bob, { criteria: { subject: 'oferta' }, actions: { delete: true } });
+  createRule(db, ala, { criteria: { subject: 'oferta' }, actions: { star: true } });
+
+  sendMessage(db, ala, { to: 'bob@twojapoczta.com', subject: 'oferta specjalna', body: 'tresc' });
+
+  const uBoba = db.prepare(`SELECT * FROM messages WHERE owner_id = ? AND folder != 'sent'`).all(bob.id);
+  assert.equal(uBoba.length, 1);
+  assert.equal(uBoba[0].folder, 'trash', 'regula Boba skasowala');
+  const wyslana = db.prepare(`SELECT * FROM messages WHERE owner_id = ? AND folder = 'sent'`).get(ala.id);
+  assert.equal(wyslana.is_starred, 0, 'reguly nie ruszaja kopii w Wyslanych');
+  db.close();
+});
+
+test('wiadomosci systemowe nie przechodza przez reguly', () => {
+  const db = openMemoryDb();
+  const u = uzytkownik(db, 'ala');
+  createRule(db, u, { criteria: { has: 'Zwrot' }, actions: { delete: true } });
+  deliverSystemMessage(db, u.id, { subject: 'Zwrot do nadawcy: test', body: 'Zwrot' });
+  const list = db.prepare('SELECT * FROM messages WHERE owner_id = ?').get(u.id);
+  assert.equal(list.folder, 'inbox', 'zwrot zostal w Odebranych mimo reguly usun');
+  db.close();
+});
+
+test('przebieg wsadowy stosuje akcje bez przekazywania dalej', () => {
+  const db = openMemoryDb();
+  const ala = uzytkownik(db, 'ala');
+  const bob = uzytkownik(db, 'bob');
+  wiadomoscW(db, ala.id, { subject: 'faktura 1', folder: 'inbox' });
+  wiadomoscW(db, ala.id, { subject: 'faktura 2', folder: 'archive' });
+  wiadomoscW(db, ala.id, { subject: 'faktura 3', folder: 'trash' });
+  wiadomoscW(db, ala.id, { subject: 'inny temat' });
+  const { rule } = createRule(db, ala, {
+    criteria: { subject: 'faktura' },
+    actions: { markRead: true, forwardTo: 'bob@twojapoczta.com' },
+  });
+
+  const wynik = applyRuleToExisting(db, ala, rule.id);
+  assert.equal(wynik.applied, 2, 'inbox + archive; kosz poza domyslnym zasiegiem kryteriow');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM messages WHERE owner_id = ? AND is_read = 1').get(ala.id).n, 2);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM messages WHERE owner_id = ?').get(bob.id).n, 0, 'zero przekazan');
+  db.close();
+});
+
+test('przebieg wsadowy na wylaczonej regule odmawia', () => {
+  const db = openMemoryDb();
+  const u = uzytkownik(db, 'ala');
+  const { rule } = createRule(db, u, { criteria: { subject: 'x' }, actions: { star: true } });
+  updateRule(db, u, rule.id, { is_active: 0 });
+  assert.match(applyRuleToExisting(db, u, rule.id).error, /wyłączona/i);
+  db.close();
+});
+
+test('ta sama sciezka: werdykt wsadowy rowna sie werdyktowi wyszukiwarki', () => {
+  const db = openMemoryDb();
+  const u = uzytkownik(db, 'ala');
+  const wSpamie = wiadomoscW(db, u.id, { from_addr: 'faktury@firma.com', subject: 'Faktura 9', folder: 'spam' });
+  wiadomoscW(db, u.id, { from_addr: 'faktury@firma.com', subject: 'Faktura 7' });
+  wiadomoscW(db, u.id, { from_addr: 'faktury@firma.com', subject: 'Newsletter' });
+  wiadomoscW(db, u.id, { from_addr: 'inni@firma.com', subject: 'Faktura 8' });
+  const kryteria = { from: 'faktury@', subject: 'faktura' };
+  const { rule } = createRule(db, u, { criteria: kryteria, actions: { star: true } });
+  applyRuleToExisting(db, u, rule.id);
+
+  const zSilnika = new Set(
+    db.prepare('SELECT id FROM messages WHERE owner_id = ? AND is_starred = 1').all(u.id).map((r) => r.id)
+  );
+  const zWyszukiwarki = new Set(listMessages(db, u.id, { kryteria }).map((r) => r.id));
+  assert.deepEqual(zSilnika, zWyszukiwarki, 'jedna sciezka kodu: silnik == wyszukiwarka');
+  assert.ok(zSilnika.size > 0, 'cos naprawde zostalo oznaczone');
+  assert.ok(!zSilnika.has(wSpamie), 'spam poza domyslnym zasiegiem obu');
+  db.close();
+});
