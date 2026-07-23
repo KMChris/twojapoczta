@@ -152,3 +152,18 @@ export function bezOgonkow(tekst) {
     .replace(/[̀-ͯ]/g, '')
     .replace(/ł/g, 'l');
 }
+
+// Kliknięcie w tło zamyka modal, tak samo jak Esc. Tło to pseudo-element
+// dialogu, więc trafienie w nie ma target === dialog; po marginesie wewnętrznym
+// rozróżnia je dopiero geometria. `detail` odsiewa Enter i kliknięcia z kodu,
+// które przychodzą bez współrzędnych i wyglądałyby na klik w róg ekranu.
+export function zamykajDialogiTlem() {
+  for (const okno of document.querySelectorAll('dialog')) {
+    okno.addEventListener('click', (e) => {
+      if (e.target !== okno || !e.detail) return;
+      const r = okno.getBoundingClientRect();
+      const poza = e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+      if (poza) okno.close();
+    });
+  }
+}

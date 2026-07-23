@@ -1,6 +1,7 @@
 // Panel administratora · rdzeń: strażnik roli, motyw, nawigacja sekcji.
 
 import { api } from './api.js';
+import { zamykajDialogiTlem } from '../app/ui.js';
 import { initPulpit } from './pulpit.js';
 import { initUzytkownicy } from './uzytkownicy.js';
 import { initZespoly } from './zespoly.js';
@@ -90,4 +91,5 @@ async function start() {
   pokazSekcje(location.hash.slice(1) || 'pulpit');
 }
 
+zamykajDialogiTlem();
 start();
