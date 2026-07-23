@@ -94,6 +94,11 @@ body.app {
   transition: border-color var(--przejscie), background var(--przejscie);
 }
 
+/* Puste pole nie pokazuje „Wyczyść", więc odzyskujemy jego szerokość (28px) z prawego paddingu. */
+.szukaj input:placeholder-shown {
+  padding-right: calc(4.6em - 28px);
+}
+
 .szukaj input:focus {
   outline: none;
   background: var(--papier);
