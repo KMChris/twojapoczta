@@ -1067,11 +1067,18 @@ const app = {
   doKoszaOtwarta,
   nieprzeczytanaOtwarta,
   wyczyscZaznaczenie: () => zaznaczanie.wyczysc(),
+  // Gwiazdka nadana zbiorczo obejmuje też list otwarty w czytniku — pasek
+  // akcji czytnika ma pokazać świeży stan bez zamykania.
+  ustawGwiazdkeOtwartej: (nowa) => {
+    if (!stan.otwarta) return;
+    stan.otwarta.is_starred = nowa ? 1 : 0;
+    renderujCzytnik();
+  },
 };
 
 const kompozycja = initKompozycja(app);
 const foldery = initFoldery(app);
-const zaznaczanie = initZaznaczanie(app);
+const zaznaczanie = initZaznaczanie(app, foldery);
 const filtry = initFiltry(app, foldery);
 const reguly = initReguly(app, foldery, filtry);
 initSkroty(app, kompozycja);
