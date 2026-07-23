@@ -93,3 +93,68 @@ test('setForwarding po refaktorze odmawia jak dotąd', () => {
   assert.equal(setForwarding(db, ala, { to: '' }).forwarding.to, '');
   db.close();
 });
+
+// --- CRUD z kolejnoscia --------------------------------------------------------
+
+import { listRules, createRule, updateRule, deleteRule, moveRule } from '../server/reguly.js';
+
+test('createRule waliduje kryteria i akcje, nadaje kolejne pozycje', () => {
+  const db = openMemoryDb();
+  const u = uzytkownik(db, 'ala');
+  assert.match(createRule(db, u, { criteria: {}, actions: { archive: true } }).error, /kryterium/);
+  assert.match(createRule(db, u, { criteria: { from: 'x' }, actions: {} }).error, /akcj/);
+  const pierwsza = createRule(db, u, { name: 'Archiwum faktur', criteria: { from: 'faktury@' }, actions: { archive: true } });
+  const druga = createRule(db, u, { criteria: { subject: 'raport' }, actions: { star: true } });
+  assert.equal(pierwsza.rule.position, 1);
+  assert.equal(druga.rule.position, 2);
+  const lista = listRules(db, u.id);
+  assert.deepEqual(lista.map((r) => r.name), ['Archiwum faktur', '']);
+  assert.deepEqual(lista[0].criteria, { from: 'faktury@' });
+  assert.deepEqual(lista[1].actions, { star: true });
+  db.close();
+});
+
+test('updateRule podmienia pola i pilnuje cudzych regul', () => {
+  const db = openMemoryDb();
+  const ala = uzytkownik(db, 'ala');
+  const bob = uzytkownik(db, 'bob');
+  const { rule } = createRule(db, ala, { criteria: { from: 'x' }, actions: { archive: true } });
+  assert.equal(updateRule(db, ala, rule.id, { name: 'Nowa', is_active: 0 }).rule.is_active, 0);
+  assert.match(updateRule(db, ala, rule.id, { criteria: {} }).error, /kryterium/);
+  assert.ok(updateRule(db, bob, rule.id, { name: 'Cudza' }).notFound);
+  db.close();
+});
+
+test('updateRule: aktywacja reguly bez akcji odmawia', () => {
+  const db = openMemoryDb();
+  const u = uzytkownik(db, 'ala');
+  const { rule } = createRule(db, u, { criteria: { from: 'x' }, actions: { archive: true } });
+  // Symulacja stanu po skasowaniu folderu: cel wyczyszczony, zero akcji, nieaktywna.
+  db.prepare("UPDATE rules SET actions = '{}', is_active = 0 WHERE id = ?").run(rule.id);
+  assert.match(updateRule(db, u, rule.id, { is_active: 1 }).error, /akcj/);
+  assert.equal(listRules(db, u.id)[0].is_active, 0);
+  db.close();
+});
+
+test('moveRule zamienia pozycje z sasiadem i nie wypada za kraniec', () => {
+  const db = openMemoryDb();
+  const u = uzytkownik(db, 'ala');
+  const a = createRule(db, u, { name: 'A', criteria: { from: 'a' }, actions: { archive: true } }).rule;
+  createRule(db, u, { name: 'B', criteria: { from: 'b' }, actions: { archive: true } });
+  const c = createRule(db, u, { name: 'C', criteria: { from: 'c' }, actions: { archive: true } }).rule;
+  assert.deepEqual(moveRule(db, u.id, c.id, 'up').rules.map((r) => r.name), ['A', 'C', 'B']);
+  assert.deepEqual(moveRule(db, u.id, a.id, 'up').rules.map((r) => r.name), ['A', 'C', 'B']);
+  assert.deepEqual(moveRule(db, u.id, a.id, 'down').rules.map((r) => r.name), ['C', 'A', 'B']);
+  db.close();
+});
+
+test('deleteRule kasuje tylko swoje', () => {
+  const db = openMemoryDb();
+  const ala = uzytkownik(db, 'ala');
+  const bob = uzytkownik(db, 'bob');
+  const { rule } = createRule(db, ala, { criteria: { from: 'x' }, actions: { archive: true } });
+  assert.ok(deleteRule(db, bob.id, rule.id).notFound);
+  assert.ok(deleteRule(db, ala.id, rule.id).deleted);
+  assert.equal(listRules(db, ala.id).length, 0);
+  db.close();
+});
