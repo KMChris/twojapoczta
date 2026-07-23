@@ -494,3 +494,86 @@ test('cid: list bez HTML nadal nie gubi załącznika z Content-ID', async () => 
   const { data } = await api('GET', `/api/messages/${id}`);
   assert.equal(data.attachments.length, 1);
 });
+
+// --- Filtry wyszukiwania -------------------------------------------------------
+
+// Wiadomość wstawiona wprost do bazy: trasa filtrów nie wymaga pełnego obiegu SMTP.
+function wiadomoscOd(userId, nadpisy = {}) {
+  const w = {
+    folder: 'inbox', from_name: '', from_addr: 'kto@example.com',
+    to_addr: '', cc_addr: '', subject: 'Temat', body: 'Treść',
+    attachments_count: 0, sent_at: now(),
+    ...nadpisy,
+  };
+  db.prepare(
+    `INSERT INTO messages (owner_id, folder, from_name, from_addr, to_addr, cc_addr,
+                           subject, body, attachments_count, sent_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(userId, w.folder, w.from_name, w.from_addr, w.to_addr, w.cc_addr,
+        w.subject, w.body, w.attachments_count, w.sent_at);
+}
+
+test('filtry: kryteria zawężają listę i wracają z licznikami', async () => {
+  const ala = client();
+  await ala('POST', '/api/register', { login: 'filtrowa', name: 'Ala', password: 'haslo1234' });
+  const mojeId = db.prepare('SELECT id FROM users WHERE login = ?').get('filtrowa').id;
+  wiadomoscOd(mojeId, { from_addr: 'faktury@firma.com', subject: 'Faktura 7/2026', attachments_count: 1 });
+  wiadomoscOd(mojeId, { from_addr: 'faktury@firma.com', subject: 'Newsletter' });
+  wiadomoscOd(mojeId, { from_addr: 'inny@example.com', subject: 'Faktura 8/2026', folder: 'trash' });
+
+  const poNadawcy = await ala('GET', '/api/messages?from=faktury%40');
+  assert.equal(poNadawcy.status, 200);
+  assert.equal(poNadawcy.data.messages.length, 2);
+  assert.ok(poNadawcy.data.counts, 'liczniki jadą razem z wynikami, jak przy zwykłej liście');
+
+  const zLacznie = await ala('GET', '/api/messages?from=faktury%40&subject=faktura&hasAttachment=1');
+  assert.equal(zLacznie.data.messages.length, 1);
+  assert.equal(zLacznie.data.messages[0].subject, 'Faktura 7/2026');
+
+  // Kosz jest poza domyślnym zasięgiem; jawny folder=trash go otwiera.
+  assert.equal((await ala('GET', '/api/messages?subject=faktura')).data.messages.length, 1);
+  const zKosza = await ala('GET', '/api/messages?subject=faktura&folder=trash');
+  assert.equal(zKosza.data.messages.length, 1);
+  assert.equal(zKosza.data.messages[0].subject, 'Faktura 8/2026');
+});
+
+test('filtry: nieprawidłowe kryteria to 400 z komunikatem', async () => {
+  const ala = client();
+  await ala('POST', '/api/register', { login: 'walidacyjna', name: 'Ala', password: 'haslo1234' });
+
+  const zlaData = await ala('GET', '/api/messages?dateFrom=wczoraj');
+  assert.equal(zlaData.status, 400);
+  assert.match(zlaData.data.error, /RRRR-MM-DD/);
+
+  const konflikt = await ala('GET', '/api/messages?has=x&folder=inbox&folderId=1');
+  assert.equal(konflikt.status, 400);
+  assert.match(konflikt.data.error, /nie oba naraz/);
+
+  const odwrocony = await ala('GET', '/api/messages?dateFrom=2026-07-10&dateTo=2026-07-01');
+  assert.equal(odwrocony.status, 400);
+  assert.match(odwrocony.data.error, /odwrócony/);
+});
+
+test('filtry: sam folder bez kryteriów to dalej zwykła nawigacja', async () => {
+  const ala = client();
+  await ala('POST', '/api/register', { login: 'nawigacyjna', name: 'Ala', password: 'haslo1234' });
+  // Rejestracja zostawia w Odebranych wiadomość powitalną.
+  const odebrane = await ala('GET', '/api/messages?folder=inbox');
+  assert.ok(odebrane.data.messages.length >= 1);
+  // Pusty parametr filtra nie przełącza trybu.
+  const pustyParametr = await ala('GET', '/api/messages?folder=inbox&from=');
+  assert.equal(pustyParametr.status, 200);
+  assert.equal(pustyParametr.data.messages.length, odebrane.data.messages.length);
+});
+
+test('filtry: cudza poczta jest niewidoczna niezależnie od kryteriów', async () => {
+  const ala = client();
+  await ala('POST', '/api/register', { login: 'wlascicielka2', name: 'Ala', password: 'haslo1234' });
+  const alaId = db.prepare('SELECT id FROM users WHERE login = ?').get('wlascicielka2').id;
+  wiadomoscOd(alaId, { subject: 'sekretny raport kwartalny' });
+
+  const bob = client();
+  await bob('POST', '/api/register', { login: 'obcy2', name: 'Bob', password: 'haslo1234' });
+  assert.equal((await bob('GET', '/api/messages?subject=sekretny')).data.messages.length, 0);
+  assert.equal((await ala('GET', '/api/messages?subject=sekretny')).data.messages.length, 1);
+});

@@ -10,6 +10,7 @@ import {
   unreadCounts, sendMessage, saveDraft, deliverSystemMessage, setForwarding, getForwarding,
 } from './mail.js';
 import { listFolders, createFolder, renameFolder, deleteFolder } from './folders.js';
+import { normalizujKryteria } from './kryteria.js';
 import { WELCOME_SUBJECT, WELCOME_BODY } from './seed.js';
 import {
   saveUpload, listAttachments, getAttachment, getAttachmentByCid, MAX_FILE_BYTES,
@@ -208,11 +209,33 @@ export function registerApiRoutes(router, db) {
 
   // --- Messages --------------------------------------------------------------
 
+  // Parametry filtrów przełączają trasę w tryb kryteriów. folder i folderId
+  // dołączają do kryteriów tylko w ich towarzystwie — same oznaczają zwykłą
+  // nawigację i zachowują dzisiejsze znaczenie.
+  const POLA_FILTRA = ['from', 'to', 'subject', 'has', 'hasNot', 'dateFrom', 'dateTo', 'hasAttachment'];
+
   route('GET', '/api/messages', async (req, res, { user, url }) => {
     const folder = url.searchParams.get('folder') ?? 'inbox';
     // Number('') to 0, a Number('abc') to NaN, oba padają na || null.
     const folderId = Number(url.searchParams.get('folderId')) || null;
     const q = (url.searchParams.get('q') ?? '').trim().slice(0, 200);
+
+    const surowe = {};
+    for (const pole of POLA_FILTRA) {
+      const wartosc = url.searchParams.get(pole);
+      if (wartosc) surowe[pole] = wartosc;
+    }
+    if (Object.keys(surowe).length) {
+      if (url.searchParams.get('folder')) surowe.folder = url.searchParams.get('folder');
+      if (url.searchParams.get('folderId')) surowe.folderId = url.searchParams.get('folderId');
+      const wynik = normalizujKryteria(surowe);
+      if (wynik.error) return json(res, 400, { error: wynik.error });
+      return json(res, 200, {
+        messages: listMessages(db, user.id, { q, kryteria: wynik.kryteria }),
+        counts: unreadCounts(db, user.id),
+      });
+    }
+
     json(res, 200, {
       messages: listMessages(db, user.id, { folder, folderId, q }),
       counts: unreadCounts(db, user.id),
