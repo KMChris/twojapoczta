@@ -29,22 +29,29 @@ To wszystko. Bez `npm install`, bez Dockera, bez zewnętrznej bazy danych.
 
 - **Pełny webmail**: Odebrane, Z gwiazdką, Wysłane, Zaplanowane, Wersje robocze
   (z autozapisem), Archiwum, Spam, Kosz (dwustopniowe usuwanie).
+- **Foldery własne**: płaskie katalogi obok wbudowanych, do ręcznego
+  porządkowania poczty; nazwa nie może udawać folderu systemowego.
 - **Pisanie jak w dużych skrzynkach**: formatowanie treści (pogrubienie, kolory,
   listy, cytaty, odnośniki, obrazki), DW i UDW, nadawanie spod aliasu
   oraz wysyłka o zaplanowanej porze.
 - **Czytnik HTML**: poczta przychodząca z formatowaniem, obrazkami i układem;
   zdalne obrazki domyślnie blokowane (belka „Pokaż obrazki"), cytaty zwijane
-  pod „•••", a kolory dopasowane do ciemnego motywu.
+  pod „•••", a kolory dopasowane do ciemnego motywu, z przełącznikiem
+  „Oryginalne kolory".
 - **Przesyłanie dalej**: cała nowa poczta leci automatycznie pod wskazany adres,
   z kopią w Odebranych albo bez, z ochroną przed zapętleniem.
 - **Doręczanie wewnętrzne**: wiadomości między kontami w Twojej domenie
   trafiają do adresatów natychmiast.
 - **Bramka SMTP**: odbiór poczty ze świata (rekord MX + port 25) z pełnym
-  parserem MIME; wysyłka na zewnątrz opcjonalnie (`TP_EXTERNAL=1`)
+  parserem MIME i szyfrowaniem **STARTTLS** (certyfikat samopodpisany od ręki
+  albo własny z Let's Encrypt); wysyłka na zewnątrz opcjonalnie (`TP_EXTERNAL=1`)
   z podpisami **DKIM**, nieudane doręczenia wracają jako „Zwrot do nadawcy".
 - **Załączniki**: do 10 plików po 5 MB, przechowywane z deduplikacją treści.
 - **Aliasy adresów**: dodatkowe adresy wpadające do Twojej skrzynki; limit
   ustawia administrator per konto (domyślnie 5, można znieść).
+- **Skrzynki zespołowe**: jeden adres dla wielu osób; każdy dostaje własną
+  kopię (miejsce, foldery i kosz zostają przy koncie), z własną nazwą nadawcy
+  i prawem wysyłki nadawanym per członek.
 - **Skróty klawiszowe**: `c` pisze, `/` szuka, `j`/`k` przewijają, `e` archiwizuje,
   `s` gwiazdka, `#` kosz, `u` nieprzeczytane, `g i`/`g s` foldery, `?` ściąga.
 - **Paleta poleceń** `Ctrl+K`: foldery, akcje i ustawienia w jednym miejscu.
@@ -52,10 +59,10 @@ To wszystko. Bez `npm install`, bez Dockera, bez zewnętrznej bazy danych.
 - **Tryb ciemny „nocna sortownia"**: jasny, ciemny albo jak system; ciemny obejmuje też treść otwartych listów.
 - **List powitalny** dla każdego nowego konta i gotowa skrzynka demo.
 - **Panel administratora** pod `/admin`: konta (role, blokady, hasła,
-  limity miejsca, aliasy), klucze DKIM z panelu, żywa weryfikacja rekordów
-  DNS (MX/SPF/DKIM/DMARC), rejestracja i polityka haseł bez restartu,
-  catch-all, komunikaty do wszystkich skrzynek, dziennik zdarzeń
-  i statystyki instancji. Bez wglądu w treść cudzych wiadomości.
+  limity miejsca, aliasy, skrzynki zespołowe), klucze DKIM z panelu,
+  żywa weryfikacja rekordów DNS (MX/SPF/DKIM/DMARC), rejestracja i polityka
+  haseł bez restartu, catch-all, komunikaty do wszystkich skrzynek,
+  dziennik zdarzeń i statystyki instancji. Bez wglądu w treść cudzych wiadomości.
 
 ## Architektura
 
@@ -73,8 +80,9 @@ wbudowane w Node 24:
 
 ```
 server/          # backend: http, router, static, db, auth, mail, api, seed,
-                 #          attachments, mime, smtp (in), smtp-out, dkim,
-                 #          settings, audit, quota, admin, api-admin, dns-check
+                 #          attachments, mime, smtp (in) + STARTTLS (tls-cert, x509),
+                 #          smtp-out, dkim, aliases, teams, folders, settings,
+                 #          audit, quota, admin, api-admin, dns-check
 public/          # strona główna, logowanie/rejestracja, aplikacja /app
 tests/           # testy node:test (in-memory SQLite): api, smtp, dkim
 data/            # tworzony przy starcie; cała poczta w jednym pliku
@@ -98,6 +106,8 @@ Zmiennymi środowiskowymi:
 | `TP_SMTP_PORT`     | brak (wyłączone)   | port przychodzącego SMTP (produkcyjnie `25`) |
 | `TP_SMTP_HOST`     | `0.0.0.0`          | adres nasłuchu SMTP                         |
 | `TP_SMTP_HOSTNAME` | `mx.{TP_DOMAIN}`   | nazwa serwera w powitaniu SMTP i EHLO       |
+| `TP_TLS_CERT`      | brak (samopodpisany) | certyfikat STARTTLS; bez niego generowany samopodpisany w `{TP_DATA_DIR}/tls/` |
+| `TP_TLS_KEY`       | brak               | klucz prywatny do `TP_TLS_CERT`             |
 | `TP_EXTERNAL`      | brak (wyłączone)   | `1` włącza wysyłkę poza własną domenę       |
 | `TP_SMTP_ROUTE`    | brak               | smarthost `host[:port]`: cała poczta wychodząca przez przekaźnik |
 | `TP_TLS_VERIFY`    | brak (oportunistycznie) | `1` wymusza walidację certyfikatu serwera odbiorcy (fail-closed) |
@@ -135,6 +145,14 @@ Bramka SMTP przyjmuje pocztę tylko dla skrzynek i aliasów w Twojej domenie
 nieudane doręczenia jako „Zwrot do nadawcy". Rekordy DNS (MX, SPF, DKIM),
 rekord PTR, zaporę i wariant ze smarthostem opisuje samouczek.
 
+**Pierwszy administrator.** Konto zakładasz przez rejestrację, a uprawnienia
+administratora nadajesz z wiersza poleceń (na produkcji, gdzie `TP_SEED=0`
+wyłącza konto demo, to jedyna droga do panelu `/admin`):
+
+```sh
+node server/index.js --admin twoj-login
+```
+
 **Kopia zapasowa.** Cała poczta to jeden plik SQLite:
 
 ```sh
@@ -145,15 +163,14 @@ sqlite3 /var/lib/twojapoczta/twojapoczta.db ".backup kopia-$(date +%F).db"
 
 ```sh
 npm run dev             # restart przy zmianach (node --watch)
-npm test                # 331 testów (node:test, baza w pamięci, zero instalacji)
+npm test                # 546 testów (node:test, baza w pamięci, zero instalacji)
 npm run test:coverage   # to samo + raport pokrycia linii i gałęzi
 ```
 
 ## Mapa rozwoju
 
-- STARTTLS dla przychodzącego SMTP (szyfrowany transport od obcych serwerów)
 - Dostęp IMAP dla zewnętrznych klientów pocztowych
-- Katalogi własne i filtry / reguły
+- Filtry i reguły automatycznego sortowania przychodzącej poczty
 
 ## Licencja
 
