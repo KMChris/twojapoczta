@@ -9,6 +9,7 @@ import { renderujTresc, pokazObrazki } from './tresc.js';
 import { widoczneSpinacze } from './spinacze.js';
 import { initSkroty } from './skroty.js';
 import { initFoldery } from './foldery.js';
+import { initFiltry } from './filtry.js';
 
 const NAZWY = {
   inbox: 'Odebrane', starred: 'Z gwiazdką', sent: 'Wysłane', scheduled: 'Zaplanowane',
@@ -40,6 +41,7 @@ const stan = {
   folder: 'inbox',
   folderId: null,
   q: '',
+  kryteria: null,
   wiadomosci: [],
   liczniki: {},
   wybranaId: null,
@@ -137,8 +139,9 @@ for (const kafelek of formularzUstawien.querySelectorAll('input[name="motyw"]'))
 
 // Tytuł listy: wbudowane mają nazwy w NAZWY, własne trzymają je w foldery.js.
 function odswiezTytul() {
-  tytulFolderu.textContent =
-    stan.folder === 'custom' ? foldery.nazwa(stan.folderId) : NAZWY[stan.folder];
+  tytulFolderu.textContent = stan.kryteria
+    ? 'Wyniki wyszukiwania'
+    : stan.folder === 'custom' ? foldery.nazwa(stan.folderId) : NAZWY[stan.folder];
   renderujLiczniki();
 }
 
@@ -146,6 +149,7 @@ function przejdzDoFolderu(folder, { folderId = null, zHash = false } = {}) {
   stan.folder = folder;
   stan.folderId = folder === 'custom' ? folderId : null;
   stan.q = '';
+  filtry.wyczyscTryb();
   szukajInput.value = '';
   szukajWyczysc.hidden = true;
   stan.wybranaId = null;
@@ -172,7 +176,9 @@ function przejdzDoFolderu(folder, { folderId = null, zHash = false } = {}) {
 
 async function odswiezListe({ cicho = false } = {}) {
   try {
-    const { messages, counts } = await api.lista(stan.folder, stan.q, stan.folderId);
+    const { messages, counts } = stan.kryteria
+      ? await api.szukaj(stan.kryteria)
+      : await api.lista(stan.folder, stan.q, stan.folderId);
     stan.wiadomosci = messages;
     stan.liczniki = counts;
     renderujListe();
@@ -206,7 +212,9 @@ function renderujLiczniki() {
   }
   foldery.renderuj();
   const nieprzeczytane = stan.liczniki.inbox;
-  const nazwaFolderu = stan.folder === 'custom' ? foldery.nazwa(stan.folderId) : NAZWY[stan.folder];
+  const nazwaFolderu = stan.kryteria
+    ? 'Wyniki wyszukiwania'
+    : stan.folder === 'custom' ? foldery.nazwa(stan.folderId) : NAZWY[stan.folder];
   document.title = `${nazwaFolderu}${nieprzeczytane ? ` (${nieprzeczytane})` : ''} · TwojaPoczta`;
 }
 
@@ -214,9 +222,11 @@ function renderujListe() {
   listaEl.replaceChildren();
 
   if (!stan.wiadomosci.length) {
-    const tekst = stan.q
-      ? `Brak wyników dla „${stan.q}”.`
-      : PUSTE_TEKSTY[stan.folder] ?? 'Pusto.';
+    const tekst = stan.kryteria
+      ? 'Nic nie pasuje do ustawionych filtrów.'
+      : stan.q
+        ? `Brak wyników dla „${stan.q}”.`
+        : PUSTE_TEKSTY[stan.folder] ?? 'Pusto.';
     const pusta = el('div', { class: 'lista-pusta' }, ikona('mail'));
     for (const linia of tekst.split('\n')) pusta.append(el('p', {}, linia));
     listaEl.append(pusta);
@@ -227,7 +237,11 @@ function renderujListe() {
 }
 
 function zbudujWiersz(w) {
-  const wysylkowy = ['sent', 'drafts', 'scheduled'].includes(stan.folder);
+  // W wynikach filtrów o układzie wiersza decyduje szukany folder, nie ostatnio
+  // oglądany: wyniki „wszędzie" pokazują nadawcę, wyniki z Wysłanych adresata.
+  const wysylkowy = stan.kryteria
+    ? stan.kryteria.folder === 'sent'
+    : ['sent', 'drafts', 'scheduled'].includes(stan.folder);
   const kto = wysylkowy ? `Do: ${w.to_addr || w.cc_addr || '(bez adresata)'}` : w.from_name || w.from_addr;
   const kolorAdres = wysylkowy ? w.to_addr : w.from_addr;
   const czas = stan.folder === 'scheduled' && w.scheduled_at ? w.scheduled_at : w.sent_at;
@@ -718,6 +732,11 @@ szukajInput.addEventListener('input', () => {
   szukajWyczysc.hidden = !szukajInput.value;
   clearTimeout(zegarSzukania);
   zegarSzukania = setTimeout(() => {
+    // Pisanie w polu szukania wraca do zwykłego trybu: tytuł i lista folderu.
+    if (stan.kryteria) {
+      filtry.wyczyscTryb();
+      odswiezTytul();
+    }
     stan.q = szukajInput.value.trim();
     odswiezListe();
   }, 300);
@@ -726,6 +745,10 @@ szukajInput.addEventListener('input', () => {
 szukajInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     clearTimeout(zegarSzukania);
+    if (stan.kryteria) {
+      filtry.wyczyscTryb();
+      odswiezTytul();
+    }
     stan.q = szukajInput.value.trim();
     odswiezListe();
   }
@@ -742,6 +765,20 @@ szukajWyczysc.addEventListener('click', () => {
 function fokusSzukaj() {
   szukajInput.focus();
   szukajInput.select();
+}
+
+// Wyniki filtrów to tryb listy: wyłącza zwykłe szukanie, a kończy go nawigacja
+// do folderu, „Wyczyść" w panelu albo powrót do pola szukania.
+function szukajKryteriami(kryteria) {
+  stan.kryteria = kryteria;
+  stan.q = '';
+  szukajInput.value = '';
+  szukajWyczysc.hidden = true;
+  stan.wybranaId = null;
+  stan.otwarta = null;
+  pokazPustyCzytnik();
+  odswiezTytul();
+  odswiezListe();
 }
 
 // --- Ustawienia i pomoc ---------------------------------------------------------------
@@ -971,6 +1008,9 @@ const app = {
   zamknijCzytnik,
   napisz,
   fokusSzukaj,
+  szukajKryteriami,
+  otworzFiltry: () => filtry.otworz(),
+  nazwyFolderow: NAZWY,
   ustawMotyw,
   otworzUstawienia,
   otworzPomoc,
@@ -986,6 +1026,7 @@ const app = {
 
 const kompozycja = initKompozycja(app);
 const foldery = initFoldery(app);
+const filtry = initFiltry(app, foldery);
 initSkroty(app, kompozycja);
 
 // „Nowy folder" i przyszłe przyciski stylowane na .folder nie są folderami:
@@ -1059,7 +1100,7 @@ async function start() {
   setInterval(() => {
     if (document.hidden) return;
     odswiezLiczniki();
-    if (stan.folder === 'inbox' && !stan.q && !kompozycja.otwarte() && listaEl.scrollTop === 0) {
+    if (stan.folder === 'inbox' && !stan.q && !stan.kryteria && !kompozycja.otwarte() && listaEl.scrollTop === 0) {
       odswiezListe({ cicho: true });
     }
   }, 30_000);

@@ -20,6 +20,7 @@ export function initSkroty(app, kompozycja) {
     { tytul: 'Spam', ikona: 'spam', wykonaj: () => app.przejdzDoFolderu('spam') },
     { tytul: 'Kosz', ikona: 'trash', wykonaj: () => app.przejdzDoFolderu('trash') },
     { tytul: 'Szukaj w poczcie', ikona: 'search', skrot: '/', wykonaj: () => app.fokusSzukaj() },
+    { tytul: 'Filtry wyszukiwania', ikona: 'filtr', wykonaj: () => app.otworzFiltry() },
     { tytul: 'Odśwież listę', ikona: 'refresh', wykonaj: () => app.odswiezListe() },
     { tytul: 'Motyw: jasny', ikona: 'ustawienia', wykonaj: () => app.ustawMotyw('light', { zapisz: true }) },
     { tytul: 'Motyw: nocna sortownia', ikona: 'ustawienia', wykonaj: () => app.ustawMotyw('dark', { zapisz: true }) },

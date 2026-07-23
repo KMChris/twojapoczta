@@ -29,6 +29,11 @@ export const api = {
       `/api/messages?folder=${encodeURIComponent(folder)}&q=${encodeURIComponent(q ?? '')}` +
         (folderId ? `&folderId=${folderId}` : '')
     ),
+  szukaj: (kryteria) => {
+    const parametry = new URLSearchParams();
+    for (const [klucz, wartosc] of Object.entries(kryteria)) parametry.set(klucz, wartosc);
+    return zadanie('GET', `/api/messages?${parametry}`);
+  },
   wiadomosc: (id) => zadanie('GET', `/api/messages/${id}`),
   wyslij: (dane) => zadanie('POST', '/api/messages', dane),
   zmien: (id, dane) => zadanie('PATCH', `/api/messages/${id}`, dane),
