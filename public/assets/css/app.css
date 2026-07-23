@@ -1815,6 +1815,14 @@ a.boczny-link {
   color: var(--stempel);
 }
 
+/* Opis pola: drobny, szary hint pod etykietą lub listą (aliasy, foldery, reguły).
+   Bliźniak reguły z auth.css — app.css nigdy jej nie miał, więc te akapity były pełnej wielkości. */
+.pole-opis {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--stempel);
+}
+
 .ustawienia-formularz input[type='text'],
 .ustawienia-formularz textarea {
   width: 100%;
@@ -2615,12 +2623,21 @@ input[type='radio']:disabled {
 
 .regula {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.6rem;
   padding: 0.5rem 0.65rem;
   background: var(--papier-2);
   border-radius: var(--r-m);
   font-size: 0.88rem;
+}
+
+/* Wiersz trzyma się góry (flex-start), więc przy wielolinijkowym opisie checkbox nie
+   spływa na środek bloku. min-height: 1lh centruje go na wysokości pierwszej linii tekstu. */
+.regula-aktywnosc {
+  display: flex;
+  align-items: center;
+  min-height: 1lh;
+  flex-shrink: 0;
 }
 
 .regula.wylaczona .regula-opis {
