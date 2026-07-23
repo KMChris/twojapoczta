@@ -49,7 +49,7 @@ export async function seedIfEmpty(db) {
 
   const users = {};
   const roster = [
-    ['demo', 'Jan Demowski', 'Pozdrawiam,\nJan'],
+    ['demo', 'Jan Demowski', 'Pozdrawiam\nJan'],
     [SYSTEM_SENDER.login, SYSTEM_SENDER.name, ''],
     ['ania', 'Ania Nowakowska', 'Ania'],
     ['michal', 'Michał Krajewski', 'M.'],
@@ -226,7 +226,7 @@ chciałbym złożyć wniosek o urlop w dniach 10–21 sierpnia. Projekt
 wchodzę w to! Wrzesień pasuje idealnie, byle nie ten weekend z maratonem.
 Zarezerwujesz schronisko, czy mam się tym zająć?
 
-Pozdrawiam,
+Pozdrawiam
 Jan`,
     { to: `ania@${'twojapoczta.com'}`, at: at(7 * DAYS) }
   );
