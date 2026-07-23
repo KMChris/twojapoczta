@@ -1042,6 +1042,8 @@ for (const przycisk of document.querySelectorAll('.folder[data-folder]')) {
 }
 
 document.querySelector('[data-akcja="napisz"]').addEventListener('click', napisz);
+// Ustawienia mogły zmienić aliasy; otwarte okno pisania widzi zmianę od razu.
+ustawieniaDialog.addEventListener('close', () => kompozycja.odswiezNadawcow());
 document.querySelector('[data-akcja="odswiez"]').addEventListener('click', () => odswiezListe());
 document.querySelector('[data-akcja="ustawienia"]').addEventListener('click', otworzUstawienia);
 document.querySelector('[data-akcja="pomoc"]').addEventListener('click', otworzPomoc);

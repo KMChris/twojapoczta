@@ -57,6 +57,11 @@ export function initKompozycja(app) {
     }
   }
 
+  // Ustawienia mogły właśnie zmienić aliasy: przebuduj listę, zachowując obecny wybór.
+  function odswiezNadawcow() {
+    if (otwarte()) uzupelnijNadawcow(wyborOd.value || app.stan.user.address);
+  }
+
   function otworz({ do: doKogo = '', dw = '', udw = '', temat = '', tresc = '', trescHtml = '', draft = null } = {}) {
     generacja += 1;
     draftId = draft?.id ?? null;
@@ -418,7 +423,7 @@ export function initKompozycja(app) {
     .querySelector('[data-akcja="odrzuc-robocza"]')
     .addEventListener('click', odrzuc);
 
-  return { otworz, zamknij, otwarte, zamknijNakladki };
+  return { otworz, zamknij, otwarte, zamknijNakladki, odswiezNadawcow };
 }
 
 // Cytowanie przy odpowiedzi: oryginał wjeżdża jako blockquote (HTML, gdy jest).
