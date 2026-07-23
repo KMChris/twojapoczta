@@ -682,16 +682,53 @@ body.panel-admina {
 
 .zespol-karta > header .mono { color: var(--stempel); }
 
-.zespol-nowy,
 .zespol-akcje {
   display: flex;
   align-items: center;
   gap: 0.7rem;
   flex-wrap: wrap;
+  margin-top: 0.8rem;
 }
 
-.zespol-akcje { margin-top: 0.8rem; }
 .zespol-akcje .grozny { margin-left: auto; }
+
+/* Zakładanie zespołu: osobny, podpisany blok, żeby nie zlewał się z opisem sekcji. */
+.zespol-nowy {
+  margin-top: 1.1rem;
+  padding: 0.85rem 1rem 0.95rem;
+  border: 1.5px dashed var(--linia-2);
+  border-radius: var(--r-m);
+}
+
+.zespol-nowy h2 {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+}
+
+.zespol-nowy-pola {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.zespol-pole {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.84rem;
+  color: var(--stempel);
+}
+
+.zespol-adres-wiersz {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.zespol-domena {
+  color: var(--stempel);
+}
 
 .czlonkowie {
   display: flex;

@@ -71,7 +71,7 @@ async function start() {
 
   widoki.pulpit = initPulpit();
   widoki.uzytkownicy = initUzytkownicy(stan);
-  widoki.zespoly = initZespoly();
+  widoki.zespoly = initZespoly(stan);
   widoki.domena = initDomena();
   widoki.ustawienia = initUstawienia();
   widoki.dziennik = initDziennik();

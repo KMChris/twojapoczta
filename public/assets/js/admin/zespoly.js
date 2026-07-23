@@ -3,8 +3,9 @@
 import { api } from './api.js';
 import { el, ikona, toast } from '../app/ui.js';
 
-export function initZespoly() {
+export function initZespoly(stan) {
   const kontener = document.querySelector('[data-widok="zespoly"]');
+  const domena = () => stan.user.address.split('@')[1];
   let zespoly = [];
   let konta = [];
 
@@ -117,29 +118,38 @@ export function initZespoly() {
   }
 
   function rysuj() {
-    const adres = el('input', { name: 'adres', type: 'text', placeholder: 'sprzedaz', maxlength: '30', 'aria-label': 'Adres zespołu' });
-    const nazwa = el('input', { name: 'nazwa', type: 'text', placeholder: 'Dział Sprzedaży', maxlength: '60', 'aria-label': 'Nazwa zespołu' });
+    const nazwa = el('input', { name: 'nazwa', type: 'text', placeholder: 'Dział Sprzedaży', maxlength: '60' });
+    const adres = el('input', { name: 'adres', type: 'text', placeholder: 'sprzedaz', maxlength: '30' });
 
     kontener.replaceChildren(
       el('div', { class: 'sekcja-naglowek' }, el('h1', {}, 'Zespoły')),
       el('p', { class: 'karta-opis' },
         'Skrzynka zespołowa to wspólny adres z własną nazwą. Poczta na niego rozchodzi się do wszystkich członków, a wysyłka podpisuje się nazwą zespołu.'),
-      el('div', { class: 'zespol-nowy' },
-        adres,
-        nazwa,
-        el('button', {
-          class: 'btn-glowny',
-          onclick: async () => {
-            try {
-              await api.dodajZespol({ local_part: adres.value.trim().toLowerCase(), name: nazwa.value.trim() });
-              toast('Założono zespół', { ikonaNazwa: 'mail' });
-              await odswiez();
-              rysuj();
-            } catch (err) {
-              toast(err.message, { blad: true });
-            }
-          },
-        }, 'Załóż zespół')
+      el('section', { class: 'zespol-nowy' },
+        el('h2', {}, 'Nowy zespół'),
+        el('div', { class: 'zespol-nowy-pola' },
+          el('label', { class: 'zespol-pole' }, el('span', {}, 'Nazwa zespołu'), nazwa),
+          el('label', { class: 'zespol-pole' },
+            el('span', {}, 'Adres'),
+            el('span', { class: 'zespol-adres-wiersz' },
+              adres,
+              el('span', { class: 'mono zespol-domena', 'aria-hidden': 'true' }, `@${domena()}`)
+            )
+          ),
+          el('button', {
+            class: 'btn-glowny',
+            onclick: async () => {
+              try {
+                await api.dodajZespol({ local_part: adres.value.trim().toLowerCase(), name: nazwa.value.trim() });
+                toast('Założono zespół', { ikonaNazwa: 'mail' });
+                await odswiez();
+                rysuj();
+              } catch (err) {
+                toast(err.message, { blad: true });
+              }
+            },
+          }, 'Załóż zespół')
+        )
       ),
       zespoly.length
         ? el('div', { class: 'zespoly-lista' }, ...zespoly.map(karta))
