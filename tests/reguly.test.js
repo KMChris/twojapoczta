@@ -415,3 +415,23 @@ test('silnik: regula z niepoprawnym JSON-em jest pomijana', () => {
   assert.equal(poId(db, id).is_starred, 1);
   db.close();
 });
+
+test('nadanie zaplanowanej wysylki tez przechodzi przez reguly odbiorcy', async () => {
+  const { fireScheduled } = await import('../server/mail.js');
+  const db = openMemoryDb();
+  const ala = uzytkownik(db, 'ala');
+  const bob = uzytkownik(db, 'bob');
+  createRule(db, bob, { criteria: { subject: 'terminowa' }, actions: { star: true, markRead: true } });
+  // Zaplanowana z terminem w przeszlosci: straznik podejmie ja od reki.
+  db.prepare(
+    `INSERT INTO messages (owner_id, folder, from_name, from_addr, to_addr, subject, body,
+                           is_read, scheduled_at, sent_at)
+     VALUES (?, 'scheduled', 'Ala', 'ala@twojapoczta.com', 'bob@twojapoczta.com', 'terminowa', 'tresc',
+             1, '2020-01-01T00:00:00.000Z', '2020-01-01T00:00:00.000Z')`
+  ).run(ala.id);
+  assert.equal(fireScheduled(db), 1);
+  const uBoba = db.prepare('SELECT * FROM messages WHERE owner_id = ?').get(bob.id);
+  assert.equal(uBoba.is_starred, 1, 'regula Boba zadzialala na kopii z zaplanowanej wysylki');
+  assert.equal(uBoba.is_read, 1);
+  db.close();
+});
