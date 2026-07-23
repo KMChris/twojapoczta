@@ -88,12 +88,12 @@ export function renameFolder(db, userId, id, rawName) {
 // wiadomości, które z tego folderu poszły do kosza (mają jeszcze folder_id,
 // gdyby ktoś kiedyś złamał niezmiennik) i wskrzesili je w Archiwum.
 //
-// Reguły przenoszące do tego folderu wyłącza faza 3: tabeli rules jeszcze nie ma.
 export function deleteFolder(db, userId, id) {
   const folder = db.prepare('SELECT id, name FROM folders WHERE id = ? AND user_id = ?').get(id, userId);
   if (!folder) return { error: 'Nie znaleziono folderu.', notFound: true };
 
   let moved = 0;
+  let rulesDisabled = 0;
   db.exec('BEGIN');
   try {
     moved = db
@@ -102,11 +102,30 @@ export function deleteFolder(db, userId, id) {
          WHERE owner_id = ? AND folder_id = ? AND folder = 'custom'`
       )
       .run(userId, id).changes;
+    // Reguły przenoszące do kasowanego folderu: wyłączamy i czyścimy cel.
+    // Kasowanie cudzej pracy po cichu byłoby gorsze niż wyłączenie z komunikatem
+    // (mówi o nim toast po stronie klienta). Na tabeli rules operujemy wprost,
+    // jak na messages — folders.js nie importuje reguly.js, graf zależności
+    // zostaje prosty.
+    const reguly = db.prepare('SELECT id, actions FROM rules WHERE user_id = ?').all(userId);
+    for (const regula of reguly) {
+      let akcje;
+      try {
+        akcje = JSON.parse(regula.actions);
+      } catch {
+        continue;
+      }
+      if (akcje.moveTo !== id) continue;
+      delete akcje.moveTo;
+      db.prepare('UPDATE rules SET is_active = 0, actions = ? WHERE id = ?')
+        .run(JSON.stringify(akcje), regula.id);
+      rulesDisabled += 1;
+    }
     db.prepare('DELETE FROM folders WHERE id = ? AND user_id = ?').run(id, userId);
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
     throw err;
   }
-  return { deleted: true, moved, name: folder.name };
+  return { deleted: true, moved, name: folder.name, rulesDisabled };
 }

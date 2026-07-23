@@ -322,3 +322,33 @@ test('unreadCounts liczy nieprzeczytane w folderach własnych', () => {
   assert.equal(liczniki.inbox, 0);
   db.close();
 });
+
+// --- Reguly a kasowanie folderu --------------------------------------------------
+
+test('deleteFolder wylacza reguly przenoszace do niego i czysci im cel', () => {
+  const db = openMemoryDb();
+  const id = konto(db, 'ala');
+  const f = createFolder(db, id, 'Faktury').folder;
+  const g = createFolder(db, id, 'Umowy').folder;
+  db.prepare('INSERT INTO rules (user_id, criteria, actions, position, created_at) VALUES (?, ?, ?, 1, ?)')
+    .run(id, '{"from":"faktury@"}', JSON.stringify({ moveTo: f.id, star: true }), now());
+  db.prepare('INSERT INTO rules (user_id, criteria, actions, position, created_at) VALUES (?, ?, ?, 2, ?)')
+    .run(id, '{"from":"umowy@"}', JSON.stringify({ moveTo: g.id }), now());
+
+  const wynik = deleteFolder(db, id, f.id);
+  assert.equal(wynik.rulesDisabled, 1);
+
+  const reguly = db.prepare('SELECT * FROM rules WHERE user_id = ? ORDER BY position').all(id);
+  assert.equal(reguly[0].is_active, 0, 'regula z celem w kasowanym folderze gasnie');
+  assert.deepEqual(JSON.parse(reguly[0].actions), { star: true }, 'cel wyczyszczony, reszta akcji zostaje');
+  assert.equal(reguly[1].is_active, 1, 'regula z innym celem nietknieta');
+  db.close();
+});
+
+test('deleteFolder bez regul zwraca rulesDisabled = 0', () => {
+  const db = openMemoryDb();
+  const id = konto(db, 'ala');
+  const f = createFolder(db, id, 'Puste').folder;
+  assert.equal(deleteFolder(db, id, f.id).rulesDisabled, 0);
+  db.close();
+});
