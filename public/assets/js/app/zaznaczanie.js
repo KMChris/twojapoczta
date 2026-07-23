@@ -1,14 +1,15 @@
 // TwojaPoczta · zaznaczanie wielu wiadomości: stan, pasek akcji, menu zakresów.
 //
 // Wejściem jest klik w awatar wiersza (main.js/zbudujWiersz); tu mieszka Set
-// zaznaczonych id, pasek nad nagłówkiem listy i menu „Zaznacz…". Przełączenie
-// działa w miejscu (klasa + podmiana zawartości awatara), bez przerysowania
-// listy — szybkie klikanie nie gubi fokusu ani pozycji przewinięcia.
+// zaznaczonych id, pasek ZASTĘPUJĄCY nagłówek listy i menu „Zaznacz…".
+// Przełączenie działa w miejscu (klasa + podmiana zawartości awatara), bez
+// przerysowania listy — szybkie klikanie nie gubi fokusu ani pozycji przewinięcia.
 
 import { api } from './api.js';
 import { ikona, toast } from './ui.js';
 
 const pasek = document.querySelector('[data-pasek-zaznaczenia]');
+const naglowek = document.querySelector('.lista-naglowek');
 const licznik = document.querySelector('[data-zaznaczenie-licznik]');
 const przyciskWszystko = document.querySelector('[data-akcja="zaznacz-wszystko"]');
 const ikonaWyboru = document.querySelector('[data-zaznacz-ikona]');
@@ -46,8 +47,12 @@ export function initZaznaczanie(app, foldery) {
   }
 
   function odswiezPasek() {
-    pasek.hidden = !zaznaczone.size;
-    if (!zaznaczone.size) {
+    // Pasek ZASTĘPUJE nagłówek listy (oba mają 36px przyciski i ten sam pion),
+    // więc zaznaczenie nie zmienia wysokości — tylko jeden jest widoczny naraz.
+    const aktywne = zaznaczone.size > 0;
+    pasek.hidden = !aktywne;
+    naglowek.hidden = aktywne;
+    if (!aktywne) {
       if (menu.matches(':popover-open')) menu.hidePopover();
       return;
     }
