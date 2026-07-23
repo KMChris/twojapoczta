@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openMemoryDb } from '../server/db.js';
 import { normalizujKryteria, kompilujKryteria, MAX_POLE_KRYTERIUM } from '../server/kryteria.js';
+import { listMessages } from '../server/mail.js';
 
 test('normalizacja: przycina białe znaki i długość, gubi puste pola', () => {
   const { kryteria } = normalizujKryteria({
@@ -250,4 +251,53 @@ test('kompilacja: deterministyczna — dwa przebiegi dają identyczny SQL i para
 
 test('kompilacja: puste kryteria to błąd programisty, nie „pasuje wszystko"', () => {
   assert.throws(() => kompilujKryteria({}), /puste/i);
+});
+
+// --- Integracja z listMessages ------------------------------------------------
+
+test('listMessages: kryteria wygrywają z folderem nawigacyjnym', () => {
+  const db = openMemoryDb();
+  const ja = konto(db, 'ala');
+  const wArchiwum = wiadomosc(db, ja, { folder: 'archive', subject: 'faktura' });
+  wiadomosc(db, ja, { folder: 'inbox', subject: 'inny temat' });
+  const wyniki = listMessages(db, ja, { folder: 'inbox', kryteria: { subject: 'faktura' } });
+  assert.deepEqual(wyniki.map((w) => w.id), [wArchiwum]);
+  db.close();
+});
+
+test('listMessages: kryteria nie przeciekają między kontami', () => {
+  const db = openMemoryDb();
+  const ala = konto(db, 'ala');
+  const bob = konto(db, 'bob');
+  const moja = wiadomosc(db, ala, { subject: 'poufna faktura' });
+  wiadomosc(db, bob, { subject: 'poufna faktura' });
+  assert.deepEqual(
+    listMessages(db, ala, { kryteria: { subject: 'poufna' } }).map((w) => w.id),
+    [moja]
+  );
+  db.close();
+});
+
+test('listMessages: q składa się z kryteriami przez AND', () => {
+  const db = openMemoryDb();
+  const ja = konto(db, 'ala');
+  const obie = wiadomosc(db, ja, { from_addr: 'faktury@firma.com', body: 'pilne' });
+  wiadomosc(db, ja, { from_addr: 'faktury@firma.com', body: 'zwykłe' });
+  assert.deepEqual(
+    listMessages(db, ja, { q: 'pilne', kryteria: { from: 'faktury@' } }).map((w) => w.id),
+    [obie]
+  );
+  db.close();
+});
+
+test('listMessages: wyniki kryteriów idą od najnowszych', () => {
+  const db = openMemoryDb();
+  const ja = konto(db, 'ala');
+  const starsza = wiadomosc(db, ja, { subject: 'faktura', sent_at: '2026-07-01T10:00:00.000Z' });
+  const nowsza = wiadomosc(db, ja, { subject: 'faktura', sent_at: '2026-07-20T10:00:00.000Z' });
+  assert.deepEqual(
+    listMessages(db, ja, { kryteria: { subject: 'faktura' } }).map((w) => w.id),
+    [nowsza, starsza]
+  );
+  db.close();
 });

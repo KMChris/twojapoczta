@@ -6,6 +6,7 @@ import { hasRoom } from './quota.js';
 import { buildRawMessage, deliverExternal } from './smtp-out.js';
 import { signMessage } from './dkim.js';
 import { findTeam, teamMailboxes, canSendAs } from './teams.js';
+import { kompilujKryteria } from './kryteria.js';
 
 export const DOMAIN = process.env.TP_DOMAIN || 'twojapoczta.com';
 // Dozwolone wartości messages.folder. 'custom' to wartownik: mówi „folder własny",
@@ -78,11 +79,18 @@ export function parseRecipients(raw) {
     .filter(Boolean);
 }
 
-export function listMessages(db, userId, { folder = 'inbox', folderId = null, q = '', limit = 100 } = {}) {
+export function listMessages(db, userId, { folder = 'inbox', folderId = null, q = '', limit = 100, kryteria = null } = {}) {
   const where = ['owner_id = ?'];
   const params = [userId];
 
-  if (folderId) {
+  if (kryteria) {
+    // Jedna ścieżka kodu: ten sam fragment obsłuży w fazie 3 silnik reguł
+    // (identyczne WHERE z dopiskiem AND id = ?). Kryteria niosą własny wybór
+    // folderu, więc folder nawigacyjny nie ma tu głosu.
+    const skompilowane = kompilujKryteria(kryteria);
+    where.push(skompilowane.sql);
+    params.push(...skompilowane.params);
+  } else if (folderId) {
     where.push("folder = 'custom' AND folder_id = ?");
     params.push(folderId);
   } else if (folder === 'starred') {
@@ -103,7 +111,8 @@ export function listMessages(db, userId, { folder = 'inbox', folderId = null, q 
 
   params.push(limit);
   // Zaplanowane sortujemy po terminie nadania: najbliższe na górze.
-  const porzadek = folder === 'scheduled' ? 'scheduled_at ASC, id ASC' : 'sent_at DESC, id DESC';
+  const porzadek =
+    !kryteria && folder === 'scheduled' ? 'scheduled_at ASC, id ASC' : 'sent_at DESC, id DESC';
   return db
     .prepare(
       `SELECT id, folder, from_name, from_addr, to_addr, cc_addr, subject, snippet,
