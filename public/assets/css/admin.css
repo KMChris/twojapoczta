@@ -665,7 +665,6 @@ body.panel-admina {
 }
 
 .zespol-karta {
-  padding: 0.95rem 1.1rem;
   background: var(--papier);
   border: 1.5px solid var(--linia-2);
   border-radius: var(--r-l);
@@ -677,10 +676,15 @@ body.panel-admina {
   align-items: baseline;
   gap: 0.6rem;
   flex-wrap: wrap;
-  margin-bottom: 0.6rem;
+  padding: 0.8rem 1.1rem;
+  border-bottom: 1px dashed var(--linia-2);
 }
 
 .zespol-karta > header .mono { color: var(--stempel); }
+
+.zespol-tresc {
+  padding: 0.85rem 1.1rem 0.95rem;
+}
 
 .zespol-akcje {
   display: flex;

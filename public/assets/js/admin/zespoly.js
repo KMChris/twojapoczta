@@ -90,29 +90,31 @@ export function initZespoly(stan) {
         el('b', {}, zespol.name),
         el('span', { class: 'mono' }, zespol.address)
       ),
-      // Zespół bez członków odbija pocztę 550, a to jedyne miejsce, gdzie admin
-      // może się o tym dowiedzieć, zanim dowie się od nadawcy.
-      zespol.members.length
-        ? null
-        : el('p', { class: 'ostrzezenie' }, 'Ten zespół nie ma członków. Poczta na jego adres jest odrzucana.'),
-      el('ul', { class: 'czlonkowie' }, ...zespol.members.map((m) => czlonek(zespol, m))),
-      el('div', { class: 'zespol-akcje' },
-        wybor,
-        el('button', {
-          class: 'btn-drugi',
-          onclick: async () => {
-            if (!wybor.value) return;
-            try {
-              await api.ustawCzlonka(zespol.id, Number(wybor.value), false);
-              toast('Dopisano do zespołu', { ikonaNazwa: 'mail' });
-              await odswiez();
-              rysuj();
-            } catch (err) {
-              toast(err.message, { blad: true });
-            }
-          },
-        }, 'Dopisz'),
-        usun
+      el('div', { class: 'zespol-tresc' },
+        // Zespół bez członków odbija pocztę 550, a to jedyne miejsce, gdzie admin
+        // może się o tym dowiedzieć, zanim dowie się od nadawcy.
+        zespol.members.length
+          ? null
+          : el('p', { class: 'ostrzezenie' }, 'Ten zespół nie ma członków. Poczta na jego adres jest odrzucana.'),
+        el('ul', { class: 'czlonkowie' }, ...zespol.members.map((m) => czlonek(zespol, m))),
+        el('div', { class: 'zespol-akcje' },
+          wybor,
+          el('button', {
+            class: 'btn-drugi',
+            onclick: async () => {
+              if (!wybor.value) return;
+              try {
+                await api.ustawCzlonka(zespol.id, Number(wybor.value), false);
+                toast('Dopisano do zespołu', { ikonaNazwa: 'mail' });
+                await odswiez();
+                rysuj();
+              } catch (err) {
+                toast(err.message, { blad: true });
+              }
+            },
+          }, 'Dopisz'),
+          usun
+        )
       )
     );
   }
