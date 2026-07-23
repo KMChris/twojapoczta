@@ -2148,11 +2148,24 @@ input[type='radio']:disabled {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+}
+
+/* Nazwa i adres łamią się między sobą, plakietka stoi w pionowym środku wiersza. */
+.zespol-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.6rem;
 }
 
 .zespol-nazwa { font-weight: 600; }
-.zespol-adres { color: var(--stempel); }
+
+.zespol-adres {
+  color: var(--stempel);
+  overflow-wrap: anywhere;
+}
 
 .zespol-prawo {
   margin-left: auto;

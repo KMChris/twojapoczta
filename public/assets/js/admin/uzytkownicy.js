@@ -305,8 +305,10 @@ export function initUzytkownicy(stan) {
       ? el('ul', { class: 'zespoly' },
           ...u.teams.map((t) =>
             el('li', { class: 'zespol' },
-              el('span', { class: 'zespol-nazwa' }, t.name),
-              el('span', { class: 'zespol-adres mono' }, t.address),
+              el('span', { class: 'zespol-info' },
+                el('span', { class: 'zespol-nazwa' }, t.name),
+                el('span', { class: 'zespol-adres mono' }, t.address)
+              ),
               el('span', { class: `zespol-prawo${t.can_send ? ' moze-wysylac' : ''}` },
                 t.can_send ? 'odbiór i wysyłka' : 'odbiór')
             )
