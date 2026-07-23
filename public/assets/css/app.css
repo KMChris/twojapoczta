@@ -1299,11 +1299,19 @@ a.boczny-link {
 .btn-wyslij svg {
   width: 15px;
   height: 15px;
+  flex-shrink: 0;
 }
 
 .btn-wyslij[disabled] {
   opacity: 0.6;
   pointer-events: none;
+}
+
+/* Ciasny ekran: ikona znika w całości zamiast się zgniatać. */
+@media (max-width: 350px) {
+  .btn-wyslij svg {
+    display: none;
+  }
 }
 
 .kompozycja-status {
@@ -2358,7 +2366,8 @@ input[type='radio']:disabled {
 
 .zaslona {
   position: fixed;
-  inset: 0;
+  /* 58px = wysokość paska: nagłówek z szukaniem zostaje jasny i klikalny. */
+  inset: 58px 0 0 0;
   z-index: 29;
   background: rgb(15 17 23 / 0.4);
 }

@@ -714,6 +714,7 @@ function otworzWzgledna(krok) {
 // --- Kompozycja: wejścia -------------------------------------------------------------
 
 function napisz() {
+  zamknijBoczny();
   kompozycja.otworz({ tresc: stan.user.signature ? `\n\n${stan.user.signature}` : '' });
 }
 
