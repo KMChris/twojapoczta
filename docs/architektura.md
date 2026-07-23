@@ -40,6 +40,7 @@ budowania. `node server/index.js` to całe wdrożenie.
 | `auth.js`       | scrypt + sól, `timingSafeEqual`, sesje w cookie `httpOnly`/`SameSite=Lax`, limit prób logowania (5 / 15 min na parę IP+login). |
 | `mail.js`       | Logika domenowa: foldery, doręczanie wewnętrzne, wyszukiwanie, wersje robocze, zaplanowana wysyłka (`fireScheduled`), przesyłanie dalej (`forwardDelivered`), cykl życia wiadomości, doręczanie przychodzące (`deliverInbound`) i zlecanie wysyłki na zewnątrz. |
 | `folders.js`    | Logika folderów własnych: CRUD, walidacja nazw, usuwanie z przeniesieniem do Archiwum. |
+| `kryteria.js`   | Kryteria wyszukiwania: normalizacja, walidacja i kompilacja do jednego fragmentu SQL. Dziś napędza wyszukiwarkę; w fazie reguł ten sam fragment z dopiskiem `AND id = ?` będzie silnikiem dopasowania. |
 | `api.js`        | Handlery HTTP: walidacja wejścia, strażnik sesji, warstwa JSON, odczyt ciała z limitami. |
 | `seed.js`       | Konta i wiadomości demonstracyjne (pomijane przy `TP_SEED=0`), treść listu powitalnego. |
 | `attachments.js`| Załączniki: bloby adresowane sha256 (deduplikacja treści), tokeny uploadu (jednorazowe, 24 h), odśmiecanie osieroconych blobów. |
@@ -161,6 +162,7 @@ Bez frameworka i bez budowania. Cztery strony (strona główna `index.html`,
   - `spinacze.js`: wybór widocznych spinaczy załączników · chowa ten, którego obrazek renderer wstawił w treść przez `cid:`,
   - `skroty.js`: skróty klawiszowe i paleta poleceń,
   - `foldery.js`: panel boczny, okna folderu i przenoszenia,
+  - `filtry.js`: panel filtrów pod polem wyszukiwania (popover pozycjonowany w JS, bo anchor positioning nie jest jeszcze Baseline), zbieranie kryteriów, znacznik aktywnych filtrów,
   - `main.js`: rdzeń, czyli stan, foldery, lista, czytnik, ustawienia i spinanie całości.
 - `assets/js/admin/`: panel administratora (osobna strona, hash-routing jak
   w apce, reuse `ui.js` i tokenów): `main.js` (strażnik roli, nawigacja),
@@ -182,6 +184,7 @@ każdy endpoint wymaga sesji.
 | `POST /api/register` · `login` · `logout`| konto i sesja |
 | `GET` / `PATCH /api/me`                  | profil (imię, podpis, motyw) |
 | `GET /api/messages?folder=&folderId=&q=` | lista + liczniki |
+| `GET /api/messages?from=&to=&subject=&has=&hasNot=&dateFrom=&dateTo=&hasAttachment=` | wyszukiwanie po kryteriach (AND); `folder`/`folderId` stają się kryteriami tylko w towarzystwie filtrów, bez folderu szuka wszędzie poza Koszem i Spamem, nieprawidłowe kryteria → 400 |
 | `GET /api/messages/:id`                  | treść (oznacza przeczytane) + załączniki |
 | `POST /api/messages`                     | wyślij (od razu albo z `scheduledAt`) lub zapisz wersję roboczą |
 | `PATCH /api/messages/:id`                | `is_read` / `is_starred` / `folder` / `folder_id` |

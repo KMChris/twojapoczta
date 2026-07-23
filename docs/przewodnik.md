@@ -143,6 +143,12 @@ Najszybsza droga do każdej funkcji.
 Pole wyszukiwania u góry (albo `/`) przeszukuje bieżący folder po nadawcy,
 temacie i treści. Wyniki pojawiają się w trakcie pisania.
 
+**Filtry.** Lejek po prawej stronie pola szukania rozwija panel: Od, Do, Temat,
+Zawiera słowa, Nie zawiera, zakres dat, folder i załącznik. Kryteria łączą się
+spójnikiem „i", a bez wskazanego folderu przeszukują całą pocztę poza Koszem
+i Spamem. Aktywne filtry sygnalizuje kropka na lejku; zdejmiesz je przyciskiem
+„Wyczyść", przejściem do folderu albo zwykłym wpisem w polu szukania.
+
 ## Ustawienia
 
 Kliknij swój awatar w prawym górnym rogu:
