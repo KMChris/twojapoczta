@@ -7,9 +7,10 @@
 import { api } from './api.js';
 import { el, toast } from './ui.js';
 
-// Czysty opis reguły po polsku; używa go lista w Ustawieniach.
+// Klocki opisu po polsku: kreator skleja z nich zdanie, a lista w Ustawieniach
+// rozkłada na znaczniki „jeśli / to". Jedno źródło, żeby opisy się nie rozjechały.
 // `nazwy` = { wbudowane: {inbox: 'Odebrane', …}, folderu: (id) => nazwa }.
-export function podsumowaniePL(criteria, actions, nazwy) {
+export function opisWarunkow(criteria, nazwy) {
   const czesci = [];
   if (criteria.from) czesci.push(`od „${criteria.from}"`);
   if (criteria.to) czesci.push(`do „${criteria.to}"`);
@@ -21,7 +22,10 @@ export function podsumowaniePL(criteria, actions, nazwy) {
   if (criteria.folder) czesci.push(`w folderze ${nazwy.wbudowane[criteria.folder] ?? criteria.folder}`);
   if (criteria.folderId) czesci.push(`w folderze „${nazwy.folderu(criteria.folderId)}"`);
   if (criteria.hasAttachment) czesci.push('ma załącznik');
+  return czesci;
+}
 
+export function opisSkutkow(actions, nazwy) {
   const skutki = [];
   if (actions.delete) skutki.push('usuń');
   if (actions.moveTo) skutki.push(`przenieś do „${nazwy.folderu(actions.moveTo)}"`);
@@ -32,8 +36,11 @@ export function podsumowaniePL(criteria, actions, nazwy) {
   if (actions.neverSpam) skutki.push('nigdy nie do spamu');
   if (actions.priority === 'always') skutki.push('zawsze priorytet');
   if (actions.priority === 'never') skutki.push('nigdy priorytet');
+  return skutki;
+}
 
-  return `Jeśli ${czesci.join(' i ')} → ${skutki.join(', ')}`;
+export function podsumowaniePL(criteria, actions, nazwy) {
+  return `Jeśli ${opisWarunkow(criteria, nazwy).join(' i ')} → ${opisSkutkow(actions, nazwy).join(', ')}`;
 }
 
 export function initReguly(app, foldery, filtry) {
@@ -140,10 +147,23 @@ export function initReguly(app, foldery, filtry) {
         { class: `regula${regula.is_active ? '' : ' wylaczona'}` },
         el('label', { class: 'regula-aktywnosc' }, przelacznik),
         el(
-          'span',
+          'div',
           { class: 'regula-opis' },
-          regula.name ? el('strong', {}, `${regula.name} · `) : null,
-          podsumowaniePL(regula.criteria, regula.actions, nazwy)
+          regula.name ? el('strong', { class: 'regula-nazwa' }, regula.name) : null,
+          el(
+            'span',
+            { class: 'regula-wiersz' },
+            el('span', { class: 'regula-etykieta' }, 'jeśli'),
+            el('span', { class: 'regula-znaczniki' },
+              ...opisWarunkow(regula.criteria, nazwy).map((czesc) => el('span', { class: 'regula-znacznik' }, czesc)))
+          ),
+          el(
+            'span',
+            { class: 'regula-wiersz' },
+            el('span', { class: 'regula-etykieta' }, 'to'),
+            el('span', { class: 'regula-znaczniki' },
+              ...opisSkutkow(regula.actions, nazwy).map((skutek) => el('span', { class: 'regula-znacznik' }, skutek)))
+          )
         ),
         el(
           'span',

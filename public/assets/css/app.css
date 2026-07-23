@@ -2645,9 +2645,47 @@ input[type='radio']:disabled {
 }
 
 .regula-opis {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* Wiersze „jeśli / to": etykieta trzyma lewą kolumnę, znaczniki zawijają się w prawej,
+   więc długi warunek łamie się wewnątrz kolumny zamiast uciekać pod etykietę. */
+.regula-wiersz {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.regula-znaczniki {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.35rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.regula-etykieta {
+  flex-shrink: 0;
+  min-width: 2.9rem;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--stempel);
+}
+
+.regula-znacznik {
+  padding: 0.14rem 0.55rem;
+  background: var(--papier);
+  border: 1.5px solid var(--linia-2);
+  border-radius: var(--r-s);
+  font-size: 0.8rem;
 }
 
 .regula-akcje-listy {
