@@ -2346,7 +2346,7 @@ input[type='radio']:disabled {
   height: 1.15em;
   padding: 0;
   margin-left: 0.3rem;
-  vertical-align: middle;
+  vertical-align: sub;
   color: var(--stempel);
   background: none;
   border: 0;

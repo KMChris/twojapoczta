@@ -4,7 +4,6 @@
 // pokazaniu, tym samym ruchem co strefa toastów (ui.js).
 
 const ODSTEP = 8;
-const ZWLOKA = 350;
 
 // Czysta geometria (testowana w node): nad celem, wyśrodkowana, klamrowana do okna;
 // gdy u góry brak miejsca, dymek schodzi pod cel.
@@ -24,7 +23,6 @@ export function initDymki() {
   document.body.append(dymek);
 
   let cel = null;
-  let zegar = 0;
 
   function pokaz(nowyCel) {
     if (cel && cel !== nowyCel) schowaj();
@@ -43,7 +41,6 @@ export function initDymki() {
   }
 
   function schowaj() {
-    clearTimeout(zegar);
     if (!cel) return;
     if (cel.getAttribute('aria-describedby') === 'dymek') cel.removeAttribute('aria-describedby');
     cel = null;
@@ -54,18 +51,13 @@ export function initDymki() {
     if (e.pointerType === 'touch') return; // dotyk nie najeżdża; z fokusu dymek i tak wyjdzie
     const t = e.target.closest?.('[data-dymek]');
     if (!t || t === cel) return;
-    clearTimeout(zegar);
-    // Przycisk (i) to jawna prośba o wyjaśnienie, więc odpowiada od razu; pozostałe
-    // cele czekają, żeby dymki nie migały przy przelocie kursora nad rzędem ikon.
-    if (t.classList.contains('info-dymek')) pokaz(t);
-    else zegar = setTimeout(() => pokaz(t), ZWLOKA);
+    pokaz(t);
   });
 
   document.addEventListener('pointerout', (e) => {
     const t = e.target.closest?.('[data-dymek]');
     if (!t || (e.relatedTarget && t.contains(e.relatedTarget))) return;
     if (t === cel) schowaj();
-    else clearTimeout(zegar);
   });
 
   // Fokus pokazuje bez zwłoki, ale tylko widoczny (Tab), nie każdy klik w przycisk.
