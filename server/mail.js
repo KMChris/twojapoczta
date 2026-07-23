@@ -639,14 +639,11 @@ function wyslijZaplanowana(db, msg) {
 
 // --- Przesyłanie dalej (automatyczne przekierowanie skrzynki) --------------------
 
-// Ustawia albo kasuje przekierowanie skrzynki. Pusty adres = wyłączone.
-export function setForwarding(db, user, { to, keepCopy = true }) {
-  const cel = String(to ?? '').trim().toLowerCase();
-  if (!cel) {
-    db.prepare("UPDATE users SET forward_to = '', forward_keep = 1 WHERE id = ?").run(user.id);
-    return { forwarding: { to: '', keepCopy: true } };
-  }
-
+// Wspólna odpowiedź na pytanie „czy da się tam przesłać pocztę": używa jej
+// przekierowanie skrzynki i akcja „przekaż dalej" w regułach. Jedna ścieżka,
+// żeby obie funkcje odmawiały dokładnie tych samych celów.
+export function validateForwardTarget(db, user, surowyCel) {
+  const cel = String(surowyCel ?? '').trim().toLowerCase();
   const at = cel.lastIndexOf('@');
   if (at < 1 || !cel.slice(at + 1)) return { error: `Adres „${cel}" wygląda na niepoprawny.` };
   const domena = cel.slice(at + 1);
@@ -659,17 +656,28 @@ export function setForwarding(db, user, { to, keepCopy = true }) {
       if (findTeam(db, cel.slice(0, at))) return { error: 'Nie można przesyłać poczty na adres zespołu.' };
       return { error: `Nie znaleziono skrzynki „${cel}".` };
     }
-    // Przekierowanie na własny adres albo alias zapętliłoby skrzynkę na siebie.
+    // Przesyłanie na własny adres albo alias zapętliłoby skrzynkę na siebie.
     if (odbiorca.id === user.id) return { error: 'Nie da się przesyłać poczty na własny adres.' };
-  } else {
-    if (process.env.TP_EXTERNAL !== '1') {
-      return { error: `Ta instalacja doręcza pocztę tylko w domenie @${DOMAIN}. Adres „${cel}" jest poza nią.` };
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cel)) return { error: `Adres „${cel}" wygląda na niepoprawny.` };
+    return { cel };
   }
+  if (process.env.TP_EXTERNAL !== '1') {
+    return { error: `Ta instalacja doręcza pocztę tylko w domenie @${DOMAIN}. Adres „${cel}" jest poza nią.` };
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cel)) return { error: `Adres „${cel}" wygląda na niepoprawny.` };
+  return { cel };
+}
 
-  db.prepare('UPDATE users SET forward_to = ?, forward_keep = ? WHERE id = ?').run(cel, keepCopy ? 1 : 0, user.id);
-  return { forwarding: { to: cel, keepCopy: !!keepCopy } };
+// Ustawia albo kasuje przekierowanie skrzynki. Pusty adres = wyłączone.
+export function setForwarding(db, user, { to, keepCopy = true }) {
+  const pusty = !String(to ?? '').trim();
+  if (pusty) {
+    db.prepare("UPDATE users SET forward_to = '', forward_keep = 1 WHERE id = ?").run(user.id);
+    return { forwarding: { to: '', keepCopy: true } };
+  }
+  const wynik = validateForwardTarget(db, user, to);
+  if (wynik.error) return { error: wynik.error };
+  db.prepare('UPDATE users SET forward_to = ?, forward_keep = ? WHERE id = ?').run(wynik.cel, keepCopy ? 1 : 0, user.id);
+  return { forwarding: { to: wynik.cel, keepCopy: !!keepCopy } };
 }
 
 export function getForwarding(db, userId) {
