@@ -1,6 +1,6 @@
 // Renderer treści listu przychodzącego.
 //
-// Podział ról: reguly.js trzyma polityki (czyste, testowalne), tutaj jest
+// Podział ról: polityki.js trzyma polityki (czyste, testowalne), tutaj jest
 // wyłącznie chodzenie po drzewie i CSSOM. Oba parsery bierzemy od przeglądarki:
 // DOMParser dla HTML, CSSStyleSheet dla CSS.
 //
@@ -32,7 +32,7 @@ import {
   DOZWOLONE_TAGI, WYTNIJ_W_CALOSCI, dozwoloneAtrybuty, bezpiecznyLink,
   ocenUrlObrazka, czyOdrzucicDeklaracje, zakresujSelektor, rozstrzygnijMedia,
   znajdzCytatyWTekscie, zostajeCosWidocznego, liczbaTagow,
-} from './reguly.js';
+} from './polityki.js';
 import { rgbNaOklch, odwrocJasnosc, parsujRgb, zapiszRgb } from './kolor.js';
 
 let licznik = 0;
@@ -95,7 +95,7 @@ const MAX_GLEBOKOSC = 256;
 // samej liczbie tagów parsuje się liniowo i tanio. Cena proxy: bardzo duży PŁASKI list
 // (>16 tys. tagów, np. 1000-wierszowy newsletter ~18 tys.) też zejdzie do tekstu — rzadkie i
 // degraduje się czytelnie, a podniesienie progu wpuściłoby zagnieżdżony ładunek 20-30 tys.
-// tagów wiszący 300-700 ms. Licznik: liczbaTagow w reguly.js.
+// tagów wiszący 300-700 ms. Licznik: liczbaTagow w polityki.js.
 const MAX_TAGI = 16000;
 
 // Twardy limit liczby reguł CSS przemielanych z JEDNEGO listu. MAX_TAGI go nie zastąpi i to
@@ -424,7 +424,7 @@ function czyscStylInline(wezel, kontekst) {
   else wezel.removeAttribute('style');
 }
 
-// Polityka URL-i w CSS to allowlista funkcji z reguly.js, nie szukanie URL-i: wartość
+// Polityka URL-i w CSS to allowlista funkcji z polityki.js, nie szukanie URL-i: wartość
 // pada, jeśli wywołuje cokolwiek spoza listy znanych niepobierających. Dlatego CSS-owe
 // `url()` nie ma tu odpowiednika bramki z <img> — nie chowamy adresu do schowka i nie
 // doliczamy go do kontekst.zdalne. `zdalne` karmi belkę „Pokaż obrazki", a belka nie
@@ -444,7 +444,7 @@ function czyscStylInline(wezel, kontekst) {
 // Stąd sygnał: własność WYMIENIONA przez iterator, której getPropertyValue oddaje `""`,
 // jest cieniem skrótu, którego nie widzimy. Sygnał jest wąski, bo longhand z `var()`
 // (`background-image: image-set(var(--u) 1x)`) oddaje swoją treść normalnie i pada już
-// na allowliście w reguly.js. `""` naprawdę znaczy „stoi tu coś, czego nie umiemy
+// na allowliście w polityki.js. `""` naprawdę znaczy „stoi tu coś, czego nie umiemy
 // przeczytać", a czego nie umiemy przeczytać, tego nie wolno nam wypuścić.
 //
 // Nie usuwamy wtedy pojedynczego longhandu: removeProperty('background-image') NIE

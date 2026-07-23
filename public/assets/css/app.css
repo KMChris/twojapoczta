@@ -835,7 +835,7 @@ a.boczny-link {
    kontener blokiem zawierającym dla position: fixed (więc fixed przestaje
    uciekać do viewportu), a `isolation: isolate` domyka kontekst układania,
    więc z-index z listu nie przebije się nad interfejs. Silnik CSS egzekwuje
-   to strukturalnie; czarna lista fixed/sticky/z-index w reguly.js jest drugą
+   to strukturalnie; czarna lista fixed/sticky/z-index w polityki.js jest drugą
    warstwą (obrona w głąb) — obie opowiadają tę samą historię. */
 .cz-body-list {
   contain: layout paint style;

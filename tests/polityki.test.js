@@ -7,7 +7,7 @@ import {
   czyWartoscSiegaPoZasob, czyDeklaracjaZakazana, czyOdrzucicDeklaracje,
   podzielSelektory, zakresujSelektor,
   rozstrzygnijMedia, znajdzCytatyWTekscie, zostajeCosWidocznego, liczbaTagow,
-} from '../public/assets/js/app/reguly.js';
+} from '../public/assets/js/app/polityki.js';
 
 test('DOZWOLONE_TAGI: tabele przechodzą, bo na nich stoi layout newsletterów', () => {
   for (const tag of ['TABLE', 'THEAD', 'TBODY', 'TR', 'TD', 'TH']) {

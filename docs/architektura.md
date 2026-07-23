@@ -157,7 +157,7 @@ Bez frameworka i bez budowania. Cztery strony (strona główna `index.html`,
   - `kompozycja.js`: okno pisania, DW/UDW, nadawca z aliasu, autozapis i odrzucanie wersji roboczych, upload załączników, planowanie wysyłki, stempel,
   - `edytor.js`: pasek formatowania nad `contenteditable` i czyszczenie HTML po liście dozwolonych znaczników (przy zapisie i przy renderze),
   - `tresc.js`: renderer poczty przychodzącej · sanitizer po stronie klienta (`DOMParser` + CSSOM), blokada zdalnych obrazków, zwijanie cytatów, inwersja kolorów w ciemnym motywie i fallback do czystego tekstu,
-  - `reguly.js`: czyste polityki renderera (bez DOM, testowalne w `node:test`): allowlisty tagów i atrybutów, ocena adresów obrazków, allowlista funkcji CSS i zakresowanie selektorów do listu,
+  - `polityki.js`: czyste polityki renderera (bez DOM, testowalne w `node:test`): allowlisty tagów i atrybutów, ocena adresów obrazków, allowlista funkcji CSS i zakresowanie selektorów do listu,
   - `kolor.js`: konwersje sRGB↔OKLCH i inwersja jasności pod ciemny motyw (czysty moduł),
   - `spinacze.js`: wybór widocznych spinaczy załączników · chowa ten, którego obrazek renderer wstawił w treść przez `cid:`,
   - `skroty.js`: skróty klawiszowe i paleta poleceń,
@@ -224,7 +224,7 @@ Trasy panelu administratora (`/api/admin/*`) wymagają dodatkowo roli
   odblokował w liście. Do tego `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
   `Permissions-Policy`.
 - Poczta HTML renderuje się po stronie klienta przez własny sanitizer (`tresc.js`,
-  polityki w `reguly.js`): `DOMParser` parsuje HTML, CSSOM czyści CSS, a treść ląduje
+  polityki w `polityki.js`): `DOMParser` parsuje HTML, CSSOM czyści CSS, a treść ląduje
   w DOM aplikacji przez allowlistę tagów i atrybutów, ze stylami zakresowanymi do
   kontenera listu. Bez `iframe` i bez Shadow DOM. Drzewa nie serializujemy z powrotem
   do stringa · to zamyka mXSS.
