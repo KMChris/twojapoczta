@@ -1847,8 +1847,77 @@ a.boczny-link {
   cursor: pointer;
 }
 
-.radio-rzad input {
-  accent-color: var(--polecony);
+/* --- Kontrolki wyboru: checkbox i radio -------------------------------------
+   Rysowane od zera (appearance: none), więc jeden wygląd w każdej przeglądarce
+   i w obu motywach; obowiązuje też w panelu admina, który ładuje ten arkusz.
+   Radia motywu są schowane (.motywy input) i mają własne karty. */
+
+input[type='checkbox'],
+input[type='radio'] {
+  appearance: none;
+  flex-shrink: 0;
+  width: 1.05em;
+  height: 1.05em;
+  margin: 0 0.15em 0 0;
+  vertical-align: -0.16em;
+  display: inline-grid;
+  place-content: center;
+  background: var(--papier);
+  border: 1.5px solid var(--linia-2);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background var(--przejscie), border-color var(--przejscie);
+}
+
+input[type='radio'] {
+  border-radius: 50%;
+}
+
+input[type='checkbox']::before,
+input[type='radio']::before {
+  content: '';
+  scale: 0;
+  transition: scale var(--przejscie);
+}
+
+/* Ptaszek: biały w obu motywach, bo czerwień polecony jest ciemna i tu, i tu. */
+input[type='checkbox']::before {
+  width: 0.62em;
+  height: 0.62em;
+  background: #fff;
+  clip-path: polygon(13% 47%, 0 62%, 38% 100%, 100% 17%, 84% 5%, 36% 71%);
+}
+
+input[type='radio']::before {
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: var(--polecony);
+}
+
+input[type='checkbox']:hover,
+input[type='radio']:hover {
+  border-color: var(--stempel);
+}
+
+input[type='checkbox']:checked {
+  background: var(--polecony);
+  border-color: var(--polecony);
+}
+
+input[type='radio']:checked {
+  border-color: var(--polecony);
+}
+
+input[type='checkbox']:checked::before,
+input[type='radio']:checked::before {
+  scale: 1;
+}
+
+input[type='checkbox']:disabled,
+input[type='radio']:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 /* Wybór motywu: karty z miniaturą skrzynki zamiast gołych kropek. */
@@ -2365,7 +2434,8 @@ a.boczny-link {
   color: var(--stempel);
 }
 
-.filtry-siatka input,
+/* Pola tekstowe i selecty; checkboxy i radia mają własny wygląd (sekcja Kontrolki wyboru). */
+.filtry-siatka input:not([type='checkbox'], [type='radio']),
 .filtry-siatka select {
   width: 100%;
   padding: 0.55em 0.85em;
@@ -2377,7 +2447,7 @@ a.boczny-link {
   border-radius: var(--r-m);
 }
 
-.filtry-siatka input:focus,
+.filtry-siatka input:not([type='checkbox'], [type='radio']):focus,
 .filtry-siatka select:focus {
   outline: none;
   border-color: var(--priorytet);
@@ -2390,11 +2460,6 @@ a.boczny-link {
   gap: 0.5rem;
   font-size: 0.9rem;
   cursor: pointer;
-}
-
-.filtry-zalacznik input {
-  width: auto;
-  accent-color: var(--polecony);
 }
 
 .filtry-stopka {
@@ -2454,11 +2519,6 @@ a.boczny-link {
   cursor: pointer;
 }
 
-.reguly-akcje input {
-  width: auto;
-  accent-color: var(--polecony);
-}
-
 .reguly-notka {
   margin: 0;
 }
@@ -2490,10 +2550,6 @@ a.boczny-link {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
-}
-
-.regula-aktywnosc input {
-  accent-color: var(--polecony);
 }
 
 .regula-akcje-listy {
