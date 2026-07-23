@@ -349,6 +349,63 @@ export function registerApiRoutes(router, db) {
     json(res, 200, result);
   });
 
+  // --- Operacje zbiorcze ------------------------------------------------------
+
+  // Zaznaczenie na liście ma najwyżej tyle pozycji, ile odda listMessages
+  // (limit 100); 200 zostawia zapas, a ucina wsady sklejane poza aplikacją.
+  const MAX_BATCH = 200;
+
+  function batchIds(body) {
+    const { ids } = body;
+    if (!Array.isArray(ids) || !ids.length || ids.length > MAX_BATCH) return null;
+    if (!ids.every((id) => typeof id === 'number' && Number.isInteger(id))) return null;
+    return ids;
+  }
+
+  // Wsad przechodzi przez updateMessage/deleteMessage sztuka po sztuce: cudze
+  // i nieistniejące id po prostu się nie liczą, więc odpowiedź niesie liczby,
+  // nie listę błędów. Transakcja jak przy deleteFolder — połowiczny wsad po
+  // padzie w środku byłby gorszy niż powtórka całości.
+  route('PATCH', '/api/messages', async (req, res, { user }) => {
+    const body = await readBody(req);
+    const ids = batchIds(body);
+    const maZmiane = ['is_read', 'is_starred', 'folder', 'folder_id'].some((pole) => pole in body);
+    if (!ids || !maZmiane) return json(res, 400, { error: 'Nieprawidłowy format danych.' });
+    let updated = 0;
+    db.exec('BEGIN');
+    try {
+      for (const id of ids) {
+        if (updateMessage(db, user.id, id, body)) updated += 1;
+      }
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    json(res, 200, { updated });
+  });
+
+  route('DELETE', '/api/messages', async (req, res, { user }) => {
+    const body = await readBody(req);
+    const ids = batchIds(body);
+    if (!ids) return json(res, 400, { error: 'Nieprawidłowy format danych.' });
+    let deleted = 0;
+    let purged = 0;
+    db.exec('BEGIN');
+    try {
+      for (const id of ids) {
+        const wynik = deleteMessage(db, user.id, id);
+        if (wynik.deleted) deleted += 1;
+        if (wynik.purged) purged += 1;
+      }
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    json(res, 200, { deleted, purged });
+  });
+
   route('GET', '/api/counts', async (req, res, { user }) => {
     json(res, 200, { counts: unreadCounts(db, user.id) });
   });

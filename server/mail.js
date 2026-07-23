@@ -116,7 +116,7 @@ export function listMessages(db, userId, { folder = 'inbox', folderId = null, q 
     !kryteria && folder === 'scheduled' ? 'scheduled_at ASC, id ASC' : 'sent_at DESC, id DESC';
   return db
     .prepare(
-      `SELECT id, folder, from_name, from_addr, to_addr, cc_addr, subject, snippet,
+      `SELECT id, folder, folder_id, from_name, from_addr, to_addr, cc_addr, subject, snippet,
               is_read, is_starred, is_priority, attachments_count, sent_at, scheduled_at
        FROM messages WHERE ${where.join(' AND ')}
        ORDER BY ${porzadek} LIMIT ?`
