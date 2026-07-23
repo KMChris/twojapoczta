@@ -87,6 +87,18 @@ Kliknij wiadomość, żeby ją otworzyć. Nad treścią masz przyciski:
 oznacz jako nieprzeczytane, do kosza, zgłoś spam, drukuj. Załączniki pobierasz
 klikając ich kafelki pod treścią.
 
+**Porządki hurtem.** Kliknij kółko z inicjałami przy wiadomości, żeby ją
+zaznaczyć (zmienia się w ptaszek). Nad listą pojawia się pasek z licznikiem
+i akcjami dla całego zaznaczenia: archiwizuj, przenieś do folderu, gwiazdka,
+oznacz jako nieprzeczytane, do kosza, zgłoś spam (w Spamie zamiast tego
+**To nie spam**, które odsyła do Odebranych). Kwadrat po lewej stronie paska
+zaznacza wszystko albo odznacza (kreska oznacza, że zaznaczona jest tylko
+część), a strzałka obok rozwija szybki wybór: **Przeczytane**,
+**Nieprzeczytane**, **Oznaczone gwiazdką** i odwrotności — działa na tym, co
+masz właśnie na liście, więc łączy się z wyszukiwaniem i filtrami. Przenosiny
+i usunięcie z Odebranych możesz cofnąć jednym kliknięciem w dymku. `Esc`
+zdejmuje zaznaczenie.
+
 List otwiera się tak, jak złożył go nadawca: z formatowaniem, obrazkami i układem
 (newslettery w tabelach wyglądają jak u innych dostawców), a nie jako goły tekst.
 Trzy rzeczy dzieją się przy tym po Twojej stronie:

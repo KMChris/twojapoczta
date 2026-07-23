@@ -173,6 +173,7 @@ Bez frameworka i bez budowania. Cztery strony (strona główna `index.html`,
   - `spinacze.js`: wybór widocznych spinaczy załączników · chowa ten, którego obrazek renderer wstawił w treść przez `cid:`,
   - `skroty.js`: skróty klawiszowe i paleta poleceń,
   - `foldery.js`: panel boczny, okna folderu i przenoszenia,
+  - `zaznaczanie.js`: zaznaczanie wielu wiadomości — `Set` id, awatar jako przełącznik (klik zamienia inicjały w ptaszek), pasek akcji nad nagłówkiem listy, menu zakresów (wszystkie/żadne/przeczytane/nieprzeczytane/z gwiazdką/bez), akcje zbiorcze przez `PATCH`/`DELETE /api/messages` z cofaniem grupowanym po pierwotnym folderze; „Zgłoś spam" staje się „To nie spam" w widoku Spamu,
   - `dymek.js`: dymki podpowiedzi dla celów `[data-dymek]` (współdzielony z panelem admina) · popover nad warstwą dialogów, czysta geometria `pozycjaDymka` testowana w `node:test`,
   - `filtry.js`: panel filtrów pod polem wyszukiwania (popover pozycjonowany w JS, bo anchor positioning nie jest jeszcze Baseline), zbieranie kryteriów, znacznik aktywnych filtrów,
   - `reguly.js`: kreator reguły (drugi krok panelu filtrów) i sekcja „Reguły" w Ustawieniach ze znacznikami „jeśli / to" składanymi z tych samych klocków co zdanie kreatora (`opisWarunkow`, `opisSkutkow`, `podsumowaniePL`), przełącznikiem, strzałkami kolejności i usuwaniem,
@@ -202,6 +203,8 @@ każdy endpoint wymaga sesji.
 | `POST /api/messages`                     | wyślij (od razu albo z `scheduledAt`) lub zapisz wersję roboczą |
 | `PATCH /api/messages/:id`                | `is_read` / `is_starred` / `folder` / `folder_id` |
 | `DELETE /api/messages/:id`               | do kosza, a z kosza trwale |
+| `PATCH /api/messages`                    | zbiorczo: `{ ids: [], … }` te same pola co pojedynczy PATCH (1–200 id, w transakcji; cudze/nieznane po prostu się nie liczą) → `{ updated }` |
+| `DELETE /api/messages`                   | zbiorczo: `{ ids: [] }` → `{ deleted, purged }` |
 | `GET /api/counts`                        | nieprzeczytane per folder |
 | `GET` / `POST /api/folders`              | lista folderów własnych · utwórz folder |
 | `PATCH` / `DELETE /api/folders/:id`      | zmień nazwę · usuń (poczta do Archiwum, reguły z tym celem gasną — `rulesDisabled` w odpowiedzi) |
