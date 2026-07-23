@@ -362,6 +362,12 @@
         Bez zostawiania kopii oryginał schodzi do Archiwum, więc nic nie ginie.
       </p>
     </fieldset>
+    <fieldset class="pole">
+      <legend>Reguły</legend>
+      <ul class="reguly-lista" data-reguly></ul>
+      <p class="pole-opis" data-reguly-brak>Reguły tworzysz z panelu filtrów (lejek przy polu
+         szukania · przycisk „Utwórz regułę"). Działają na nową pocztę przychodzącą.</p>
+    </fieldset>
     <footer class="modal-stopka">
       <button type="submit" class="btn-zapisz">Zapisz zmiany</button>
     </footer>
@@ -400,6 +406,7 @@
      patrząc na listę. Pozycję pod polem nadaje filtry.js; style trzymają go
      na środku, dopóki moduł się nie wepnie (i gdyby JS poległ). -->
 <form class="panel-filtrow" id="panel-filtrow" data-panel-filtrow popover>
+  <div data-krok-filtrow>
   <div class="filtry-siatka">
     <label class="pole"><span>Od</span>
       <input name="od" type="text" maxlength="200" autocomplete="off" autofocus></label>
@@ -423,8 +430,46 @@
   </div>
   <footer class="filtry-stopka">
     <button type="button" class="filtry-wyczysc" data-akcja="wyczysc-filtry">Wyczyść</button>
-    <button type="submit" class="btn-zapisz">Szukaj</button>
+    <span class="filtry-stopka-prawa">
+      <button type="button" class="filtry-wyczysc" data-akcja="utworz-regule">Utwórz regułę</button>
+      <button type="submit" class="btn-zapisz">Szukaj</button>
+    </span>
   </footer>
+  </div>
+
+  <!-- Krok akcji: „Utwórz regułę" zamienia zebrane kryteria w automat (jak w Gmailu). -->
+  <div data-krok-akcji hidden>
+    <div class="filtry-siatka">
+      <p class="reguly-kryteria filtry-szeroki" data-reguly-kryteria></p>
+      <label class="pole filtry-szeroki"><span>Nazwa reguły (opcjonalna)</span>
+        <input name="regula_nazwa" type="text" maxlength="80" autocomplete="off"></label>
+      <div class="reguly-akcje filtry-szeroki">
+        <label><input type="checkbox" name="akcja_archive"> Archiwizuj</label>
+        <label><input type="checkbox" name="akcja_markread"> Oznacz jako przeczytane</label>
+        <label><input type="checkbox" name="akcja_star"> Oznacz gwiazdką</label>
+        <label><input type="checkbox" name="akcja_delete"> Usuń</label>
+        <label><input type="checkbox" name="akcja_neverspam"> Nigdy nie oznaczaj jako spam</label>
+      </div>
+      <label class="pole"><span>Przenieś do folderu</span>
+        <select name="akcja_moveto" data-regula-folder>
+          <option value="">Nie przenoś</option>
+        </select></label>
+      <label class="pole"><span>Priorytet</span>
+        <select name="akcja_priority">
+          <option value="">Bez zmian</option>
+          <option value="always">Zawsze priorytet</option>
+          <option value="never">Nigdy priorytet</option>
+        </select></label>
+      <label class="pole filtry-szeroki"><span>Przekaż dalej na adres</span>
+        <input name="akcja_forwardto" type="text" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+      <label class="filtry-zalacznik"><input type="checkbox" name="regula_wstecz_zastosuj"> Zastosuj także do już istniejących wiadomości</label>
+      <p class="pole-opis filtry-szeroki reguly-notka">Przy stosowaniu do istniejących przekazywanie dalej zostanie pominięte.</p>
+    </div>
+    <footer class="filtry-stopka">
+      <button type="button" class="filtry-wyczysc" data-akcja="regula-wstecz">Wstecz</button>
+      <button type="submit" class="btn-zapisz">Zapisz regułę</button>
+    </footer>
+  </div>
 </form>
 
 <div class="toast-strefa" data-toasty aria-live="polite" popover="manual"></div>

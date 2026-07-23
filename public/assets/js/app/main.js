@@ -10,6 +10,7 @@ import { widoczneSpinacze } from './spinacze.js';
 import { initSkroty } from './skroty.js';
 import { initFoldery } from './foldery.js';
 import { initFiltry } from './filtry.js';
+import { initReguly } from './reguly.js';
 
 const NAZWY = {
   inbox: 'Odebrane', starred: 'Z gwiazdką', sent: 'Wysłane', scheduled: 'Zaplanowane',
@@ -790,6 +791,7 @@ function otworzUstawienia() {
   odswiezAliasy();
   odswiezZespoly();
   odswiezPrzekierowanie();
+  reguly.odswiez();
   ustawieniaDialog.showModal();
 }
 
@@ -1027,6 +1029,7 @@ const app = {
 const kompozycja = initKompozycja(app);
 const foldery = initFoldery(app);
 const filtry = initFiltry(app, foldery);
+const reguly = initReguly(app, foldery, filtry);
 initSkroty(app, kompozycja);
 
 // „Nowy folder" i przyszłe przyciski stylowane na .folder nie są folderami:

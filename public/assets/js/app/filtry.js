@@ -14,6 +14,16 @@ const szukajInput = document.querySelector('[data-szukaj]');
 const selectFolderu = document.querySelector('[data-filtry-folder]');
 
 export function initFiltry(app, foldery) {
+  const krokFiltrow = panel.querySelector('[data-krok-filtrow]');
+  const krokAkcji = panel.querySelector('[data-krok-akcji]');
+
+  // Kreator reguły to drugi krok tego samego panelu (jak w Gmailu);
+  // przełączaniem steruje reguly.js, tu jest tylko mechanika widoczności.
+  function pokazKrok(ktory) {
+    krokFiltrow.hidden = ktory === 'akcje';
+    krokAkcji.hidden = ktory !== 'akcje';
+  }
+
   function ustawPozycje() {
     const pole = szukajBox.getBoundingClientRect();
     const szerokosc = Math.min(560, window.innerWidth - 16);
@@ -73,6 +83,7 @@ export function initFiltry(app, foldery) {
 
   panel.addEventListener('toggle', (e) => {
     if (e.newState !== 'open') return;
+    pokazKrok('filtry'); // panel zawsze startuje od kryteriów
     ustawPozycje();
     odswiezFoldery();
     // Panel doprecyzowuje szukanie: puste „Zawiera" przejmuje tekst z pola.
@@ -87,6 +98,7 @@ export function initFiltry(app, foldery) {
 
   panel.addEventListener('submit', (e) => {
     e.preventDefault();
+    if (!krokAkcji.hidden) return; // krok akcji obsługuje reguly.js
     const kryteria = zbierz();
     if (!Object.keys(kryteria).length) {
       toast('Ustaw przynajmniej jeden filtr.', { blad: true });
@@ -112,5 +124,5 @@ export function initFiltry(app, foldery) {
     }
   });
 
-  return { otworz, wyczyscTryb };
+  return { otworz, wyczyscTryb, zbierzKryteria: zbierz, pokazKrok };
 }

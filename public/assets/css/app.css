@@ -2423,8 +2423,112 @@ a.boczny-link {
   color: var(--atrament);
 }
 
+.filtry-stopka-prawa {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* --- Reguły: kreator w panelu i lista w Ustawieniach ----------------------- */
+
+.reguly-kryteria {
+  margin: 0;
+  padding: 0.55em 0.85em;
+  font-size: 0.88rem;
+  color: var(--atrament-2);
+  background: var(--papier-2);
+  border-radius: var(--r-m);
+}
+
+.reguly-akcje {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem 1rem;
+}
+
+.reguly-akcje label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.reguly-akcje input {
+  width: auto;
+  accent-color: var(--polecony);
+}
+
+.reguly-notka {
+  margin: 0;
+}
+
+.reguly-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.regula {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--papier-2);
+  border-radius: var(--r-m);
+  font-size: 0.88rem;
+}
+
+.regula.wylaczona .regula-opis {
+  opacity: 0.55;
+}
+
+.regula-opis {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.regula-aktywnosc input {
+  accent-color: var(--polecony);
+}
+
+.regula-akcje-listy {
+  display: inline-flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.regula-przycisk {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--stempel);
+  font: inherit;
+  cursor: pointer;
+}
+
+.regula-przycisk:hover:not(:disabled) {
+  background: var(--papier-3);
+  color: var(--atrament);
+}
+
+.regula-przycisk:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 @media (max-width: 480px) {
   .filtry-siatka {
+    grid-template-columns: 1fr;
+  }
+
+  .reguly-akcje {
     grid-template-columns: 1fr;
   }
 }

@@ -130,15 +130,18 @@ export function initFoldery(app) {
     const folder = stan.edytowany;
     if (!folder) return;
     try {
-      const { folders, moved } = await api.usunFolder(folder.id);
+      const { folders, moved, rulesDisabled } = await api.usunFolder(folder.id);
       stan.foldery = folders;
       okno.close();
-      toast(
-        moved
-          ? `Usunięto folder · ${moved} ${wiadomosciWord(moved)} w Archiwum`
-          : 'Usunięto folder',
-        { ikonaNazwa: 'archive' }
-      );
+      // Nic nie dzieje się po cichu: toast wylicza i pocztę, i wyłączone reguły.
+      const czesci = [];
+      if (moved) czesci.push(`${moved} ${wiadomosciWord(moved)} w Archiwum`);
+      if (rulesDisabled) {
+        czesci.push(rulesDisabled === 1 ? 'wyłączona 1 reguła' : `wyłączone ${rulesDisabled} reguły`);
+      }
+      toast(czesci.length ? `Usunięto folder · ${czesci.join(' · ')}` : 'Usunięto folder', {
+        ikonaNazwa: 'archive',
+      });
       // Patrzyliśmy właśnie na skasowany folder: idziemy tam, gdzie trafiła poczta.
       if (app.stan.folder === 'custom' && app.stan.folderId === folder.id) {
         app.przejdzDoFolderu(moved ? 'archive' : 'inbox');
