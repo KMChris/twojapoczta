@@ -167,7 +167,7 @@ export function initReguly(app, foldery, filtry) {
       {
         type: 'button',
         class: 'regula-przycisk',
-        title: tytul,
+        'data-dymek': tytul,
         'aria-label': tytul,
         disabled: wylaczony || null,
         onclick: async () => {

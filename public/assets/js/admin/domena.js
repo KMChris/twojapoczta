@@ -24,7 +24,7 @@ async function kopiuj(tekst) {
 }
 
 function przyciskKopiuj(tekst) {
-  return el('button', { class: 'ikona-btn', title: 'Kopiuj', 'aria-label': 'Kopiuj do schowka', onclick: () => kopiuj(tekst) }, ikona('copy'));
+  return el('button', { class: 'ikona-btn', 'data-dymek': 'Kopiuj', 'aria-label': 'Kopiuj do schowka', onclick: () => kopiuj(tekst) }, ikona('copy'));
 }
 
 export function initDomena() {

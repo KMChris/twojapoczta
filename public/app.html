@@ -35,6 +35,7 @@
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
     <symbol id="i-attach" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 1 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-ustawienia" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11.2v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/></symbol>
     <symbol id="i-print" viewBox="0 0 24 24"><path d="M7 8V3h10v5M7 16H4V8h16v8h-3M7 13h10v8H7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.4V12l3.1 2.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-align-left" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
@@ -72,16 +73,16 @@
       <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-close"/></svg>
     </button>
     <button class="szukaj-filtry" data-akcja="filtry" popovertarget="panel-filtrow"
-            title="Filtry wyszukiwania" aria-label="Filtry wyszukiwania">
+            data-dymek="Filtry wyszukiwania" aria-label="Filtry wyszukiwania">
       <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-filtr"/></svg>
     </button>
   </div>
 
   <div class="pasek-akcje">
-    <button class="ikona-btn" data-akcja="paleta" title="Paleta poleceń (Ctrl+K)" aria-label="Paleta poleceń">
+    <button class="ikona-btn" data-akcja="paleta" data-dymek="Paleta poleceń (Ctrl+K)" aria-label="Paleta poleceń">
       <kbd>⌘K</kbd>
     </button>
-    <button class="awatar" data-akcja="ustawienia" title="Ustawienia" aria-label="Ustawienia konta">
+    <button class="awatar" data-akcja="ustawienia" data-dymek="Ustawienia" aria-label="Ustawienia konta">
       <span data-awatar>?</span>
     </button>
   </div>
@@ -123,7 +124,7 @@
   <section class="lista" data-panel-lista aria-label="Lista wiadomości">
     <header class="lista-naglowek">
       <h1 data-tytul-folderu>Odebrane</h1>
-      <button class="ikona-btn" data-akcja="odswiez" title="Odśwież" aria-label="Odśwież">
+      <button class="ikona-btn" data-akcja="odswiez" data-dymek="Odśwież" aria-label="Odśwież">
         <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-refresh"/></svg>
       </button>
     </header>
@@ -159,8 +160,8 @@
       <span>Do</span>
       <input name="do" type="text" autocomplete="off" spellcheck="false" placeholder="adres@twojapoczta.com">
       <span class="kompozycja-przelaczniki">
-        <button type="button" data-akcja="pokaz-dw" title="Dodaj pole DW (kopia)">DW</button>
-        <button type="button" data-akcja="pokaz-udw" title="Dodaj pole UDW (ukryta kopia)">UDW</button>
+        <button type="button" data-akcja="pokaz-dw" data-dymek="Dodaj pole DW (kopia)">DW</button>
+        <button type="button" data-akcja="pokaz-udw" data-dymek="Dodaj pole UDW (ukryta kopia)">UDW</button>
       </span>
     </label>
     <label class="kompozycja-pole" data-pole-dw hidden>
@@ -176,17 +177,17 @@
       <input name="temat" type="text" autocomplete="off" placeholder="O czym piszesz?">
     </label>
     <div class="kompozycja-narzedzia" data-pasek-edytora role="toolbar" aria-label="Formatowanie tekstu">
-      <button type="button" class="narz-btn" data-cmd="bold" title="Pogrubienie (Ctrl+B)" aria-label="Pogrubienie"><b>B</b></button>
-      <button type="button" class="narz-btn" data-cmd="italic" title="Kursywa (Ctrl+I)" aria-label="Kursywa"><i>I</i></button>
-      <button type="button" class="narz-btn" data-cmd="underline" title="Podkreślenie (Ctrl+U)" aria-label="Podkreślenie"><u>U</u></button>
-      <button type="button" class="narz-btn" data-cmd="strikeThrough" title="Przekreślenie" aria-label="Przekreślenie"><s>S</s></button>
+      <button type="button" class="narz-btn" data-cmd="bold" data-dymek="Pogrubienie (Ctrl+B)" aria-label="Pogrubienie"><b>B</b></button>
+      <button type="button" class="narz-btn" data-cmd="italic" data-dymek="Kursywa (Ctrl+I)" aria-label="Kursywa"><i>I</i></button>
+      <button type="button" class="narz-btn" data-cmd="underline" data-dymek="Podkreślenie (Ctrl+U)" aria-label="Podkreślenie"><u>U</u></button>
+      <button type="button" class="narz-btn" data-cmd="strikeThrough" data-dymek="Przekreślenie" aria-label="Przekreślenie"><s>S</s></button>
       <span class="narz-przerwa" aria-hidden="true"></span>
-      <select class="narz-select" name="czcionka" data-czcionka title="Krój pisma" aria-label="Krój pisma">
+      <select class="narz-select" name="czcionka" data-czcionka data-dymek="Krój pisma" aria-label="Krój pisma">
         <option value="Arial">Bezszeryfowy</option>
         <option value="Georgia">Szeryfowy</option>
         <option value="Courier New">Maszynowy</option>
       </select>
-      <select class="narz-select narz-rozmiar" name="rozmiar" data-rozmiar title="Rozmiar pisma (w punktach)" aria-label="Rozmiar pisma w punktach">
+      <select class="narz-select narz-rozmiar" name="rozmiar" data-rozmiar data-dymek="Rozmiar pisma (w punktach)" aria-label="Rozmiar pisma w punktach">
         <option value="8">8</option>
         <option value="9">9</option>
         <option value="10" selected>10</option>
@@ -197,20 +198,20 @@
         <option value="24">24</option>
         <option value="36">36</option>
       </select>
-      <button type="button" class="narz-btn" data-narzedzie="kolor" title="Kolor tekstu" aria-label="Kolor tekstu"><span class="narz-kolor">A</span></button>
+      <button type="button" class="narz-btn" data-narzedzie="kolor" data-dymek="Kolor tekstu" aria-label="Kolor tekstu"><span class="narz-kolor">A</span></button>
       <span class="narz-przerwa" aria-hidden="true"></span>
-      <button type="button" class="narz-btn" data-cmd="justifyLeft" title="Wyrównaj do lewej" aria-label="Wyrównaj do lewej"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-align-left"/></svg></button>
-      <button type="button" class="narz-btn" data-cmd="justifyCenter" title="Wyśrodkuj" aria-label="Wyśrodkuj"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-align-center"/></svg></button>
-      <button type="button" class="narz-btn" data-cmd="justifyRight" title="Wyrównaj do prawej" aria-label="Wyrównaj do prawej"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-align-right"/></svg></button>
+      <button type="button" class="narz-btn" data-cmd="justifyLeft" data-dymek="Wyrównaj do lewej" aria-label="Wyrównaj do lewej"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-align-left"/></svg></button>
+      <button type="button" class="narz-btn" data-cmd="justifyCenter" data-dymek="Wyśrodkuj" aria-label="Wyśrodkuj"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-align-center"/></svg></button>
+      <button type="button" class="narz-btn" data-cmd="justifyRight" data-dymek="Wyrównaj do prawej" aria-label="Wyrównaj do prawej"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-align-right"/></svg></button>
       <span class="narz-przerwa" aria-hidden="true"></span>
-      <button type="button" class="narz-btn" data-cmd="insertUnorderedList" title="Lista punktowana" aria-label="Lista punktowana"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-list"/></svg></button>
-      <button type="button" class="narz-btn" data-cmd="insertOrderedList" title="Lista numerowana" aria-label="Lista numerowana"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-list-ol"/></svg></button>
-      <button type="button" class="narz-btn" data-cmd="blockquote" title="Cytat" aria-label="Cytat"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-quote"/></svg></button>
+      <button type="button" class="narz-btn" data-cmd="insertUnorderedList" data-dymek="Lista punktowana" aria-label="Lista punktowana"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-list"/></svg></button>
+      <button type="button" class="narz-btn" data-cmd="insertOrderedList" data-dymek="Lista numerowana" aria-label="Lista numerowana"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-list-ol"/></svg></button>
+      <button type="button" class="narz-btn" data-cmd="blockquote" data-dymek="Cytat" aria-label="Cytat"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-quote"/></svg></button>
       <span class="narz-przerwa" aria-hidden="true"></span>
-      <button type="button" class="narz-btn" data-narzedzie="link" title="Wstaw odnośnik" aria-label="Wstaw odnośnik"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-link"/></svg></button>
-      <button type="button" class="narz-btn" data-narzedzie="obraz" title="Wstaw obrazek" aria-label="Wstaw obrazek"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-image"/></svg></button>
+      <button type="button" class="narz-btn" data-narzedzie="link" data-dymek="Wstaw odnośnik" aria-label="Wstaw odnośnik"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-link"/></svg></button>
+      <button type="button" class="narz-btn" data-narzedzie="obraz" data-dymek="Wstaw obrazek" aria-label="Wstaw obrazek"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-image"/></svg></button>
       <input type="file" name="obraz" data-obraz-input accept="image/*" hidden>
-      <button type="button" class="narz-btn" data-cmd="usunFormat" title="Usuń formatowanie" aria-label="Usuń formatowanie"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-clear"/></svg></button>
+      <button type="button" class="narz-btn" data-cmd="usunFormat" data-dymek="Usuń formatowanie" aria-label="Usuń formatowanie"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-clear"/></svg></button>
     </div>
     <div class="kompozycja-edytor" data-edytor contenteditable="true" data-placeholder="Napisz wiadomość…" aria-label="Treść wiadomości"></div>
     <ul class="kompozycja-zalaczniki" data-zalaczniki hidden></ul>
@@ -219,15 +220,15 @@
         Wyślij
         <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><use href="#i-send"/></svg>
       </button>
-      <button type="button" class="btn-pozniej" data-akcja="wyslij-pozniej" title="Zaplanuj wysyłkę" aria-label="Zaplanuj wysyłkę">
+      <button type="button" class="btn-pozniej" data-akcja="wyslij-pozniej" data-dymek="Zaplanuj wysyłkę" aria-label="Zaplanuj wysyłkę">
         <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><use href="#i-clock"/></svg>
       </button>
-      <button type="button" class="ikona-btn" data-akcja="dodaj-zalacznik" title="Dodaj załącznik" aria-label="Dodaj załącznik">
+      <button type="button" class="ikona-btn" data-akcja="dodaj-zalacznik" data-dymek="Dodaj załącznik" aria-label="Dodaj załącznik">
         <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-attach"/></svg>
       </button>
       <input type="file" name="plik" data-plik-input multiple hidden>
       <span class="kompozycja-status" data-status-zapisu></span>
-      <button type="button" class="ikona-btn kompozycja-odrzuc" data-akcja="odrzuc-robocza" title="Odrzuć wersję roboczą" aria-label="Odrzuć wersję roboczą">
+      <button type="button" class="ikona-btn kompozycja-odrzuc" data-akcja="odrzuc-robocza" data-dymek="Odrzuć wersję roboczą" aria-label="Odrzuć wersję roboczą">
         <svg xmlns="http://www.w3.org/2000/svg"><use href="#i-trash"/></svg>
       </button>
     </footer>
@@ -331,7 +332,9 @@
       </div>
     </fieldset>
     <fieldset class="pole">
-      <legend>Aliasy adresu</legend>
+      <legend>Aliasy adresu <button type="button" class="info-dymek"
+              data-dymek="Wiadomości wysłane na alias trafią do Twojej skrzynki."
+              aria-label="Więcej informacji"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-info"/></svg></button></legend>
       <ul class="aliasy" data-aliasy></ul>
       <div class="alias-dodawanie" data-alias-dodawanie>
         <input type="text" name="alias" data-alias-input placeholder="np. biuro" autocomplete="off"
@@ -339,15 +342,18 @@
         <span aria-hidden="true" data-domena>@twojapoczta.com</span>
         <button type="button" class="alias-dodaj" data-akcja="dodaj-alias">Dodaj</button>
       </div>
-      <p class="pole-opis" data-aliasy-opis>Wiadomości wysłane na alias trafią do Twojej skrzynki.</p>
+      <p class="pole-opis" data-aliasy-opis hidden></p>
     </fieldset>
     <fieldset class="pole" data-zespoly-sekcja hidden>
-      <legend>Skrzynki zespołowe</legend>
+      <legend>Skrzynki zespołowe <button type="button" class="info-dymek"
+              data-dymek="Skrzynki zespołowe zakłada administrator. Poczta na ich adres trafia do Ciebie."
+              aria-label="Więcej informacji"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-info"/></svg></button></legend>
       <ul class="zespoly" data-zespoly></ul>
-      <p class="pole-opis">Skrzynki zespołowe zakłada administrator. Poczta na ich adres trafia do Ciebie.</p>
     </fieldset>
     <fieldset class="pole">
-      <legend>Przesyłanie dalej</legend>
+      <legend>Przesyłanie dalej <button type="button" class="info-dymek"
+              data-dymek="Każda nowa wiadomość poleci automatycznie pod wskazany adres. Bez zostawiania kopii oryginał schodzi do Archiwum, więc nic nie ginie."
+              aria-label="Więcej informacji"><svg xmlns="http://www.w3.org/2000/svg"><use href="#i-info"/></svg></button></legend>
       <div class="przekierowanie">
         <input type="text" name="przekierowanie" data-przekierowanie placeholder="adres@twojapoczta.com"
                autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Adres przesyłania dalej">
@@ -357,10 +363,6 @@
         <input type="checkbox" name="przekierowanie_kopia" data-przekierowanie-kopia checked>
         Zostaw kopię w Odebranych
       </label>
-      <p class="pole-opis" data-przekierowanie-opis>
-        Każda nowa wiadomość poleci automatycznie pod wskazany adres.
-        Bez zostawiania kopii oryginał schodzi do Archiwum, więc nic nie ginie.
-      </p>
     </fieldset>
     <fieldset class="pole">
       <legend>Reguły</legend>

@@ -249,7 +249,7 @@ export function initEdytor() {
           type: 'button',
           class: 'edytor-probka',
           style: `background:${kolor}`,
-          title: nazwa,
+          'data-dymek': nazwa,
           'aria-label': `Kolor: ${nazwa}`,
           onclick: () => {
             przywrocZakres();

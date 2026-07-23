@@ -173,6 +173,7 @@ Bez frameworka i bez budowania. Cztery strony (strona główna `index.html`,
   - `spinacze.js`: wybór widocznych spinaczy załączników · chowa ten, którego obrazek renderer wstawił w treść przez `cid:`,
   - `skroty.js`: skróty klawiszowe i paleta poleceń,
   - `foldery.js`: panel boczny, okna folderu i przenoszenia,
+  - `dymek.js`: dymki podpowiedzi dla celów `[data-dymek]` (współdzielony z panelem admina) · popover nad warstwą dialogów, czysta geometria `pozycjaDymka` testowana w `node:test`,
   - `filtry.js`: panel filtrów pod polem wyszukiwania (popover pozycjonowany w JS, bo anchor positioning nie jest jeszcze Baseline), zbieranie kryteriów, znacznik aktywnych filtrów,
   - `reguly.js`: kreator reguły (drugi krok panelu filtrów) i sekcja „Reguły" w Ustawieniach z polskim podsumowaniem (`podsumowaniePL`), przełącznikiem, strzałkami kolejności i usuwaniem,
   - `main.js`: rdzeń, czyli stan, foldery, lista, czytnik, ustawienia i spinanie całości.

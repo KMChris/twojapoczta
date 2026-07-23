@@ -10,6 +10,7 @@ import { renderujTresc, pokazObrazki } from './tresc.js';
 import { widoczneSpinacze } from './spinacze.js';
 import { initSkroty } from './skroty.js';
 import { initFoldery } from './foldery.js';
+import { initDymki } from './dymek.js';
 import { initFiltry } from './filtry.js';
 import { initReguly } from './reguly.js';
 
@@ -286,7 +287,7 @@ function zbudujWiersz(w) {
       { class: 'w-dol' },
       el('span', { class: 'w-temat' }, w.subject || '(bez tematu)'),
       el('span', { class: 'w-snippet' }, w.snippet ? `· ${w.snippet}` : ''),
-      w.attachments_count ? el('span', { class: 'w-spinacz', title: 'Z załącznikiem' }, ikona('attach')) : null,
+      w.attachments_count ? el('span', { class: 'w-spinacz', 'data-dymek': 'Z załącznikiem' }, ikona('attach')) : null,
       gwiazdka
     )
   );
@@ -356,7 +357,7 @@ function przyciskAkcji(tekst, nazwaIkony, klik, { glowny = false } = {}) {
 function ikonaAkcji(tytul, nazwaIkony, klik, { aktywna = false } = {}) {
   return el(
     'button',
-    { class: `ikona-btn${aktywna ? ' aktywna' : ''}`, title: tytul, 'aria-label': tytul, onclick: klik },
+    { class: `ikona-btn${aktywna ? ' aktywna' : ''}`, 'data-dymek': tytul, 'aria-label': tytul, onclick: klik },
     ikona(nazwaIkony)
   );
 }
@@ -842,8 +843,6 @@ przekierowanieWylacz.addEventListener('click', async () => {
 
 // --- Aliasy ---------------------------------------------------------------------
 
-const OPIS_ALIASOW = 'Wiadomości wysłane na alias trafią do Twojej skrzynki.';
-
 async function odswiezAliasy() {
   try {
     const { aliases, limit } = await api.aliasy();
@@ -861,7 +860,8 @@ function renderujAliasy(aliasy, limit) {
   const dodawanie = document.querySelector('[data-alias-dodawanie]');
 
   if (limit === 0) opis.textContent = 'Administrator wyłączył aliasy na tym koncie.';
-  else opis.textContent = limit == null ? OPIS_ALIASOW : `${OPIS_ALIASOW} Najwyżej ${limit}.`;
+  else opis.textContent = limit == null ? '' : `Najwyżej ${limit}.`;
+  opis.hidden = !opis.textContent;
   dodawanie.hidden = limit != null && aliasy.length >= limit;
 
   lista.replaceChildren();
@@ -1052,6 +1052,7 @@ for (const przycisk of document.querySelectorAll('[data-akcja="zamknij-modal"]')
 }
 
 zamykajDialogiTlem();
+initDymki();
 
 document.querySelector('[data-akcja="dodaj-alias"]').addEventListener('click', dodajAlias);
 document.querySelector('[data-alias-input]').addEventListener('keydown', (e) => {

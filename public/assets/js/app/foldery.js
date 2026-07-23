@@ -46,7 +46,7 @@ export function initFoldery(app) {
               class: 'folder-edytuj',
               role: 'button',
               tabindex: '0',
-              title: `Zmień nazwę albo usuń „${f.name}”`,
+              'data-dymek': `Zmień nazwę albo usuń „${f.name}”`,
               'aria-label': `Zmień nazwę albo usuń „${f.name}”`,
               onclick: async (e) => {
                 e.stopPropagation();

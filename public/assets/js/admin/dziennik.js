@@ -79,7 +79,7 @@ export function initDziennik() {
 
     const wiersze = events.map((w) =>
       el('tr', {},
-        el('td', { class: 'mono', title: pelnaData(w.created_at) }, krotkiCzas(w.created_at)),
+        el('td', { class: 'mono', 'data-dymek': pelnaData(w.created_at) }, krotkiCzas(w.created_at)),
         el('td', { class: 'mono' }, w.actor_login),
         el('td', {}, el('span', { class: `naklejka${GROZNE.has(w.action) ? ' naklejka-blokada' : ''}` }, AKCJE[w.action] ?? w.action)),
         el('td', { class: 'mono' }, w.target || '—'),

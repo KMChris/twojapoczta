@@ -2,6 +2,7 @@
 
 import { api } from './api.js';
 import { zamykajDialogiTlem } from '../app/ui.js';
+import { initDymki } from '../app/dymek.js';
 import { initPulpit } from './pulpit.js';
 import { initUzytkownicy } from './uzytkownicy.js';
 import { initZespoly } from './zespoly.js';
@@ -92,4 +93,5 @@ async function start() {
 }
 
 zamykajDialogiTlem();
+initDymki();
 start();
